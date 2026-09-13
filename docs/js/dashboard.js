@@ -300,6 +300,24 @@ function closeBackendModal(){
   if (modal) modal.hidden = true;
 }
 
+function openShortcutsModal(){
+  const modal = $("shortcuts-modal");
+  if (!modal) return;
+  modal.hidden = false;
+  modal.removeAttribute("hidden");
+  modal.style.setProperty("display", "flex", "important");
+}
+
+function closeShortcutsModal(){
+  const modal = $("shortcuts-modal");
+  if (!modal) return;
+  modal.hidden = true;
+  modal.setAttribute("hidden", "");
+  modal.style.setProperty("display", "none", "important");
+}
+window.openShortcutsModal = openShortcutsModal;
+window.closeShortcutsModal = closeShortcutsModal;
+
 async function handleSaveBackendUrl(){
   const input = $("backend-url-input");
   const feedback = $("backend-url-feedback");
@@ -3316,23 +3334,7 @@ async function init(){
     });
   }
 
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      closeBackendModal();
-      closeShortcutsModal();
-    }
-  });
-
-  // Keyboard Shortcuts Modal Handlers
-  function openShortcutsModal(){
-    const modal = $("shortcuts-modal");
-    if (modal) modal.hidden = false;
-  }
-  function closeShortcutsModal(){
-    const modal = $("shortcuts-modal");
-    if (modal) modal.hidden = true;
-  }
-
+  // Keyboard Shortcuts Modal Trigger Listeners
   const btnShortcutsHelp = $("btn-shortcuts-help");
   if (btnShortcutsHelp) btnShortcutsHelp.addEventListener("click", openShortcutsModal);
 
@@ -3365,30 +3367,100 @@ async function init(){
   const copyCmdBtn = $("btn-copy-backend-cmd");
   if (copyCmdBtn) copyCmdBtn.addEventListener("click", handleCopyBackendCmd);
 
-  // Accessible Global Keyboard Shortcuts (Alt+S, Alt+A, Alt+D, Alt+E, ?, Esc)
+  // Accessible Global Keyboard Shortcuts (Single Keys & Modifier Combos)
   document.addEventListener("keydown", (e) => {
-    // Avoid triggering when user is actively typing in an input or select
-    const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
-    if (tag === "input" || tag === "textarea" || tag === "select") return;
+    // Check if target or activeElement is an input, textarea, select, or contenteditable
+    const activeEl = document.activeElement;
+    const isInput = (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA" || activeEl.tagName === "SELECT" || activeEl.isContentEditable)) ||
+                    (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT" || e.target.isContentEditable));
 
-    if (e.key === "?" || (e.key === "/" && e.shiftKey)) {
+    // Escape always closes any open modal or banner regardless of focus
+    if (e.key === "Escape" || e.key === "Esc") {
+      closeBackendModal();
+      closeShortcutsModal();
+      const rogueBanner = $("wifi-evil-twin-banner");
+      if (rogueBanner) rogueBanner.style.display = "none";
+      if (isInput && activeEl && activeEl.blur) activeEl.blur();
+      return;
+    }
+
+    // Never trigger shortcuts while user is actively typing in a form field
+    if (isInput) return;
+
+    const rawKey = e.key || "";
+    const key = rawKey.toLowerCase();
+    const code = e.code || "";
+
+    // 1. HELP / SHORTCUTS MODAL: '?' or '/' or 'h'
+    if (rawKey === "?" || (code === "Slash" && e.shiftKey) || (!e.ctrlKey && !e.altKey && !e.metaKey && (key === "h" || key === "/"))) {
       e.preventDefault();
       openShortcutsModal();
-    } else if (e.altKey && (e.key === "s" || e.key === "S")) {
+      return;
+    }
+
+    // 2. WI-FI VIEW & SPECTRUM SCAN: '1' or 'w' or 's' or Alt+S or Ctrl+1
+    if ((!e.ctrlKey && !e.altKey && !e.metaKey && (key === "1" || key === "w" || key === "s")) ||
+        (e.altKey && (key === "s" || key === "w")) ||
+        (e.ctrlKey && key === "1")) {
       e.preventDefault();
       switchTab("wifi");
       loadWifiAssessment(true);
-    } else if (e.altKey && (e.key === "a" || e.key === "A")) {
+      showToast("⌨️ Hotkey: Scanning Live Wi-Fi Spectrum...", "info");
+      return;
+    }
+
+    // 3. IPSEC VIEW & ASSESS: '2' or 'i' or 'a' or Alt+A or Ctrl+2
+    if ((!e.ctrlKey && !e.altKey && !e.metaKey && (key === "2" || key === "i" || key === "a")) ||
+        (e.altKey && key === "a") ||
+        (e.ctrlKey && key === "2")) {
       e.preventDefault();
       switchTab("ipsec");
       runAnalysis();
-    } else if (e.altKey && (e.key === "d" || e.key === "D")) {
+      showToast("⌨️ Hotkey: Running IPsec Assessment...", "info");
+      return;
+    }
+
+    // 4. DIFF A/B COMPARATIVE MODE: '3' or 'd' or 'c' or Alt+D or Ctrl+3
+    if ((!e.ctrlKey && !e.altKey && !e.metaKey && (key === "3" || key === "d" || key === "c")) ||
+        (e.altKey && key === "d") ||
+        (e.ctrlKey && key === "3")) {
       e.preventDefault();
       switchTab("ipsec");
       switchIpsecMode("diff");
-    } else if (e.altKey && (e.key === "e" || e.key === "E")) {
+      showToast("⌨️ Hotkey: Switched to Diff Comparison Mode", "info");
+      return;
+    }
+
+    // 5. EXPORT AUDIT DOSSIER: 'e' or 'p' or Alt+E or Ctrl+E
+    if ((!e.ctrlKey && !e.altKey && !e.metaKey && (key === "e" || key === "p")) ||
+        (e.altKey && key === "e") ||
+        (e.ctrlKey && key === "e")) {
       e.preventDefault();
+      showToast("⌨️ Hotkey: Compiling Security Dossier...", "success");
       exportSecurityAuditReport();
+      return;
+    }
+
+    // 6. TOGGLE ROGUE AP SIMULATION: 'r'
+    if (!e.ctrlKey && !e.altKey && !e.metaKey && key === "r") {
+      e.preventDefault();
+      const simBtn = $("wifi-simulate-evil-twin");
+      if (simBtn) {
+        simBtn.click();
+        showToast("⌨️ Hotkey: Toggled Rogue AP Simulation", "info");
+      }
+      return;
+    }
+
+    // 7. TOGGLE VPN OVERLAY SIMULATION: 'v'
+    if (!e.ctrlKey && !e.altKey && !e.metaKey && key === "v") {
+      e.preventDefault();
+      const vpnBtn = $("btn-toggle-sim-vpn");
+      if (vpnBtn) {
+        vpnBtn.click();
+        showToast("⌨️ Hotkey: Toggled Sovereign VPN Simulation", "info");
+      }
+      return;
     }
   });
 

@@ -4031,6 +4031,12 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
 }
 
 /* Shortcuts Modal Dialog */
+#shortcuts-modal {
+  z-index: 100000;
+}
+#shortcuts-modal[hidden] {
+  display: none !important;
+}
 .shortcuts-modal-card {
   background: var(--surface);
   border: 1px solid var(--rule);

@@ -37,7 +37,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/dashboard.css">
+  <link rel="stylesheet" href="css/dashboard.css?v=2.2">
 </head>
 <body>
 
@@ -57,8 +57,8 @@
         <span class="pulse-dot"></span>
         <span id="backend-status-label">Live Telemetry</span>
       </button>
-      <button type="button" id="btn-shortcuts-help" class="shortcuts-trigger-btn" title="Keyboard Shortcuts Cheat Sheet (Press ?)" aria-haspopup="dialog">
-        <span>⌨️</span> <span>Hotkeys <kbd>?</kbd></span>
+      <button type="button" id="btn-shortcuts-help" class="shortcuts-trigger-btn" onclick="openShortcutsModal()" title="Keyboard Shortcuts Cheat Sheet (Press ? or H)" aria-haspopup="dialog">
+        <span>⌨️</span> <span>Hotkeys <kbd>?</kbd> / <kbd>H</kbd></span>
       </button>
     </div>
     <div class="controls" id="header-controls">
@@ -942,60 +942,74 @@
           <div class="backend-modal-subtitle">Fast keyboard control for security audits</div>
         </div>
       </div>
-      <button type="button" id="shortcuts-modal-close" class="modal-close-btn" aria-label="Close dialog">&times;</button>
+      <button type="button" id="shortcuts-modal-close" class="modal-close-btn" onclick="closeShortcutsModal()" aria-label="Close dialog">&times;</button>
     </div>
     <div class="shortcuts-modal-body">
       <div class="shortcuts-grid">
         <div class="shortcut-item">
-          <div class="shortcut-keys"><kbd>Alt</kbd> + <kbd>A</kbd></div>
-          <div class="shortcut-desc">
-            <strong>Assess IPsec Capture</strong>
-            <span>Run active cryptographic analysis on selected PCAP capture file</span>
-          </div>
-        </div>
-        <div class="shortcut-item">
-          <div class="shortcut-keys"><kbd>Alt</kbd> + <kbd>S</kbd></div>
-          <div class="shortcut-desc">
-            <strong>Scan Live Wi-Fi</strong>
-            <span>Trigger active RF scan of local 802.11 spectrum and APs</span>
-          </div>
-        </div>
-        <div class="shortcut-item">
-          <div class="shortcut-keys"><kbd>Alt</kbd> + <kbd>D</kbd></div>
-          <div class="shortcut-desc">
-            <strong>Toggle Diff Comparison</strong>
-            <span>Switch to Before vs. After Capture A/B comparative auditor</span>
-          </div>
-        </div>
-        <div class="shortcut-item">
-          <div class="shortcut-keys"><kbd>Alt</kbd> + <kbd>E</kbd></div>
-          <div class="shortcut-desc">
-            <strong>Export Security Dossier</strong>
-            <span>Generate and print executive compliance audit dossier</span>
-          </div>
-        </div>
-        <div class="shortcut-item">
-          <div class="shortcut-keys"><kbd>?</kbd> or <kbd>Shift</kbd> + <kbd>/</kbd></div>
+          <div class="shortcut-keys"><kbd>?</kbd> or <kbd>H</kbd></div>
           <div class="shortcut-desc">
             <strong>Keyboard Shortcuts</strong>
             <span>Open this analyst quick-reference guide</span>
           </div>
         </div>
         <div class="shortcut-item">
+          <div class="shortcut-keys"><kbd>1</kbd> or <kbd>W</kbd></div>
+          <div class="shortcut-desc">
+            <strong>Scan Live Wi-Fi</strong>
+            <span>Switch to Wi-Fi view and trigger active 802.11 RF sweep</span>
+          </div>
+        </div>
+        <div class="shortcut-item">
+          <div class="shortcut-keys"><kbd>2</kbd> or <kbd>I</kbd> or <kbd>A</kbd></div>
+          <div class="shortcut-desc">
+            <strong>Assess IPsec Capture</strong>
+            <span>Switch to IPsec view and run deep cryptographic dissection</span>
+          </div>
+        </div>
+        <div class="shortcut-item">
+          <div class="shortcut-keys"><kbd>3</kbd> or <kbd>D</kbd></div>
+          <div class="shortcut-desc">
+            <strong>Toggle Diff Comparison</strong>
+            <span>Switch to Before vs. After Capture A/B comparative auditor</span>
+          </div>
+        </div>
+        <div class="shortcut-item">
+          <div class="shortcut-keys"><kbd>E</kbd> or <kbd>P</kbd></div>
+          <div class="shortcut-desc">
+            <strong>Export Security Dossier</strong>
+            <span>Generate and print executive compliance audit dossier</span>
+          </div>
+        </div>
+        <div class="shortcut-item">
+          <div class="shortcut-keys"><kbd>R</kbd></div>
+          <div class="shortcut-desc">
+            <strong>Simulate Rogue AP Attack</strong>
+            <span>Toggle active Evil Twin spoofed BSSID threat vector</span>
+          </div>
+        </div>
+        <div class="shortcut-item">
+          <div class="shortcut-keys"><kbd>V</kbd></div>
+          <div class="shortcut-desc">
+            <strong>Toggle Sovereign VPN</strong>
+            <span>Switch between encrypted VPN tunnel and direct ISP route</span>
+          </div>
+        </div>
+        <div class="shortcut-item">
           <div class="shortcut-keys"><kbd>Esc</kbd></div>
           <div class="shortcut-desc">
-            <strong>Close Dialogs</strong>
+            <strong>Close Dialogs & Banners</strong>
             <span>Dismiss active modal or threat notification banner</span>
           </div>
         </div>
       </div>
       <div class="shortcuts-footer-note">
-        💡 <em>Pro-tip for Evaluators: Press <kbd>Alt</kbd> + <kbd>S</kbd> to run an instant Wi-Fi sweep or <kbd>Alt</kbd> + <kbd>A</kbd> for deep IPsec dissection without leaving your keyboard.</em>
+        💡 <em>Pro-tip for Evaluators: Press <kbd>1</kbd> or <kbd>W</kbd> to sweep Wi-Fi, <kbd>2</kbd> or <kbd>A</kbd> for IPsec analysis, <kbd>R</kbd> for Rogue AP attack, or <kbd>?</kbd> / <kbd>H</kbd> to open this guide anytime. Modifier combos (<kbd>Alt+S</kbd>, <kbd>Alt+A</kbd>, <kbd>Alt+D</kbd>, <kbd>Alt+E</kbd>) are also fully supported.</em>
       </div>
     </div>
   </div>
 </div>
 
-<script src="js/dashboard.js"></script>
+<script src="js/dashboard.js?v=2.2"></script>
 </body>
 </html>
