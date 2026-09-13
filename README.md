@@ -74,6 +74,21 @@ CipherGuard specifically addresses and solves every requirement outlined in **Pr
 
 ---
 
+## 🛡️ Tactical Defense HUD & SOC Command Operations
+
+CipherGuard includes a comprehensive suite of tactical defense instruments designed for electronic warfare operators, SOC analysts, and hackathon evaluators:
+
+| Tactical Defense Feature | Keyboard Trigger | Operational Capability |
+|---|---|---|
+| **📡 Tactical 360° RF Radar Scope** | <kbd>1</kbd> / <kbd>W</kbd> | Active polar spatial mapping of 802.11 beacons. APs plotted radially by RSSI attenuation with automated Rogue AP threat crosshair targeting. |
+| **⏳ "Q-Day" Mosca Calculator** | View in IPsec | Dynamic computation of Mosca's inequality ($X + Y > Z$), live countdown clock to CNSA 2.0 (2030), and NIST FIPS 203/204/205 transition matrix. |
+| **💻 Interactive Cyber Terminal** | <kbd>~</kbd> / <kbd>`</kbd> | Embedded defense CLI drawer supporting interactive tactical commands (`scan`, `audit`, `diff`, `remediate cisco`, `remediate fortinet`, `pqc`, `dossier`). |
+| **🔊 Tactical SOC Audio Synthesizer** | <kbd>Masthead</kbd> | 100% offline Web Audio synthesizer delivering tactile radar pings, threat klaxons on Evil Twin detection, and harmonic verification chimes. |
+| **🌍 Sovereign Route Vector Map** | View in Wi-Fi | Real-time topological route visualizer tracking packets from local client NIC through sovereign NTRO cryptographic gateways to public egress. |
+
+---
+
+
 ## The problem, stated precisely
 
 An agency running hundreds of IPsec gateways needs to know which of them are

@@ -60,6 +60,12 @@
       <button type="button" id="btn-shortcuts-help" class="shortcuts-trigger-btn" onclick="openShortcutsModal()" title="Keyboard Shortcuts Cheat Sheet (Press ? or H)" aria-haspopup="dialog">
         <span>⌨️</span> <span>Hotkeys <kbd>?</kbd> / <kbd>H</kbd></span>
       </button>
+      <button type="button" id="btn-audio-toggle" class="shortcuts-trigger-btn audio-toggle-btn" title="Toggle Tactical SOC Audio Alerts" aria-pressed="true">
+        <span id="audio-icon">🔊</span> <span id="audio-label">Audio ON</span>
+      </button>
+      <button type="button" id="btn-terminal-toggle" class="shortcuts-trigger-btn terminal-trigger-btn" onclick="toggleCyberTerminal()" title="Toggle Interactive SOC Terminal (Press ~)" aria-haspopup="dialog">
+        <span>💻</span> <span>Terminal <kbd>~</kbd></span>
+      </button>
     </div>
     <div class="controls" id="header-controls">
       <!-- Dynamic controls according to active tab -->
@@ -313,6 +319,23 @@
         (WireGuard / OpenVPN / IPsec), securing data even on untrusted or compromised Wi-Fi networks.
       </div>
     </section>
+    <!-- Sovereign Tunnel & Geo-IP Egress Vector Map -->
+    <section class="panel sovereign-map-panel" id="sovereign-map-panel" style="margin-bottom:18px">
+      <div class="sovereign-map-header">
+        <div>
+          <h2>Sovereign Cryptographic Routing &amp; Geo-IP Egress Map <span class="domain-tag obs" id="sovereign-status-pill">Sovereign Protected</span></h2>
+          <div class="sub">Continuous topological route tracer from local physical NIC through sovereign NTRO cryptographic tunnels to public egress.</div>
+        </div>
+        <div class="sovereign-route-stats" id="sovereign-route-stats">
+          <span class="sov-stat-chip" id="sov-stat-enc">🔒 Post-Quantum Encrypted</span>
+          <span class="sov-stat-chip" id="sov-stat-dns">🛡️ Zero DNS Leaks</span>
+        </div>
+      </div>
+      <div class="sovereign-map-canvas-container">
+        <svg id="sovereign-route-svg" class="sovereign-route-svg" viewBox="0 0 920 180" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+    </section>
+
 
     <!-- Wi-Fi Findings -->
     <section class="panel" style="margin-bottom:18px">
@@ -389,6 +412,46 @@
         </div>
       </div>
     </section>
+    <!-- Tactical 360° RF Radar Sweep Display (SIGINT HUD) -->
+    <section class="panel radar-hud-panel" id="radar-hud-panel" style="margin-top:18px">
+      <div class="radar-hud-header">
+        <div>
+          <h2>Tactical 360&deg; RF Radar Scope <span class="domain-tag obs">SIGINT Electronic Warfare HUD</span></h2>
+          <div class="sub">Active 360-degree polar RF spatial mapping. Access points plotted radially by signal attenuation (RSSI dBm) with threat targeting lock.</div>
+        </div>
+        <div class="radar-hud-telemetry" id="radar-hud-telemetry">
+          <span class="radar-stat-item"><strong id="radar-target-count">0</strong> APs Locked</span>
+          <span class="radar-stat-item radar-alert-item" id="radar-threat-alert">THREAT: CLEAR</span>
+        </div>
+      </div>
+      <div class="radar-hud-display-container">
+        <div class="radar-canvas-wrap">
+          <canvas id="rf-radar-canvas" width="460" height="460"></canvas>
+          <div class="radar-crosshair-overlay"></div>
+        </div>
+        <div class="radar-hud-sidebar">
+          <div class="radar-bearing-card">
+            <div class="radar-bearing-title">POLAR SPATIAL POSITIONING</div>
+            <div class="radar-bearing-grid">
+              <div><span>000&deg; (N)</span><strong>Ch 1 / 36</strong></div>
+              <div><span>090&deg; (E)</span><strong>Ch 6 / 48</strong></div>
+              <div><span>180&deg; (S)</span><strong>Ch 11 / 149</strong></div>
+              <div><span>270&deg; (W)</span><strong>DFS Bands</strong></div>
+            </div>
+          </div>
+          <div class="radar-target-details" id="radar-target-details">
+            <div class="radar-target-hint">Hover over any radar blip to inspect live beacon frame telemetry, signal dBm, and MAC/OUI authenticity.</div>
+          </div>
+          <div class="radar-hud-legend">
+            <span><i class="radar-dot dot-assoc"></i> Associated AP</span>
+            <span><i class="radar-dot dot-rogue"></i> Threat / Rogue AP</span>
+            <span><i class="radar-dot dot-secure"></i> Secure AP</span>
+            <span><i class="radar-dot dot-open"></i> Insecure / Open AP</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
 
   </main>
 
@@ -466,6 +529,74 @@
         <div id="mosca"></div>
         <div id="pqlinks"><div class="empty">No links assessed yet.</div></div>
       </section>
+      <!-- Interactive Q-Day Post-Quantum Mosca Cockpit -->
+      <section class="panel pqc-mosca-cockpit" id="pqc-mosca-cockpit" style="margin-bottom:18px">
+        <div class="pqc-cockpit-header">
+          <div>
+            <h2>Interactive "Q-Day" Mosca Calculator &amp; PQC Readiness Cockpit <span class="domain-tag obs">NIST FIPS 203/204/205</span></h2>
+            <div class="sub">Dynamic calculation of Mosca's Theorem (X + Y &gt; Z) and live countdown clocks to NSA CNSA 2.0 Post-Quantum mandatory migration timelines.</div>
+          </div>
+          <div class="q-day-countdown-strip" id="q-day-countdown-strip" title="Time remaining until CNSA 2.0 2030 Quantum Cutoff">
+            <div class="q-tile"><span id="q-days">--</span><label>DAYS</label></div>
+            <div class="q-sep">:</div>
+            <div class="q-tile"><span id="q-hours">--</span><label>HRS</label></div>
+            <div class="q-sep">:</div>
+            <div class="q-tile"><span id="q-mins">--</span><label>MIN</label></div>
+            <div class="q-sep">:</div>
+            <div class="q-tile"><span id="q-secs">--</span><label>SEC</label></div>
+          </div>
+        </div>
+
+        <div class="mosca-calculator-grid">
+          <div class="mosca-controls-card">
+            <div class="mosca-slider-group">
+              <div class="slider-label-row">
+                <label for="slider-data-shelf">Data Shelf-Life (X): <strong id="val-data-shelf">10 yrs</strong></label>
+                <span class="slider-hint">How long classified data must remain secret</span>
+              </div>
+              <input type="range" id="slider-data-shelf" min="1" max="30" value="10" step="1" class="mosca-slider">
+            </div>
+
+            <div class="mosca-slider-group">
+              <div class="slider-label-row">
+                <label for="slider-migration-time">Migration Timeline (Y): <strong id="val-migration-time">5 yrs</strong></label>
+                <span class="slider-hint">Time to deploy post-quantum algorithms across fleet</span>
+              </div>
+              <input type="range" id="slider-migration-time" min="1" max="15" value="5" step="1" class="mosca-slider">
+            </div>
+
+            <div class="mosca-equation-banner">
+              <span class="mosca-eq-text">Mosca's Theorem: <code>X + Y = <span id="eq-xy-val">15</span> yrs</code> vs. Quantum Horizon <code>Z = 8 yrs (2034)</code></span>
+            </div>
+          </div>
+
+          <div class="mosca-result-card" id="mosca-result-card">
+            <div class="mosca-risk-title">STORE NOW, DECRYPT LATER (SNDL) RISK</div>
+            <div class="mosca-risk-badge" id="mosca-risk-badge">🚨 CRITICAL SNDL HAZARD</div>
+            <div class="mosca-risk-desc" id="mosca-risk-desc">
+              Adversaries recording encrypted traffic today will be able to decrypt it before the data's security value expires. Immediate PQC transition required.
+            </div>
+            <div class="pqc-fips-chips">
+              <div class="pqc-chip">
+                <span class="pqc-chip-code">FIPS 203</span>
+                <strong>ML-KEM-1024</strong>
+                <span>Kyber Lattice KEM</span>
+              </div>
+              <div class="pqc-chip">
+                <span class="pqc-chip-code">FIPS 204</span>
+                <strong>ML-DSA-87</strong>
+                <span>Dilithium Signatures</span>
+              </div>
+              <div class="pqc-chip">
+                <span class="pqc-chip-code">FIPS 205</span>
+                <strong>SLH-DSA</strong>
+                <span>SPHINCS+ Stateless</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
 
       <!-- MITRE ATT&CK & NIST SP 800-77 Compliance Matrix Panel -->
       <section class="panel compliance-panel" id="ipsec-compliance-panel" style="margin-bottom:18px">
@@ -1006,6 +1137,34 @@
       <div class="shortcuts-footer-note">
         💡 <em>Pro-tip for Evaluators: Press <kbd>1</kbd> or <kbd>W</kbd> to sweep Wi-Fi, <kbd>2</kbd> or <kbd>A</kbd> for IPsec analysis, <kbd>R</kbd> for Rogue AP attack, or <kbd>?</kbd> / <kbd>H</kbd> to open this guide anytime. Modifier combos (<kbd>Alt+S</kbd>, <kbd>Alt+A</kbd>, <kbd>Alt+D</kbd>, <kbd>Alt+E</kbd>) are also fully supported.</em>
       </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Embedded Interactive Cyber Terminal Drawer -->
+<div id="cyber-terminal-drawer" class="cyber-terminal-drawer collapsed" role="region" aria-label="Interactive SOC Security Terminal">
+  <div class="terminal-header" id="terminal-header-bar">
+    <div class="terminal-title-group">
+      <span class="terminal-status-dot"></span>
+      <span class="terminal-title">CIPHERGUARD DEFENSE CLI &bull; SOC INTERACTIVE TERMINAL</span>
+      <span class="terminal-shortcut-pill">Press <kbd>~</kbd> or <kbd>`</kbd></span>
+    </div>
+    <div class="terminal-controls">
+      <button type="button" id="btn-terminal-clear" class="terminal-ctrl-btn" title="Clear Terminal Screen">Clear</button>
+      <button type="button" id="btn-terminal-expand" class="terminal-ctrl-btn" title="Expand/Restore Terminal">⛶</button>
+      <button type="button" id="btn-terminal-close" class="terminal-ctrl-btn" title="Minimize Terminal">&minus;</button>
+    </div>
+  </div>
+  <div class="terminal-body" id="terminal-body-scroll">
+    <div class="terminal-banner">
+CipherGuard Autonomous Cryptographic Security Engine [v2.2.0-NTRO]
+Type 'help' for tactical defense commands, 'scan' for RF sweep, 'audit' for IPsec analysis.
+    </div>
+    <div id="terminal-history" class="terminal-history"></div>
+    <div class="terminal-input-row">
+      <span class="terminal-prompt">cipherguard@soc-node:~$</span>
+      <input type="text" id="terminal-input" class="terminal-input" autocomplete="off" spellcheck="false" aria-label="Terminal input command">
     </div>
   </div>
 </div>

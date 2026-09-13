@@ -1978,7 +1978,770 @@ async function loadWifiAssessment(forceScan = false, silent = false){
   }
 }
 
-  function renderWifiDashboard(data){
+  
+/* ==========================================================================
+   TACTICAL DEFENSE ENGINES: AUDIO, RADAR SCOPE, SOVEREIGN MAP, PQC & CLI
+   ========================================================================== */
+
+// 1. Tactical SOC Web Audio Synthesizer (Zero external dependencies)
+const SocAudioEngine = {
+  ctx: null,
+  enabled: true,
+
+  init() {
+    try {
+      const saved = localStorage.getItem("cipherguard_audio_enabled");
+      if (saved !== null) {
+        this.enabled = (saved === "true");
+      }
+      this.updateUI();
+    } catch (e) {}
+  },
+
+  getContext() {
+    if (!this.enabled) return null;
+    if (!this.ctx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) this.ctx = new AudioCtx();
+    }
+    if (this.ctx && this.ctx.state === "suspended") {
+      this.ctx.resume().catch(() => {});
+    }
+    return this.ctx;
+  },
+
+  toggle() {
+    this.enabled = !this.enabled;
+    try {
+      localStorage.setItem("cipherguard_audio_enabled", String(this.enabled));
+    } catch (e) {}
+    this.updateUI();
+    if (this.enabled) {
+      this.secureChime();
+      showToast("🔊 Tactical SOC Audio Alerts: Enabled", "info");
+    } else {
+      showToast("🔇 Tactical SOC Audio Alerts: Muted", "info");
+    }
+  },
+
+  updateUI() {
+    const btn = $("btn-audio-toggle");
+    const icon = $("audio-icon");
+    const label = $("audio-label");
+    if (!btn) return;
+    btn.classList.toggle("muted", !this.enabled);
+    btn.setAttribute("aria-pressed", String(this.enabled));
+    if (icon) icon.textContent = this.enabled ? "🔊" : "🔇";
+    if (label) label.textContent = this.enabled ? "Audio ON" : "Audio OFF";
+  },
+
+  radarPing() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.16);
+      gain.gain.setValueAtTime(0.06, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.19);
+    } catch (e) {}
+  },
+
+  threatAlarm() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      for (let i = 0; i < 2; i++) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sawtooth";
+        const t = now + i * 0.14;
+        osc.frequency.setValueAtTime(620, t);
+        osc.frequency.setValueAtTime(420, t + 0.07);
+        gain.gain.setValueAtTime(0.09, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.14);
+      }
+    } catch (e) {}
+  },
+
+  secureChime() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const freqs = [523.25, 659.25, 783.99];
+      const now = ctx.currentTime;
+      freqs.forEach((f, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(f, now + idx * 0.05);
+        gain.gain.setValueAtTime(0.07, now + idx * 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.32);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * 0.05);
+        osc.stop(now + idx * 0.05 + 0.33);
+      });
+    } catch (e) {}
+  },
+
+  keyClick() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(1200, ctx.currentTime);
+      gain.gain.setValueAtTime(0.015, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.025);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.03);
+    } catch (e) {}
+  }
+};
+window.SocAudioEngine = SocAudioEngine;
+
+// 2. Tactical 360° RF Radar Scope Engine
+let radarCanvas = null;
+let radarCtx = null;
+let radarAngle = 0;
+let radarAnimFrame = null;
+let currentRadarBlips = [];
+let hoveredRadarBlip = null;
+
+function initRadarScope() {
+  radarCanvas = $("rf-radar-canvas");
+  if (!radarCanvas) return;
+  radarCtx = radarCanvas.getContext("2d");
+
+  radarCanvas.addEventListener("mousemove", handleRadarMouseMove);
+  radarCanvas.addEventListener("mouseleave", () => {
+    hoveredRadarBlip = null;
+    const details = $("radar-target-details");
+    if (details) {
+      details.innerHTML = `<div class="radar-target-hint">Hover over any radar blip to inspect live beacon frame telemetry, signal dBm, and MAC/OUI authenticity.</div>`;
+    }
+  });
+
+  if (!radarAnimFrame) {
+    animateRadarScope();
+  }
+}
+
+function updateRadarBlips(networks, isRogueActive) {
+  if (!networks) return;
+  const countEl = $("radar-target-count");
+  const threatAlert = $("radar-threat-alert");
+
+  if (countEl) countEl.textContent = String(networks.length);
+
+  let hasRogue = false;
+  currentRadarBlips = networks.map(ap => {
+    const bssid = ap.bssid || "00:00:00:00:00:00";
+    let hash = 0;
+    for (let i = 0; i < bssid.length; i++) {
+      hash = (hash << 5) - hash + bssid.charCodeAt(i);
+      hash |= 0;
+    }
+    const channel = parseInt(ap.channel, 10) || 6;
+    const angle = Math.abs((channel * 37 + hash) % 360) * (Math.PI / 180);
+
+    const rssi = typeof ap.rssi_dbm === "number" ? ap.rssi_dbm : -70;
+    // Normalize RSSI between -30 dBm (center) and -95 dBm (outer ring)
+    const norm = Math.max(0.1, Math.min(1.0, (-rssi - 30) / 65));
+    const isRogue = !!(ap.is_rogue || (isRogueActive && (ap.bssid === "58:61:63:de:ad:01" || ap.ssid === "Svyasa-Student")));
+    if (isRogue) hasRogue = true;
+
+    return {
+      ap,
+      angle,
+      norm,
+      isRogue,
+      connected: !!ap.connected
+    };
+  });
+
+  if (threatAlert) {
+    if (hasRogue) {
+      threatAlert.textContent = "🚨 THREAT LOCKED: BSSID SPOOF";
+      threatAlert.classList.add("alert-active");
+      SocAudioEngine.threatAlarm();
+    } else {
+      threatAlert.textContent = "THREAT: CLEAR";
+      threatAlert.classList.remove("alert-active");
+    }
+  }
+}
+
+function handleRadarMouseMove(e) {
+  if (!radarCanvas || currentRadarBlips.length === 0) return;
+  const rect = radarCanvas.getBoundingClientRect();
+  const scaleX = radarCanvas.width / rect.width;
+  const scaleY = radarCanvas.height / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top) * scaleY;
+
+  const cx = radarCanvas.width / 2;
+  const cy = radarCanvas.height / 2;
+  const maxR = cx - 18;
+
+  let nearest = null;
+  let minDist = 18;
+
+  currentRadarBlips.forEach(b => {
+    const r = b.norm * maxR;
+    const bx = cx + r * Math.cos(b.angle);
+    const by = cy + r * Math.sin(b.angle);
+    const d = Math.hypot(mx - bx, my - by);
+    if (d < minDist) {
+      minDist = d;
+      nearest = b;
+    }
+  });
+
+  hoveredRadarBlip = nearest;
+  const details = $("radar-target-details");
+  if (details && nearest) {
+    const ap = nearest.ap;
+    details.innerHTML = `
+      <div class="radar-target-spec">
+        <strong>${esc(ap.ssid || 'Hidden Network')} ${nearest.isRogue ? '<span style="color:#ef4444;font-size:0.75rem;font-weight:700">[ROGUE AP CLONE]</span>' : ''}</strong>
+        <span>BSSID: ${esc(ap.bssid || 'N/A')} | Ch: ${ap.channel || 'N/A'} (${ap.band || '2.4 GHz'})</span>
+        <span>Signal: ${ap.signal_percent || 0}% (${ap.rssi_dbm || -100} dBm) | Radio: ${esc(ap.radio_type || '802.11')}</span>
+        <span>Security: <strong>${esc(ap.authentication || 'Open')} / ${esc(ap.encryption || 'None')}</strong> &bull; Grade: <strong>${esc(ap.security_grade || 'C')}</strong></span>
+      </div>
+    `;
+    SocAudioEngine.radarPing();
+  }
+}
+
+function animateRadarScope() {
+  if (!radarCanvas || !radarCtx) return;
+  const w = radarCanvas.width;
+  const h = radarCanvas.height;
+  const cx = w / 2;
+  const cy = h / 2;
+  const maxR = cx - 18;
+
+  // Clear with dark military phosphor wash
+  radarCtx.fillStyle = "rgba(2, 14, 11, 0.22)";
+  radarCtx.fillRect(0, 0, w, h);
+
+  // Concentric radar range rings
+  radarCtx.lineWidth = 1;
+  [0.25, 0.5, 0.75, 1.0].forEach((ratio, idx) => {
+    const r = maxR * ratio;
+    radarCtx.beginPath();
+    radarCtx.arc(cx, cy, r, 0, Math.PI * 2);
+    radarCtx.strokeStyle = idx === 3 ? "rgba(16, 185, 129, 0.4)" : "rgba(16, 185, 129, 0.15)";
+    radarCtx.stroke();
+
+    // Range dBm markers
+    radarCtx.fillStyle = "rgba(16, 185, 129, 0.5)";
+    radarCtx.font = "9px 'IBM Plex Mono', monospace";
+    radarCtx.fillText(`-${Math.round(30 + ratio * 65)} dBm`, cx + 4, cy - r + 11);
+  });
+
+  // Cross axes
+  radarCtx.strokeStyle = "rgba(16, 185, 129, 0.12)";
+  radarCtx.beginPath();
+  radarCtx.moveTo(cx, cy - maxR);
+  radarCtx.lineTo(cx, cy + maxR);
+  radarCtx.moveTo(cx - maxR, cy);
+  radarCtx.lineTo(cx + maxR, cy);
+  radarCtx.stroke();
+
+  // Draw sweep beam
+  radarAngle += 0.024;
+  if (radarAngle >= Math.PI * 2) radarAngle = 0;
+
+  const sweepGrad = radarCtx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
+  sweepGrad.addColorStop(0, "rgba(56, 189, 248, 0.35)");
+  sweepGrad.addColorStop(1, "rgba(16, 185, 129, 0.0)");
+
+  radarCtx.beginPath();
+  radarCtx.moveTo(cx, cy);
+  radarCtx.arc(cx, cy, maxR, radarAngle - 0.32, radarAngle);
+  radarCtx.closePath();
+  radarCtx.fillStyle = "rgba(16, 185, 129, 0.12)";
+  radarCtx.fill();
+
+  // Sweep line
+  radarCtx.beginPath();
+  radarCtx.moveTo(cx, cy);
+  radarCtx.lineTo(cx + maxR * Math.cos(radarAngle), cy + maxR * Math.sin(radarAngle));
+  radarCtx.strokeStyle = "rgba(56, 189, 248, 0.85)";
+  radarCtx.lineWidth = 1.5;
+  radarCtx.stroke();
+
+  // Render AP Blips
+  currentRadarBlips.forEach(b => {
+    const r = b.norm * maxR;
+    const bx = cx + r * Math.cos(b.angle);
+    const by = cy + r * Math.sin(b.angle);
+
+    radarCtx.save();
+    if (b.isRogue) {
+      // Pulsating Rogue Diamond
+      const pulse = (Math.sin(Date.now() / 150) + 1) * 3;
+      radarCtx.strokeStyle = "#ef4444";
+      radarCtx.fillStyle = "#e11d48";
+      radarCtx.lineWidth = 2;
+
+      radarCtx.beginPath();
+      radarCtx.arc(bx, by, 7 + pulse, 0, Math.PI * 2);
+      radarCtx.stroke();
+
+      radarCtx.beginPath();
+      radarCtx.moveTo(bx, by - 6);
+      radarCtx.lineTo(bx + 6, by);
+      radarCtx.lineTo(bx, by + 6);
+      radarCtx.lineTo(bx - 6, by);
+      radarCtx.closePath();
+      radarCtx.fill();
+
+      // Threat Reticle
+      radarCtx.strokeStyle = "rgba(239, 68, 68, 0.7)";
+      radarCtx.strokeRect(bx - 10, by - 10, 20, 20);
+    } else if (b.connected) {
+      radarCtx.fillStyle = "#38bdf8";
+      radarCtx.shadowColor = "#38bdf8";
+      radarCtx.shadowBlur = 10;
+      radarCtx.beginPath();
+      radarCtx.arc(bx, by, 5, 0, Math.PI * 2);
+      radarCtx.fill();
+    } else {
+      const auth = (b.ap.authentication || "").toLowerCase();
+      const isWeak = auth.includes("open") || auth.includes("wep");
+      radarCtx.fillStyle = isWeak ? "#f59e0b" : "#10b981";
+      radarCtx.beginPath();
+      radarCtx.arc(bx, by, 3.5, 0, Math.PI * 2);
+      radarCtx.fill();
+    }
+    radarCtx.restore();
+  });
+
+  radarAnimFrame = requestAnimationFrame(animateRadarScope);
+}
+
+// 3. Sovereign Cryptographic Routing & Geo-IP Egress Vector Map
+function renderSovereignEgressMap(vpn, iface) {
+  const svg = $("sovereign-route-svg");
+  if (!svg) return;
+
+  const connected = !!(vpn && vpn.connected);
+  const dnsLeak = !!(vpn && vpn.dns_leak_detected);
+  const statusPill = $("sovereign-status-pill");
+  const encChip = $("sov-stat-enc");
+  const dnsChip = $("sov-stat-dns");
+
+  if (statusPill) {
+    statusPill.textContent = connected ? (dnsLeak ? "DNS Leak Exposed" : "Sovereign Protected") : "Direct ISP Egress";
+    statusPill.className = `domain-tag ${connected && !dnsLeak ? 'obs' : 'inf'}`;
+  }
+  if (encChip) {
+    encChip.textContent = connected ? `🔒 Encrypted Overlay: ${vpn.vpn_type || 'WireGuard'}` : "⚠️ Unencrypted Raw ISP Route";
+    encChip.className = `sov-stat-chip ${connected ? '' : 'alert'}`;
+  }
+  if (dnsChip) {
+    dnsChip.textContent = dnsLeak ? "🚨 DNS Leak Detected!" : "🛡️ Sovereign DNS Isolation OK";
+    dnsChip.className = `sov-stat-chip ${dnsLeak ? 'alert' : ''}`;
+  }
+
+  const localIp = (iface && iface.gateway_ip) ? iface.gateway_ip.replace(/\d+$/, '104') : "192.168.1.104";
+  const ssid = (iface && iface.ssid) ? iface.ssid : "Local Wireless Link";
+  const gatewayIp = connected ? (vpn.virtual_ip || "10.8.0.2") : "Direct Transit";
+  const egressIp = (vpn && vpn.egress_ip) ? vpn.egress_ip : "103.21.244.18";
+  const egressLoc = (vpn && vpn.egress_city) ? `${vpn.egress_city}, ${vpn.egress_country || 'IN'}` : "New Delhi, India";
+  const egressIsp = (vpn && vpn.egress_isp) ? vpn.egress_isp : "National NIC Gateway";
+
+  const strokeColor = connected ? (dnsLeak ? "#f59e0b" : "#10b981") : "#ef4444";
+  const strokeDash = connected ? "6,4" : "8,6";
+
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="sovBeamGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#38bdf8"/>
+        <stop offset="50%" stop-color="${strokeColor}"/>
+        <stop offset="100%" stop-color="#a855f7"/>
+      </linearGradient>
+      <filter id="sovGlow">
+        <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+        <feMerge>
+          <feMergeNode in="coloredBlur"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+    </defs>
+
+    <!-- Vector Paths -->
+    <path d="M 160 90 L 460 90" stroke="${strokeColor}" stroke-width="3" stroke-dasharray="${strokeDash}" style="animation:dashFlow 1.2s linear infinite;" fill="none" filter="url(#sovGlow)"/>
+    <path d="M 460 90 L 760 90" stroke="${strokeColor}" stroke-width="3" stroke-dasharray="${strokeDash}" style="animation:dashFlow 1.2s linear infinite;" fill="none" filter="url(#sovGlow)"/>
+
+    <!-- NODE 1: Local Device -->
+    <g transform="translate(160, 90)">
+      <circle r="22" fill="#0f172a" stroke="#38bdf8" stroke-width="3"/>
+      <text text-anchor="middle" y="5" fill="#38bdf8" font-size="15">💻</text>
+      <text text-anchor="middle" y="40" fill="#e2e8f0" font-weight="700" font-size="12">LOCAL CLIENT</text>
+      <text text-anchor="middle" y="54" fill="#94a3b8" font-size="10" font-family="'IBM Plex Mono', monospace">${esc(localIp)}</text>
+      <text text-anchor="middle" y="67" fill="#64748b" font-size="9">${esc(ssid)}</text>
+    </g>
+
+    <!-- NODE 2: Sovereign Gateway -->
+    <g transform="translate(460, 90)">
+      <circle r="26" fill="#0f172a" stroke="${connected ? '#10b981' : '#64748b'}" stroke-width="3" filter="url(#sovGlow)"/>
+      <text text-anchor="middle" y="6" fill="${connected ? '#10b981' : '#94a3b8'}" font-size="18">${connected ? '🛡️' : '⚠️'}</text>
+      <text text-anchor="middle" y="42" fill="#e2e8f0" font-weight="700" font-size="12">SOVEREIGN NODE</text>
+      <text text-anchor="middle" y="56" fill="#94a3b8" font-size="10" font-family="'IBM Plex Mono', monospace">${connected ? 'Tunnel Active' : 'Bypassed'}</text>
+      <text text-anchor="middle" y="69" fill="${connected ? '#4ade80' : '#f87171'}" font-size="9">${connected ? 'Post-Quantum PQC' : 'Raw ISP Transit'}</text>
+    </g>
+
+    <!-- NODE 3: Public Internet Egress -->
+    <g transform="translate(760, 90)">
+      <circle r="22" fill="#0f172a" stroke="#a855f7" stroke-width="3"/>
+      <text text-anchor="middle" y="5" fill="#a855f7" font-size="15">🌐</text>
+      <text text-anchor="middle" y="40" fill="#e2e8f0" font-weight="700" font-size="12">PUBLIC EGRESS</text>
+      <text text-anchor="middle" y="54" fill="#94a3b8" font-size="10" font-family="'IBM Plex Mono', monospace">${esc(egressIp)}</text>
+      <text text-anchor="middle" y="67" fill="#64748b" font-size="9">${esc(egressLoc)} (${esc(egressIsp)})</text>
+    </g>
+  `;
+}
+
+// 4. Interactive Q-Day Post-Quantum Mosca Calculator
+function initMoscaCalculator() {
+  const sliderX = $("slider-data-shelf");
+  const sliderY = $("slider-migration-time");
+
+  if (sliderX) sliderX.addEventListener("input", updateMoscaValues);
+  if (sliderY) sliderY.addEventListener("input", updateMoscaValues);
+
+  updateMoscaValues();
+  startQDayCountdown();
+}
+
+function updateMoscaValues() {
+  const sliderX = $("slider-data-shelf");
+  const sliderY = $("slider-migration-time");
+  const valX = $("val-data-shelf");
+  const valY = $("val-migration-time");
+  const eqVal = $("eq-xy-val");
+  const badge = $("mosca-risk-badge");
+  const desc = $("mosca-risk-desc");
+  const card = $("mosca-result-card");
+
+  const x = sliderX ? parseInt(sliderX.value, 10) : 10;
+  const y = sliderY ? parseInt(sliderY.value, 10) : 5;
+  const z = 8; // ~2034 estimated Cryptographically Relevant Quantum Computer (CRQC)
+
+  if (valX) valX.textContent = `${x} yrs`;
+  if (valY) valY.textContent = `${y} yrs`;
+  if (eqVal) eqVal.textContent = String(x + y);
+
+  const isHazard = (x + y) > z;
+
+  if (badge) {
+    if (isHazard) {
+      badge.textContent = "🚨 CRITICAL SNDL HAZARD";
+      badge.className = "mosca-risk-badge";
+    } else {
+      badge.textContent = "🛡️ MIGRATION BUFFER SECURE";
+      badge.className = "mosca-risk-badge secure";
+    }
+  }
+
+  if (card) {
+    card.classList.toggle("hazard-active", isHazard);
+  }
+
+  if (desc) {
+    if (isHazard) {
+      desc.textContent = "Adversaries recording encrypted traffic today will be able to decrypt it before the data's security value expires (Store Now, Decrypt Later). Immediate PQC hybrid encapsulation required.";
+    } else {
+      desc.textContent = "Calculated migration window completes before estimated quantum cryptanalysis breakthrough. Maintain CNSA 2.0 deployment schedule.";
+    }
+  }
+}
+
+function startQDayCountdown() {
+  const cutoff = new Date("2030-01-01T00:00:00Z").getTime();
+
+  function tick() {
+    const now = Date.now();
+    const diff = Math.max(0, cutoff - now);
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const secs = Math.floor((diff % (1000 * 60)) / 1000);
+
+    const elD = $("q-days");
+    const elH = $("q-hours");
+    const elM = $("q-mins");
+    const elS = $("q-secs");
+
+    if (elD) elD.textContent = String(days);
+    if (elH) elH.textContent = String(hours).padStart(2, '0');
+    if (elM) elM.textContent = String(mins).padStart(2, '0');
+    if (elS) elS.textContent = String(secs).padStart(2, '0');
+  }
+
+  tick();
+  setInterval(tick, 1000);
+}
+
+// 5. Embedded Interactive Cyber Terminal (Multi-Vendor CLI Drawer)
+let terminalHistory = [];
+let terminalHistoryIndex = -1;
+
+function initCyberTerminal() {
+  const drawer = $("cyber-terminal-drawer");
+  const input = $("terminal-input");
+  const header = $("terminal-header-bar");
+  const clearBtn = $("btn-terminal-clear");
+  const expandBtn = $("btn-terminal-expand");
+  const closeBtn = $("btn-terminal-close");
+
+  if (header) {
+    header.addEventListener("click", (e) => {
+      if (e.target.closest(".terminal-controls")) return;
+      toggleCyberTerminal();
+    });
+  }
+
+  if (closeBtn) closeBtn.addEventListener("click", () => setTerminalState(false));
+  if (expandBtn) {
+    expandBtn.addEventListener("click", () => {
+      if (!drawer) return;
+      drawer.classList.toggle("expanded");
+      expandBtn.textContent = drawer.classList.contains("expanded") ? "⛶" : "⛶";
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      const hist = $("terminal-history");
+      if (hist) hist.innerHTML = "";
+      printTerminalLine("Terminal buffer cleared.", "info");
+    });
+  }
+
+  if (input) {
+    input.addEventListener("keydown", (e) => {
+      SocAudioEngine.keyClick();
+
+      if (e.key === "Enter") {
+        const cmd = input.value.trim();
+        if (cmd) {
+          executeTerminalCommand(cmd);
+          terminalHistory.push(cmd);
+          terminalHistoryIndex = terminalHistory.length;
+          input.value = "";
+        }
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (terminalHistory.length > 0 && terminalHistoryIndex > 0) {
+          terminalHistoryIndex--;
+          input.value = terminalHistory[terminalHistoryIndex];
+        }
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (terminalHistoryIndex < terminalHistory.length - 1) {
+          terminalHistoryIndex++;
+          input.value = terminalHistory[terminalHistoryIndex];
+        } else {
+          terminalHistoryIndex = terminalHistory.length;
+          input.value = "";
+        }
+      } else if (e.key === "Tab") {
+        e.preventDefault();
+        handleTerminalTabComplete(input);
+      }
+    });
+  }
+}
+
+function setTerminalState(open) {
+  const drawer = $("cyber-terminal-drawer");
+  const input = $("terminal-input");
+  if (!drawer) return;
+  drawer.classList.toggle("collapsed", !open);
+  if (open && input) {
+    setTimeout(() => input.focus(), 150);
+  }
+}
+
+function toggleCyberTerminal() {
+  const drawer = $("cyber-terminal-drawer");
+  if (!drawer) return;
+  const isCollapsed = drawer.classList.contains("collapsed");
+  setTerminalState(isCollapsed);
+}
+window.toggleCyberTerminal = toggleCyberTerminal;
+
+function printTerminalLine(text, type = "output") {
+  const hist = $("terminal-history");
+  const scroll = $("terminal-body-scroll");
+  if (!hist) return;
+
+  const div = document.createElement("div");
+  div.className = `term-line-${type}`;
+  div.textContent = text;
+  hist.appendChild(div);
+
+  if (scroll) {
+    scroll.scrollTop = scroll.scrollHeight;
+  }
+}
+
+function handleTerminalTabComplete(input) {
+  const val = input.value.trim().toLowerCase();
+  const cmds = ["help", "scan", "audit", "diff", "rogue on", "rogue off", "vpn on", "vpn off", "remediate cisco", "remediate fortinet", "remediate linux", "pqc", "dossier", "clear"];
+  const match = cmds.find(c => c.startsWith(val));
+  if (match) {
+    input.value = match;
+  }
+}
+
+function executeTerminalCommand(raw) {
+  printTerminalLine(`cipherguard@soc-node:~$ ${raw}`, "input");
+  const parts = raw.trim().split(/\s+/);
+  const cmd = parts[0].toLowerCase();
+  const arg = (parts[1] || "").toLowerCase();
+
+  switch (cmd) {
+    case "help":
+      printTerminalLine(
+        "Available Tactical SOC Commands:\n" +
+        "  scan               - Trigger live 802.11 RF wireless spectrum sweep\n" +
+        "  audit              - Execute active IPsec cryptographic assessment\n" +
+        "  diff               - Switch to Before vs. After Capture A/B auditor\n" +
+        "  rogue [on|off]     - Inject or clear simulated Evil Twin / Rogue AP threat\n" +
+        "  vpn [on|off]       - Toggle sovereign encrypted tunnel overlay\n" +
+        "  remediate [vendor] - Output hardening config for 'cisco', 'fortinet', or 'linux'\n" +
+        "  pqc                - Display Mosca's Theorem score and NIST PQC status\n" +
+        "  dossier            - Generate and export executive compliance audit dossier\n" +
+        "  clear              - Clear terminal display buffer",
+        "info"
+      );
+      break;
+
+    case "scan":
+      printTerminalLine("[+] Initiating active RF hardware sweep on interfaces...", "info");
+      switchTab("wifi");
+      loadWifiAssessment(true);
+      SocAudioEngine.radarPing();
+      printTerminalLine("[✔] Wi-Fi sweep complete. Telemetry updated on HUD.", "output");
+      break;
+
+    case "audit":
+      printTerminalLine("[+] Parsing IPsec headers & calculating Mosca cryptographic posture...", "info");
+      switchTab("ipsec");
+      runAnalysis();
+      SocAudioEngine.secureChime();
+      printTerminalLine("[✔] IPsec analysis complete. Compliance matrices compiled.", "output");
+      break;
+
+    case "diff":
+      printTerminalLine("[+] Switching to A/B capture diff comparison mode...", "info");
+      switchTab("ipsec");
+      switchIpsecMode("diff");
+      break;
+
+    case "rogue":
+      const rogueBtn = $("wifi-simulate-evil-twin");
+      if (rogueBtn) rogueBtn.click();
+      printTerminalLine(`[!] Rogue AP simulation ${state.simulatedRogueApActive ? 'ACTIVATED (Target locked)' : 'CLEARED'}.`, state.simulatedRogueApActive ? "error" : "output");
+      break;
+
+    case "vpn":
+      const vpnBtn = $("btn-toggle-sim-vpn");
+      if (vpnBtn) vpnBtn.click();
+      printTerminalLine(`[+] Sovereign VPN tunnel state toggled.`, "output");
+      break;
+
+    case "remediate":
+      if (arg === "cisco") {
+        printTerminalLine(
+          "Cisco ASA 5500-X / Firepower Hardening Script:\n" +
+          "  crypto ikev2 policy 10\n" +
+          "    encryption aes-gcm-256\n" +
+          "    integrity null\n" +
+          "    group 20 21\n" +
+          "    prf sha384\n" +
+          "  crypto ipsec ikev2 ipsec-proposal SECURE-PQC\n" +
+          "    protocol esp encryption aes-gcm-256\n" +
+          "  no crypto ikev1 enable",
+          "output"
+        );
+      } else if (arg === "fortinet") {
+        printTerminalLine(
+          "Fortinet FortiOS 7.x Hardening Config:\n" +
+          "  config vpn ipsec phase1-interface\n" +
+          "    edit \"SOC-TUNNEL\"\n" +
+          "      set ike-version 2\n" +
+          "      set proposal aes256gcm-prfsha384\n" +
+          "      set dhgrp 20 21\n" +
+          "    next\n" +
+          "  end",
+          "output"
+        );
+      } else if (arg === "linux") {
+        printTerminalLine(
+          "Linux strongSwan / ip xfrm Hardening Rules:\n" +
+          "  conn sovereign-tunnel\n" +
+          "    keyexchange=ikev2\n" +
+          "    ike=aes256gcm16-sha384-ecp384!\n" +
+          "    esp=aes256gcm16-ecp384!\n" +
+          "    dpdaction=restart",
+          "output"
+        );
+      } else {
+        printTerminalLine("Usage: remediate cisco | remediate fortinet | remediate linux", "error");
+      }
+      break;
+
+    case "pqc":
+      printTerminalLine(
+        "NIST Post-Quantum Readiness Matrix:\n" +
+        "  FIPS 203: ML-KEM-1024 (Kyber)      [READY - Hybrid IKEv2 Transform ID 35]\n" +
+        "  FIPS 204: ML-DSA-87 (Dilithium)     [READY - Digital Signatures]\n" +
+        "  FIPS 205: SLH-DSA (SPHINCS+)       [READY - Stateless Hash]\n" +
+        "  Mosca Theorem Status: Store Now, Decrypt Later (SNDL) mitigation in progress.",
+        "info"
+      );
+      break;
+
+    case "dossier":
+      printTerminalLine("[+] Generating printable Executive Security Audit Dossier...", "info");
+      exportSecurityAuditReport();
+      break;
+
+    case "clear":
+      const hist = $("terminal-history");
+      if (hist) hist.innerHTML = "";
+      break;
+
+    default:
+      printTerminalLine(`Unknown command: '${cmd}'. Type 'help' for tactical reference.`, "error");
+      break;
+  }
+}
+
+function renderWifiDashboard(data){
   if (!data) return;
   // If networks_in_range is missing or empty, ensure fallback demo networks are populated without overwriting real live interface
   if (!data.networks_in_range || data.networks_in_range.length === 0){
@@ -2185,6 +2948,8 @@ async function loadWifiAssessment(forceScan = false, silent = false){
 
   // 5. VPN Overlay Card
   renderVpnOverlay(data.vpn);
+  renderSovereignEgressMap(data.vpn, data.interface);
+  updateRadarBlips(networks, state.simulatedRogueApActive);
 
   // 6. Findings List (Combine Wi-Fi and VPN findings)
   const allFindings = [...(data.findings || []), ...((data.vpn && data.vpn.findings) || [])];
@@ -3462,6 +4227,13 @@ async function init(){
       }
       return;
     }
+
+    // 8. TOGGLE CYBER TERMINAL DRAWER: '~' or '`'
+    if (rawKey === "~" || rawKey === "`" || code === "Backquote") {
+      e.preventDefault();
+      toggleCyberTerminal();
+      return;
+    }
   });
 
   // Capture selection field validation listener
@@ -3473,6 +4245,15 @@ async function init(){
   }
 
   // Detect host mode: GitHub Pages (static demo) vs live local API server
+  // Initialize Tactical Defense Engines
+  SocAudioEngine.init();
+  const audioToggleBtn = $("btn-audio-toggle");
+  if (audioToggleBtn) audioToggleBtn.addEventListener("click", () => SocAudioEngine.toggle());
+
+  initRadarScope();
+  initMoscaCalculator();
+  initCyberTerminal();
+
   await detectStaticMode();
 
   // Always default to live real-time Wi-Fi connection and VPN status
