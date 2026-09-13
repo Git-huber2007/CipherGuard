@@ -1980,13 +1980,16 @@ async function loadWifiAssessment(forceScan = false, silent = false){
 
   
 /* ==========================================================================
-   TACTICAL DEFENSE ENGINES: AUDIO, RADAR SCOPE, SOVEREIGN MAP, PQC & CLI
+   TACTICAL DEFENSE ENGINES: AUDIO, RADAR SCOPE, SOVEREIGN MAP, PQC & CLI (OPTIMIZED)
    ========================================================================== */
 
-// 1. Tactical SOC Web Audio Synthesizer (Zero external dependencies)
+// 1. Tactical SOC Web Audio Synthesizer (Zero external dependencies & throttled)
 const SocAudioEngine = {
   ctx: null,
   enabled: true,
+  lastKeyClick: 0,
+  lastPingTime: 0,
+  lastAlarmTime: 0,
 
   init() {
     try {
@@ -2035,7 +2038,11 @@ const SocAudioEngine = {
     if (label) label.textContent = this.enabled ? "Audio ON" : "Audio OFF";
   },
 
-  radarPing() {
+  radarPing(force = false) {
+    const now = Date.now();
+    if (!force && now - this.lastPingTime < 180) return; // Prevent audio swarm on fast mousemove
+    this.lastPingTime = now;
+
     const ctx = this.getContext();
     if (!ctx) return;
     try {
@@ -2043,29 +2050,33 @@ const SocAudioEngine = {
       const gain = ctx.createGain();
       osc.type = "sine";
       osc.frequency.setValueAtTime(880, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.16);
-      gain.gain.setValueAtTime(0.06, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.14);
+      gain.gain.setValueAtTime(0.05, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.16);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start();
-      osc.stop(ctx.currentTime + 0.19);
+      osc.stop(ctx.currentTime + 0.17);
     } catch (e) {}
   },
 
-  threatAlarm() {
+  threatAlarm(force = false) {
+    const now = Date.now();
+    if (!force && now - this.lastAlarmTime < 12000) return; // Siren fires at most once every 12s on poll
+    this.lastAlarmTime = now;
+
     const ctx = this.getContext();
     if (!ctx) return;
     try {
-      const now = ctx.currentTime;
+      const startTime = ctx.currentTime;
       for (let i = 0; i < 2; i++) {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = "sawtooth";
-        const t = now + i * 0.14;
-        osc.frequency.setValueAtTime(620, t);
-        osc.frequency.setValueAtTime(420, t + 0.07);
-        gain.gain.setValueAtTime(0.09, t);
+        const t = startTime + i * 0.14;
+        osc.frequency.setValueAtTime(600, t);
+        osc.frequency.setValueAtTime(400, t + 0.07);
+        gain.gain.setValueAtTime(0.07, t);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -2086,25 +2097,29 @@ const SocAudioEngine = {
         const gain = ctx.createGain();
         osc.type = "triangle";
         osc.frequency.setValueAtTime(f, now + idx * 0.05);
-        gain.gain.setValueAtTime(0.07, now + idx * 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.32);
+        gain.gain.setValueAtTime(0.06, now + idx * 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.3);
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start(now + idx * 0.05);
-        osc.stop(now + idx * 0.05 + 0.33);
+        osc.stop(now + idx * 0.05 + 0.31);
       });
     } catch (e) {}
   },
 
   keyClick() {
+    const now = Date.now();
+    if (now - this.lastKeyClick < 45) return; // Debounce rapid keystroke sounds
+    this.lastKeyClick = now;
+
     const ctx = this.getContext();
     if (!ctx) return;
     try {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "square";
-      osc.frequency.setValueAtTime(1200, ctx.currentTime);
-      gain.gain.setValueAtTime(0.015, ctx.currentTime);
+      osc.frequency.setValueAtTime(1100, ctx.currentTime);
+      gain.gain.setValueAtTime(0.012, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.025);
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -2115,22 +2130,28 @@ const SocAudioEngine = {
 };
 window.SocAudioEngine = SocAudioEngine;
 
-// 2. Tactical 360° RF Radar Scope Engine
+// 2. Tactical 360° RF Radar Scope Engine (Crisp High-DPI, Zero Smearing, 60 FPS)
 let radarCanvas = null;
 let radarCtx = null;
 let radarAngle = 0;
 let radarAnimFrame = null;
 let currentRadarBlips = [];
 let hoveredRadarBlip = null;
+let lastHoveredBssid = null;
 
 function initRadarScope() {
   radarCanvas = $("rf-radar-canvas");
   if (!radarCanvas) return;
   radarCtx = radarCanvas.getContext("2d");
 
+  // Setup High-DPI crisp rendering
+  setupRadarDpi();
+  window.addEventListener("resize", setupRadarDpi);
+
   radarCanvas.addEventListener("mousemove", handleRadarMouseMove);
   radarCanvas.addEventListener("mouseleave", () => {
     hoveredRadarBlip = null;
+    lastHoveredBssid = null;
     const details = $("radar-target-details");
     if (details) {
       details.innerHTML = `<div class="radar-target-hint">Hover over any radar blip to inspect live beacon frame telemetry, signal dBm, and MAC/OUI authenticity.</div>`;
@@ -2140,6 +2161,16 @@ function initRadarScope() {
   if (!radarAnimFrame) {
     animateRadarScope();
   }
+}
+
+function setupRadarDpi() {
+  if (!radarCanvas || !radarCtx) return;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = radarCanvas.getBoundingClientRect();
+  const size = Math.min(rect.width || 460, 460);
+  radarCanvas.width = size * dpr;
+  radarCanvas.height = size * dpr;
+  radarCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 function updateRadarBlips(networks, isRogueActive) {
@@ -2162,7 +2193,7 @@ function updateRadarBlips(networks, isRogueActive) {
 
     const rssi = typeof ap.rssi_dbm === "number" ? ap.rssi_dbm : -70;
     // Normalize RSSI between -30 dBm (center) and -95 dBm (outer ring)
-    const norm = Math.max(0.1, Math.min(1.0, (-rssi - 30) / 65));
+    const norm = Math.max(0.12, Math.min(0.96, (-rssi - 30) / 65));
     const isRogue = !!(ap.is_rogue || (isRogueActive && (ap.bssid === "58:61:63:de:ad:01" || ap.ssid === "Svyasa-Student")));
     if (isRogue) hasRogue = true;
 
@@ -2190,17 +2221,15 @@ function updateRadarBlips(networks, isRogueActive) {
 function handleRadarMouseMove(e) {
   if (!radarCanvas || currentRadarBlips.length === 0) return;
   const rect = radarCanvas.getBoundingClientRect();
-  const scaleX = radarCanvas.width / rect.width;
-  const scaleY = radarCanvas.height / rect.height;
-  const mx = (e.clientX - rect.left) * scaleX;
-  const my = (e.clientY - rect.top) * scaleY;
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
 
-  const cx = radarCanvas.width / 2;
-  const cy = radarCanvas.height / 2;
+  const cx = rect.width / 2;
+  const cy = rect.height / 2;
   const maxR = cx - 18;
 
   let nearest = null;
-  let minDist = 18;
+  let minDist = 20;
 
   currentRadarBlips.forEach(b => {
     const r = b.norm * maxR;
@@ -2215,49 +2244,83 @@ function handleRadarMouseMove(e) {
 
   hoveredRadarBlip = nearest;
   const details = $("radar-target-details");
-  if (details && nearest) {
+
+  if (nearest) {
     const ap = nearest.ap;
-    details.innerHTML = `
-      <div class="radar-target-spec">
-        <strong>${esc(ap.ssid || 'Hidden Network')} ${nearest.isRogue ? '<span style="color:#ef4444;font-size:0.75rem;font-weight:700">[ROGUE AP CLONE]</span>' : ''}</strong>
-        <span>BSSID: ${esc(ap.bssid || 'N/A')} | Ch: ${ap.channel || 'N/A'} (${ap.band || '2.4 GHz'})</span>
-        <span>Signal: ${ap.signal_percent || 0}% (${ap.rssi_dbm || -100} dBm) | Radio: ${esc(ap.radio_type || '802.11')}</span>
-        <span>Security: <strong>${esc(ap.authentication || 'Open')} / ${esc(ap.encryption || 'None')}</strong> &bull; Grade: <strong>${esc(ap.security_grade || 'C')}</strong></span>
-      </div>
-    `;
-    SocAudioEngine.radarPing();
+    const bssid = ap.bssid || "N/A";
+
+    // Only ping audio ONCE when cursor transitions onto a new blip
+    if (bssid !== lastHoveredBssid) {
+      lastHoveredBssid = bssid;
+      SocAudioEngine.radarPing(true);
+    }
+
+    if (details) {
+      details.innerHTML = `
+        <div class="radar-target-spec">
+          <strong>${esc(ap.ssid || 'Hidden Network')} ${nearest.isRogue ? '<span style="color:#ef4444;font-size:0.75rem;font-weight:700">[ROGUE AP CLONE]</span>' : ''}</strong>
+          <span>BSSID: ${esc(bssid)} | Ch: ${ap.channel || 'N/A'} (${ap.band || '2.4 GHz'})</span>
+          <span>Signal: ${ap.signal_percent || 0}% (${ap.rssi_dbm || -100} dBm) | Radio: ${esc(ap.radio_type || '802.11')}</span>
+          <span>Security: <strong>${esc(ap.authentication || 'Open')} / ${esc(ap.encryption || 'None')}</strong> &bull; Grade: <strong>${esc(ap.security_grade || 'C')}</strong></span>
+        </div>
+      `;
+    }
+  } else {
+    lastHoveredBssid = null;
   }
 }
 
 function animateRadarScope() {
-  if (!radarCanvas || !radarCtx) return;
-  const w = radarCanvas.width;
-  const h = radarCanvas.height;
+  // Only loop if Wi-Fi view is currently active, saving CPU/GPU cycles
+  const wifiView = $("view-wifi");
+  if (!wifiView || !wifiView.classList.contains("active")) {
+    radarAnimFrame = requestAnimationFrame(animateRadarScope);
+    return;
+  }
+
+  if (!radarCanvas || !radarCtx) {
+    radarAnimFrame = requestAnimationFrame(animateRadarScope);
+    return;
+  }
+
+  const rect = radarCanvas.getBoundingClientRect();
+  const w = rect.width || 460;
+  const h = rect.height || 460;
   const cx = w / 2;
   const cy = h / 2;
   const maxR = cx - 18;
 
-  // Clear with dark military phosphor wash
-  radarCtx.fillStyle = "rgba(2, 14, 11, 0.22)";
-  radarCtx.fillRect(0, 0, w, h);
+  // Clear canvas completely each frame to prevent ghost smears
+  radarCtx.clearRect(0, 0, w, h);
+
+  // Background radial phosphor gradient
+  const bgGrad = radarCtx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
+  bgGrad.addColorStop(0, "#08281e");
+  bgGrad.addColorStop(0.7, "#03140e");
+  bgGrad.addColorStop(1, "#010705");
+  radarCtx.fillStyle = bgGrad;
+  radarCtx.beginPath();
+  radarCtx.arc(cx, cy, maxR, 0, Math.PI * 2);
+  radarCtx.fill();
 
   // Concentric radar range rings
-  radarCtx.lineWidth = 1;
   [0.25, 0.5, 0.75, 1.0].forEach((ratio, idx) => {
     const r = maxR * ratio;
     radarCtx.beginPath();
     radarCtx.arc(cx, cy, r, 0, Math.PI * 2);
-    radarCtx.strokeStyle = idx === 3 ? "rgba(16, 185, 129, 0.4)" : "rgba(16, 185, 129, 0.15)";
+    radarCtx.strokeStyle = idx === 3 ? "rgba(16, 185, 129, 0.5)" : "rgba(16, 185, 129, 0.18)";
+    radarCtx.lineWidth = idx === 3 ? 1.5 : 1;
     radarCtx.stroke();
 
     // Range dBm markers
-    radarCtx.fillStyle = "rgba(16, 185, 129, 0.5)";
+    radarCtx.fillStyle = "rgba(56, 189, 248, 0.65)";
     radarCtx.font = "9px 'IBM Plex Mono', monospace";
     radarCtx.fillText(`-${Math.round(30 + ratio * 65)} dBm`, cx + 4, cy - r + 11);
   });
 
   // Cross axes
-  radarCtx.strokeStyle = "rgba(16, 185, 129, 0.12)";
+  radarCtx.strokeStyle = "rgba(16, 185, 129, 0.15)";
+  radarCtx.lineWidth = 1;
   radarCtx.beginPath();
   radarCtx.moveTo(cx, cy - maxR);
   radarCtx.lineTo(cx, cy + maxR);
@@ -2266,26 +2329,26 @@ function animateRadarScope() {
   radarCtx.stroke();
 
   // Draw sweep beam
-  radarAngle += 0.024;
+  radarAngle += 0.022;
   if (radarAngle >= Math.PI * 2) radarAngle = 0;
 
-  const sweepGrad = radarCtx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
-  sweepGrad.addColorStop(0, "rgba(56, 189, 248, 0.35)");
-  sweepGrad.addColorStop(1, "rgba(16, 185, 129, 0.0)");
-
+  // Phosphor tail sector
   radarCtx.beginPath();
   radarCtx.moveTo(cx, cy);
-  radarCtx.arc(cx, cy, maxR, radarAngle - 0.32, radarAngle);
+  radarCtx.arc(cx, cy, maxR, radarAngle - 0.42, radarAngle);
   radarCtx.closePath();
-  radarCtx.fillStyle = "rgba(16, 185, 129, 0.12)";
+  const tailGrad = radarCtx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
+  tailGrad.addColorStop(0, "rgba(56, 189, 248, 0.22)");
+  tailGrad.addColorStop(1, "rgba(16, 185, 129, 0.0)");
+  radarCtx.fillStyle = tailGrad;
   radarCtx.fill();
 
-  // Sweep line
+  // Sweep leading edge line
   radarCtx.beginPath();
   radarCtx.moveTo(cx, cy);
   radarCtx.lineTo(cx + maxR * Math.cos(radarAngle), cy + maxR * Math.sin(radarAngle));
-  radarCtx.strokeStyle = "rgba(56, 189, 248, 0.85)";
-  radarCtx.lineWidth = 1.5;
+  radarCtx.strokeStyle = "rgba(56, 189, 248, 0.95)";
+  radarCtx.lineWidth = 2;
   radarCtx.stroke();
 
   // Render AP Blips
@@ -2293,11 +2356,12 @@ function animateRadarScope() {
     const r = b.norm * maxR;
     const bx = cx + r * Math.cos(b.angle);
     const by = cy + r * Math.sin(b.angle);
+    const isHovered = (hoveredRadarBlip === b);
 
     radarCtx.save();
     if (b.isRogue) {
       // Pulsating Rogue Diamond
-      const pulse = (Math.sin(Date.now() / 150) + 1) * 3;
+      const pulse = (Math.sin(Date.now() / 140) + 1) * 3;
       radarCtx.strokeStyle = "#ef4444";
       radarCtx.fillStyle = "#e11d48";
       radarCtx.lineWidth = 2;
@@ -2315,7 +2379,7 @@ function animateRadarScope() {
       radarCtx.fill();
 
       // Threat Reticle
-      radarCtx.strokeStyle = "rgba(239, 68, 68, 0.7)";
+      radarCtx.strokeStyle = "rgba(239, 68, 68, 0.85)";
       radarCtx.strokeRect(bx - 10, by - 10, 20, 20);
     } else if (b.connected) {
       radarCtx.fillStyle = "#38bdf8";
@@ -2332,19 +2396,40 @@ function animateRadarScope() {
       radarCtx.arc(bx, by, 3.5, 0, Math.PI * 2);
       radarCtx.fill();
     }
+
+    // Draw targeting bracket on hover
+    if (isHovered) {
+      radarCtx.strokeStyle = "#38bdf8";
+      radarCtx.lineWidth = 1.5;
+      radarCtx.strokeRect(bx - 8, by - 8, 16, 16);
+    }
     radarCtx.restore();
   });
 
   radarAnimFrame = requestAnimationFrame(animateRadarScope);
 }
 
-// 3. Sovereign Cryptographic Routing & Geo-IP Egress Vector Map
+// 3. Sovereign Cryptographic Routing & Geo-IP Egress Vector Map (Cached & Non-Blinking)
+let lastSovereignSignature = "";
+
 function renderSovereignEgressMap(vpn, iface) {
   const svg = $("sovereign-route-svg");
   if (!svg) return;
 
   const connected = !!(vpn && vpn.connected);
   const dnsLeak = !!(vpn && vpn.dns_leak_detected);
+  const localIp = (iface && iface.gateway_ip) ? iface.gateway_ip.replace(/\d+$/, '104') : "192.168.1.104";
+  const ssid = (iface && iface.ssid) ? iface.ssid : "Local Wireless Link";
+  const gatewayIp = connected ? (vpn.virtual_ip || "10.8.0.2") : "Direct Transit";
+  const egressIp = (vpn && vpn.egress_ip) ? vpn.egress_ip : "103.21.244.18";
+  const egressLoc = (vpn && vpn.egress_city) ? `${vpn.egress_city}, ${vpn.egress_country || 'IN'}` : "New Delhi, India";
+  const egressIsp = (vpn && vpn.egress_isp) ? vpn.egress_isp : "National NIC Gateway";
+
+  // Create signature to prevent wiping innerHTML every 5s unless state actually changes
+  const signature = `${connected}-${dnsLeak}-${localIp}-${ssid}-${gatewayIp}-${egressIp}`;
+  if (signature === lastSovereignSignature) return;
+  lastSovereignSignature = signature;
+
   const statusPill = $("sovereign-status-pill");
   const encChip = $("sov-stat-enc");
   const dnsChip = $("sov-stat-dns");
@@ -2362,23 +2447,11 @@ function renderSovereignEgressMap(vpn, iface) {
     dnsChip.className = `sov-stat-chip ${dnsLeak ? 'alert' : ''}`;
   }
 
-  const localIp = (iface && iface.gateway_ip) ? iface.gateway_ip.replace(/\d+$/, '104') : "192.168.1.104";
-  const ssid = (iface && iface.ssid) ? iface.ssid : "Local Wireless Link";
-  const gatewayIp = connected ? (vpn.virtual_ip || "10.8.0.2") : "Direct Transit";
-  const egressIp = (vpn && vpn.egress_ip) ? vpn.egress_ip : "103.21.244.18";
-  const egressLoc = (vpn && vpn.egress_city) ? `${vpn.egress_city}, ${vpn.egress_country || 'IN'}` : "New Delhi, India";
-  const egressIsp = (vpn && vpn.egress_isp) ? vpn.egress_isp : "National NIC Gateway";
-
   const strokeColor = connected ? (dnsLeak ? "#f59e0b" : "#10b981") : "#ef4444";
   const strokeDash = connected ? "6,4" : "8,6";
 
   svg.innerHTML = `
     <defs>
-      <linearGradient id="sovBeamGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" stop-color="#38bdf8"/>
-        <stop offset="50%" stop-color="${strokeColor}"/>
-        <stop offset="100%" stop-color="#a855f7"/>
-      </linearGradient>
       <filter id="sovGlow">
         <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
         <feMerge>
@@ -2388,11 +2461,11 @@ function renderSovereignEgressMap(vpn, iface) {
       </filter>
     </defs>
 
-    <!-- Vector Paths -->
+    <!-- Continuous Animated Vector Paths -->
     <path d="M 160 90 L 460 90" stroke="${strokeColor}" stroke-width="3" stroke-dasharray="${strokeDash}" style="animation:dashFlow 1.2s linear infinite;" fill="none" filter="url(#sovGlow)"/>
     <path d="M 460 90 L 760 90" stroke="${strokeColor}" stroke-width="3" stroke-dasharray="${strokeDash}" style="animation:dashFlow 1.2s linear infinite;" fill="none" filter="url(#sovGlow)"/>
 
-    <!-- NODE 1: Local Device -->
+    <!-- NODE 1: Local Client -->
     <g transform="translate(160, 90)">
       <circle r="22" fill="#0f172a" stroke="#38bdf8" stroke-width="3"/>
       <text text-anchor="middle" y="5" fill="#38bdf8" font-size="15">💻</text>
@@ -2422,6 +2495,8 @@ function renderSovereignEgressMap(vpn, iface) {
 }
 
 // 4. Interactive Q-Day Post-Quantum Mosca Calculator
+let qDayCountdownTimer = null;
+
 function initMoscaCalculator() {
   const sliderX = $("slider-data-shelf");
   const sliderY = $("slider-migration-time");
@@ -2430,6 +2505,8 @@ function initMoscaCalculator() {
   if (sliderY) sliderY.addEventListener("input", updateMoscaValues);
 
   updateMoscaValues();
+
+  if (qDayCountdownTimer) clearInterval(qDayCountdownTimer);
   startQDayCountdown();
 }
 
@@ -2500,7 +2577,7 @@ function startQDayCountdown() {
   }
 
   tick();
-  setInterval(tick, 1000);
+  qDayCountdownTimer = setInterval(tick, 1000);
 }
 
 // 5. Embedded Interactive Cyber Terminal (Multi-Vendor CLI Drawer)
@@ -2569,6 +2646,8 @@ function initCyberTerminal() {
       } else if (e.key === "Tab") {
         e.preventDefault();
         handleTerminalTabComplete(input);
+      } else if (e.key === "Escape") {
+        setTerminalState(false);
       }
     });
   }
@@ -2643,7 +2722,7 @@ function executeTerminalCommand(raw) {
       printTerminalLine("[+] Initiating active RF hardware sweep on interfaces...", "info");
       switchTab("wifi");
       loadWifiAssessment(true);
-      SocAudioEngine.radarPing();
+      SocAudioEngine.radarPing(true);
       printTerminalLine("[✔] Wi-Fi sweep complete. Telemetry updated on HUD.", "output");
       break;
 

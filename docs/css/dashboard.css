@@ -4634,6 +4634,10 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
 }
 .cyber-terminal-drawer.collapsed {
   transform: translateY(calc(100% - 38px));
+  pointer-events: none;
+}
+.cyber-terminal-drawer:not(.collapsed) {
+  pointer-events: auto;
 }
 .cyber-terminal-drawer.expanded {
   height: 75vh;
