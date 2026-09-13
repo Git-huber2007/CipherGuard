@@ -5,6 +5,14 @@
 Smart India Hackathon 2026 · Problem Statement **SIH26160** · National Technical
 Research Organisation (NTRO) · Theme: Blockchain & Cybersecurity
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-1b6e8c?style=for-the-badge&logo=googlechrome&logoColor=white)](https://git-huber2007.github.io/CipherGuard/)
+[![Repository](https://img.shields.io/badge/GitHub-CipherGuard-14212b?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Git-huber2007/CipherGuard)
+[![License](https://img.shields.io/badge/License-MIT-38bdf8?style=for-the-badge)](LICENSE)
+
+> 🌐 **Live Web Application (GitHub Pages)**: [https://git-huber2007.github.io/CipherGuard/](https://git-huber2007.github.io/CipherGuard/)  
+> ⚡ **Local Telemetry Engine Dashboard**: [http://127.0.0.1:8000/](http://127.0.0.1:8000/)  
+> 📂 **GitHub Repository**: [https://github.com/Git-huber2007/CipherGuard](https://github.com/Git-huber2007/CipherGuard)
+
 A passive analyzer that audits the cryptographic posture of IPsec VPN
 deployments from mirrored traffic alone. It holds no keys, touches no gateway,
 and changes no configuration.

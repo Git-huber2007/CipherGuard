@@ -1,0 +1,41 @@
+{
+  "mode": "static",
+  "generated_from": "real pipeline output, not mock data",
+  "captures": [
+    {
+      "name": "backbone.pcap",
+      "file": "data/backbone_pcap.json",
+      "size_kb": 1209.0,
+      "score": 4,
+      "grade": "E"
+    },
+    {
+      "name": "downgrade.pcap",
+      "file": "data/downgrade_pcap.json",
+      "size_kb": 284.0,
+      "score": 27,
+      "grade": "E"
+    },
+    {
+      "name": "hardened.pcap",
+      "file": "data/hardened_pcap.json",
+      "size_kb": 495.2,
+      "score": 85,
+      "grade": "B"
+    },
+    {
+      "name": "legacy.pcap",
+      "file": "data/legacy_pcap.json",
+      "size_kb": 338.2,
+      "score": 10,
+      "grade": "E"
+    },
+    {
+      "name": "transitional.pcap",
+      "file": "data/transitional_pcap.json",
+      "size_kb": 758.7,
+      "score": 48,
+      "grade": "D"
+    }
+  ]
+}

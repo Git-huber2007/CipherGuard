@@ -1,0 +1,22 @@
+{
+  "name": "CipherGuard — Passive Protocol & Wi-Fi Security Analyzer",
+  "short_name": "CipherGuard",
+  "description": "AI-Powered Passive Network Protocol and Live Wi-Fi Security Assessment Framework",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1b6e8c",
+  "icons": [
+    {
+      "src": "/static/img/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/img/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

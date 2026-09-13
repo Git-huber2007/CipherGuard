@@ -260,14 +260,14 @@ git init
 git add .
 git commit -m "CipherGuard: passive IPsec analyzer (SIH26160)"
 git branch -M main
-git remote add origin https://github.com/<you>/cipherguard.git
+git remote add origin https://github.com/Git-huber2007/CipherGuard.git
 git push -u origin main
 ```
 
 **2. Turn Pages on**
 
 Repository → **Settings** → **Pages** → under *Build and deployment*, set
-**Source** to **GitHub Actions**. Do not pick "Deploy from a branch".
+**Source** to **GitHub Actions** (or **Deploy from a branch** -> `/docs`).
 
 **3. That is all**
 
@@ -275,7 +275,7 @@ Repository → **Settings** → **Pages** → under *Build and deployment*, set
 the test suite, generates the captures, trains the model, builds the static
 dashboard and publishes it. If the tests fail, nothing deploys.
 
-Your site appears at `https://<you>.github.io/cipherguard/` after a couple of
+Your site appears at `https://git-huber2007.github.io/CipherGuard/` after a couple of
 minutes. Watch progress under the **Actions** tab.
 
 **Preview locally before pushing**

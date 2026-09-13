@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>404 — Packet Dropped | CipherGuard Security Framework</title>
+<meta name="description" content="HTTP 404: The requested network path or resource could not be found. CipherGuard protocol analysis and security assessment framework.">
+<meta name="robots" content="noindex, follow">
+
+<!-- Favicon & Touch Icons -->
+<link rel="icon" type="image/svg+xml" href="img/favicon.svg">
+<link rel="alternate icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<meta name="theme-color" content="#1b6e8c">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/dashboard.css">
+<style>
+  .error-container {
+    max-width: 780px;
+    margin: 40px auto;
+    text-align: center;
+  }
+  .error-card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 48px 32px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  }
+  .radar-wrap {
+    width: 140px;
+    height: 140px;
+    margin: 0 auto 24px;
+    position: relative;
+  }
+  .error-code {
+    font-family: var(--mono);
+    font-size: 3.5rem;
+    font-weight: 700;
+    color: var(--crit);
+    line-height: 1;
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+  }
+  .error-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    background: rgba(168, 30, 19, 0.1);
+    color: var(--crit);
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid rgba(168, 30, 19, 0.25);
+    margin-bottom: 20px;
+  }
+  .error-desc {
+    font-size: 1.05rem;
+    color: var(--muted);
+    max-width: 52ch;
+    margin: 0 auto 28px;
+    line-height: 1.6;
+  }
+  .diagnostic-log {
+    background: #0f172a;
+    color: #e2e8f0;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    padding: 16px 20px;
+    border-radius: 6px;
+    text-align: left;
+    margin-bottom: 32px;
+    overflow-x: auto;
+    border: 1px solid #1e293b;
+  }
+  .log-line { margin-bottom: 4px; }
+  .log-line:last-child { margin-bottom: 0; }
+  .log-red { color: #f87171; }
+  .log-cyan { color: #38bdf8; }
+  .log-gray { color: #64748b; }
+  .action-links {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .btn-primary {
+    background: var(--ink);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.15s;
+  }
+  .btn-primary:hover {
+    background: #22323f;
+  }
+  .btn-secondary {
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--rule);
+    padding: 10px 20px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.15s;
+  }
+  .btn-secondary:hover {
+    background: var(--sunk);
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-in">
+    <div class="brand">
+      <a href="/" style="display:flex;align-items:baseline;gap:12px;text-decoration:none;color:inherit;">
+        <img src="img/favicon.svg" alt="CipherGuard Shield Emblem" width="24" height="24" style="vertical-align:middle">
+        <h1 style="font-size:1.24rem">CipherGuard</h1>
+        <span class="ps">SIH26160 &middot; NTRO</span>
+      </a>
+    </div>
+    <nav class="controls">
+      <a href="/" class="btn-secondary" style="padding:6px 14px;font-size:0.82rem">Return to Dashboard &rarr;</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <main class="error-container">
+    <div class="error-card">
+      <div class="radar-wrap" aria-hidden="true">
+        <svg viewBox="0 0 100 100" width="100%" height="100%" role="img" aria-label="Packet drop icon">
+          <circle cx="50" cy="50" r="45" fill="none" stroke="#e2e8f0" stroke-width="3"/>
+          <circle cx="50" cy="50" r="30" fill="none" stroke="#cbd5e1" stroke-width="2"/>
+          <circle cx="50" cy="50" r="15" fill="none" stroke="#94a3b8" stroke-width="2"/>
+          <line x1="10" y1="50" x2="90" y2="50" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="3 3"/>
+          <line x1="50" y1="10" x2="50" y2="90" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="3 3"/>
+          <circle cx="68" cy="32" r="6" fill="#a81e13"/>
+          <line x1="64" y1="28" x2="72" y2="36" stroke="#ffffff" stroke-width="1.5"/>
+          <line x1="72" y1="28" x2="64" y2="36" stroke="#ffffff" stroke-width="1.5"/>
+        </svg>
+      </div>
+
+      <div class="error-code">404</div>
+      <div class="error-badge">
+        <span>⚠</span> PACKET_DROPPED &middot; UNROUTABLE_ENDPOINT
+      </div>
+
+      <h2 style="margin-bottom:12px;font-size:1.4rem;">Segment Not Found in Routing Table</h2>
+      <p class="error-desc">
+        The requested URL path does not match any registered API endpoint, active Wi-Fi telemetry probe, or static asset in the passive capture pipeline.
+      </p>
+
+      <div class="diagnostic-log" role="region" aria-label="Packet Dissector Diagnostic Log">
+        <div class="log-line"><span class="log-gray">[0.000000]</span> <span class="log-cyan">DISSECTOR:</span> Ingress request received on loopback adapter</div>
+        <div class="log-line"><span class="log-gray">[0.000104]</span> <span class="log-cyan">FILTER:</span> RFC 4303 Security Association Lookup... <span class="log-red">FAILED</span></div>
+        <div class="log-line"><span class="log-gray">[0.000219]</span> <span class="log-red">DIAGNOSTIC:</span> SPI null or unknown route. Returning ICMP Destination Unreachable (Code 3)</div>
+      </div>
+
+      <div class="action-links">
+        <a href="/" class="btn-primary">
+          <span>⚡</span> Return to Main Dashboard
+        </a>
+        <a href="/privacy" class="btn-secondary">
+          <span>🔒</span> Privacy &amp; Data Policy
+        </a>
+        <a href="/terms" class="btn-secondary">
+          <span>📋</span> Rules of Engagement
+        </a>
+      </div>
+    </div>
+  </main>
+
+  <footer style="margin-top:40px;text-align:center;font-size:0.82rem;color:var(--muted)">
+    CipherGuard Passive Protocol Analyzer &middot; SIH Problem Statement SIH26160 &middot; Cyber Defence &amp; Protocol Analysis Lab
+  </footer>
+</div>
+
+</body>
+</html>
