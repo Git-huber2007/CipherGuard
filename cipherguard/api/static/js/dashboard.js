@@ -3090,9 +3090,14 @@ async function init(){
     });
   }
   const simEvilTwinBtn = $("wifi-simulate-evil-twin");
+  const simRogueChip = $("sim-rogue-chip");
   if (simEvilTwinBtn) {
     simEvilTwinBtn.addEventListener("click", () => {
       state.simulatedRogueApActive = !state.simulatedRogueApActive;
+      if (simRogueChip) {
+        simRogueChip.textContent = state.simulatedRogueApActive ? "ACTIVE" : "OFF";
+      }
+      simEvilTwinBtn.classList.toggle("active", state.simulatedRogueApActive);
       if (state.wifiAssessment) {
         renderWifiDashboard(state.wifiAssessment);
       }
@@ -3101,6 +3106,7 @@ async function init(){
 
   // VPN Simulation Toggle Button listener
   const btnToggleVpn = $("btn-toggle-sim-vpn");
+  const simVpnChip = $("sim-vpn-chip");
   if (btnToggleVpn) {
     btnToggleVpn.addEventListener("click", () => {
       const currentActive = !!(state.wifiAssessment && state.wifiAssessment.vpn && state.wifiAssessment.vpn.connected);
@@ -3109,6 +3115,10 @@ async function init(){
       } else {
         state.simulatedVpnActive = !state.simulatedVpnActive;
       }
+      if (simVpnChip) {
+        simVpnChip.textContent = state.simulatedVpnActive ? "SECURE" : "DIRECT";
+      }
+      btnToggleVpn.classList.toggle("active", !!state.simulatedVpnActive);
       if (state.wifiAssessment) {
         renderWifiDashboard(state.wifiAssessment);
       }
@@ -3307,8 +3317,34 @@ async function init(){
   }
 
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeBackendModal();
+    if (e.key === "Escape") {
+      closeBackendModal();
+      closeShortcutsModal();
+    }
   });
+
+  // Keyboard Shortcuts Modal Handlers
+  function openShortcutsModal(){
+    const modal = $("shortcuts-modal");
+    if (modal) modal.hidden = false;
+  }
+  function closeShortcutsModal(){
+    const modal = $("shortcuts-modal");
+    if (modal) modal.hidden = true;
+  }
+
+  const btnShortcutsHelp = $("btn-shortcuts-help");
+  if (btnShortcutsHelp) btnShortcutsHelp.addEventListener("click", openShortcutsModal);
+
+  const shortcutsCloseBtn = $("shortcuts-modal-close");
+  if (shortcutsCloseBtn) shortcutsCloseBtn.addEventListener("click", closeShortcutsModal);
+
+  const shortcutsBackdrop = $("shortcuts-modal");
+  if (shortcutsBackdrop) {
+    shortcutsBackdrop.addEventListener("click", (e) => {
+      if (e.target === shortcutsBackdrop) closeShortcutsModal();
+    });
+  }
 
   const saveUrlBtn = $("btn-save-backend-url");
   if (saveUrlBtn) saveUrlBtn.addEventListener("click", handleSaveBackendUrl);
@@ -3329,9 +3365,16 @@ async function init(){
   const copyCmdBtn = $("btn-copy-backend-cmd");
   if (copyCmdBtn) copyCmdBtn.addEventListener("click", handleCopyBackendCmd);
 
-  // Accessible Global Keyboard Shortcuts (Alt+S for Spectrum, Alt+A for Assessment)
+  // Accessible Global Keyboard Shortcuts (Alt+S, Alt+A, Alt+D, Alt+E, ?, Esc)
   document.addEventListener("keydown", (e) => {
-    if (e.altKey && (e.key === "s" || e.key === "S")) {
+    // Avoid triggering when user is actively typing in an input or select
+    const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+    if (tag === "input" || tag === "textarea" || tag === "select") return;
+
+    if (e.key === "?" || (e.key === "/" && e.shiftKey)) {
+      e.preventDefault();
+      openShortcutsModal();
+    } else if (e.altKey && (e.key === "s" || e.key === "S")) {
       e.preventDefault();
       switchTab("wifi");
       loadWifiAssessment(true);
@@ -3339,6 +3382,13 @@ async function init(){
       e.preventDefault();
       switchTab("ipsec");
       runAnalysis();
+    } else if (e.altKey && (e.key === "d" || e.key === "D")) {
+      e.preventDefault();
+      switchTab("ipsec");
+      switchIpsecMode("diff");
+    } else if (e.altKey && (e.key === "e" || e.key === "E")) {
+      e.preventDefault();
+      exportSecurityAuditReport();
     }
   });
 

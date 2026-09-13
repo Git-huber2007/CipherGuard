@@ -57,6 +57,9 @@
         <span class="pulse-dot"></span>
         <span id="backend-status-label">Live Telemetry</span>
       </button>
+      <button type="button" id="btn-shortcuts-help" class="shortcuts-trigger-btn" title="Keyboard Shortcuts Cheat Sheet (Press ?)" aria-haspopup="dialog">
+        <span>⌨️</span> <span>Hotkeys <kbd>?</kbd></span>
+      </button>
     </div>
     <div class="controls" id="header-controls">
       <!-- Dynamic controls according to active tab -->
@@ -114,6 +117,33 @@
 
   <!-- ==================== VIEW 1: LIVE WI-FI POSTURE ==================== -->
   <main id="view-wifi" class="tab-content active">
+
+    <!-- Evaluator & Jury Threat Simulation Control Bar -->
+    <div class="simulation-control-bar" role="region" aria-label="Interactive Threat Simulator">
+      <div class="sim-bar-label">
+        <span class="sim-flask-icon">🧪</span>
+        <div class="sim-label-text">
+          <span class="sim-label-title">Evaluator Threat Simulator</span>
+          <span class="sim-label-desc">Inject active RF and routing attack vectors in real-time</span>
+        </div>
+      </div>
+      <div class="sim-bar-buttons">
+        <button type="button" id="wifi-simulate-evil-twin" class="sim-btn sim-btn-rogue" title="Simulate an active Evil Twin / Rogue AP attack broadcasting spoofed BSSID">
+          <span class="sim-btn-icon">🚨</span>
+          <span class="sim-btn-text">Simulate Rogue AP Attack</span>
+          <span class="sim-status-chip" id="sim-rogue-chip">OFF</span>
+        </button>
+        <button type="button" id="btn-toggle-sim-vpn" class="sim-btn sim-btn-vpn" title="Toggle VPN tunnel state to audit DNS leaks and egress protection">
+          <span class="sim-btn-icon">🛡️</span>
+          <span class="sim-btn-text">Toggle Encrypted VPN Tunnel</span>
+          <span class="sim-status-chip" id="sim-vpn-chip">AUTO</span>
+        </button>
+        <button type="button" id="wifi-scan-now" class="sim-btn sim-btn-scan" title="Force fresh physical wireless hardware scan">
+          <span class="sim-btn-icon">🔄</span>
+          <span class="sim-btn-text">Force RF Re-scan</span>
+        </button>
+      </div>
+    </div>
 
     <!-- Evil Twin / Rogue AP Alert Banner -->
     <div id="wifi-evil-twin-banner" class="evil-twin-alert-banner" style="display:none;" role="alert">
@@ -896,6 +926,71 @@
           <code>python -m uvicorn cipherguard.api.server:app --host 127.0.0.1 --port 8000</code>
           <button type="button" id="btn-copy-backend-cmd" class="btn-copy-cmd" title="Copy command to clipboard">Copy</button>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Analyst Keyboard Shortcuts Cheat Sheet Modal -->
+<div id="shortcuts-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="shortcuts-modal-title">
+  <div class="shortcuts-modal-card" role="document">
+    <div class="backend-modal-header">
+      <div class="backend-modal-title-group">
+        <span class="backend-modal-icon">⌨️</span>
+        <div>
+          <h2 id="shortcuts-modal-title">Analyst Keyboard Shortcuts</h2>
+          <div class="backend-modal-subtitle">Fast keyboard control for security audits</div>
+        </div>
+      </div>
+      <button type="button" id="shortcuts-modal-close" class="modal-close-btn" aria-label="Close dialog">&times;</button>
+    </div>
+    <div class="shortcuts-modal-body">
+      <div class="shortcuts-grid">
+        <div class="shortcut-item">
+          <div class="shortcut-keys"><kbd>Alt</kbd> + <kbd>A</kbd></div>
+          <div class="shortcut-desc">
+            <strong>Assess IPsec Capture</strong>
+            <span>Run active cryptographic analysis on selected PCAP capture file</span>
+          </div>
+        </div>
+        <div class="shortcut-item">
+          <div class="shortcut-keys"><kbd>Alt</kbd> + <kbd>S</kbd></div>
+          <div class="shortcut-desc">
+            <strong>Scan Live Wi-Fi</strong>
+            <span>Trigger active RF scan of local 802.11 spectrum and APs</span>
+          </div>
+        </div>
+        <div class="shortcut-item">
+          <div class="shortcut-keys"><kbd>Alt</kbd> + <kbd>D</kbd></div>
+          <div class="shortcut-desc">
+            <strong>Toggle Diff Comparison</strong>
+            <span>Switch to Before vs. After Capture A/B comparative auditor</span>
+          </div>
+        </div>
+        <div class="shortcut-item">
+          <div class="shortcut-keys"><kbd>Alt</kbd> + <kbd>E</kbd></div>
+          <div class="shortcut-desc">
+            <strong>Export Security Dossier</strong>
+            <span>Generate and print executive compliance audit dossier</span>
+          </div>
+        </div>
+        <div class="shortcut-item">
+          <div class="shortcut-keys"><kbd>?</kbd> or <kbd>Shift</kbd> + <kbd>/</kbd></div>
+          <div class="shortcut-desc">
+            <strong>Keyboard Shortcuts</strong>
+            <span>Open this analyst quick-reference guide</span>
+          </div>
+        </div>
+        <div class="shortcut-item">
+          <div class="shortcut-keys"><kbd>Esc</kbd></div>
+          <div class="shortcut-desc">
+            <strong>Close Dialogs</strong>
+            <span>Dismiss active modal or threat notification banner</span>
+          </div>
+        </div>
+      </div>
+      <div class="shortcuts-footer-note">
+        💡 <em>Pro-tip for Evaluators: Press <kbd>Alt</kbd> + <kbd>S</kbd> to run an instant Wi-Fi sweep or <kbd>Alt</kbd> + <kbd>A</kbd> for deep IPsec dissection without leaving your keyboard.</em>
       </div>
     </div>
   </div>

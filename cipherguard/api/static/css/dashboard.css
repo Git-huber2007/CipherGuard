@@ -3858,6 +3858,299 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   background: #30363d;
 }
 
+/* ==========================================================================
+   11. JURY THREAT SIMULATOR, SHORTCUTS MODAL & EXECUTIVE PRINT STYLES
+   ========================================================================== */
 
+/* Shortcuts Trigger Pill Button in Masthead */
+.shortcuts-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--sunk);
+  border: 1px solid var(--rule);
+  color: var(--muted);
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.shortcuts-trigger-btn:hover {
+  background: var(--surface);
+  color: var(--observed);
+  border-color: var(--observed);
+  box-shadow: 0 1px 4px rgba(27, 110, 140, 0.15);
+}
+.shortcuts-trigger-btn kbd {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--ink);
+}
 
+/* Threat Simulation Control Bar */
+.simulation-control-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  background: linear-gradient(90deg, #ffffff 0%, #f0f7fa 100%);
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  padding: 12px 18px;
+  margin-bottom: 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
 
+.sim-bar-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sim-flask-icon {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.sim-label-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sim-label-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.sim-label-desc {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.sim-bar-buttons {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.sim-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.sim-btn-rogue {
+  background: #fff1f2;
+  border-color: #fecdd3;
+  color: #be123c;
+}
+
+.sim-btn-rogue:hover {
+  background: #ffe4e6;
+  border-color: #fda4af;
+  box-shadow: 0 2px 8px rgba(190, 18, 60, 0.15);
+}
+
+.sim-btn-rogue.active {
+  background: #e11d48;
+  border-color: #be123c;
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(225, 29, 72, 0.4);
+  animation: rogueActivePulse 2s infinite ease-in-out;
+}
+
+@keyframes rogueActivePulse {
+  0% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.6); }
+  70% { box-shadow: 0 0 0 8px rgba(225, 29, 72, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0); }
+}
+
+.sim-btn-vpn {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.sim-btn-vpn:hover {
+  background: #dcfce7;
+  border-color: #86efac;
+  box-shadow: 0 2px 8px rgba(21, 128, 61, 0.15);
+}
+
+.sim-btn-vpn.active {
+  background: #16a34a;
+  border-color: #15803d;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(22, 163, 74, 0.35);
+}
+
+.sim-btn-scan {
+  background: #ffffff;
+  border-color: var(--rule);
+  color: var(--muted);
+}
+
+.sim-btn-scan:hover {
+  background: var(--sunk);
+  color: var(--ink);
+  border-color: var(--dim);
+}
+
+.sim-status-chip {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.sim-btn.active .sim-status-chip {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+/* Shortcuts Modal Dialog */
+.shortcuts-modal-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 580px;
+  max-height: 90vh;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalScaleIn 0.25s ease-out;
+}
+
+.shortcuts-modal-body {
+  padding: 18px 22px;
+  overflow-y: auto;
+}
+
+.shortcuts-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
+  background: var(--sunk);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.shortcut-item:hover {
+  background: var(--surface);
+  border-color: var(--observed);
+  transform: translateX(2px);
+}
+
+.shortcut-keys {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.shortcut-keys kbd, .shortcuts-footer-note kbd {
+  background: #ffffff;
+  border: 1px solid var(--rule);
+  border-bottom: 2px solid var(--rule);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.shortcut-desc {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: right;
+}
+
+.shortcut-desc strong {
+  font-size: 0.82rem;
+  color: var(--ink);
+}
+
+.shortcut-desc span {
+  font-size: 0.73rem;
+  color: var(--muted);
+}
+
+.shortcuts-footer-note {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: var(--observed-bg);
+  border: 1px solid rgba(27, 110, 140, 0.25);
+  border-radius: 6px;
+  font-size: 0.76rem;
+  color: var(--observed);
+  line-height: 1.45;
+}
+
+/* Print Styles for Clean Executive Dossier Printing */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 12pt !important;
+  }
+  .masthead, .nav-tabs, .simulation-control-bar, .controls, #header-controls, .mobile-sticky-cta, #cookie-banner, .modal-backdrop {
+    display: none !important;
+  }
+  .wrap {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .panel {
+    border: 1px solid #cbd5e1 !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 20px !important;
+  }
+  .site-footer {
+    border: 1px solid #cbd5e1 !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
