@@ -40,7 +40,10 @@
 }
 
 *{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
+html{
+  -webkit-text-size-adjust:100%;
+  overflow-x:hidden;
+}
 body{
   margin:0;
   background:var(--paper);
@@ -48,12 +51,21 @@ body{
   font-family:var(--sans);
   font-size:15px;
   line-height:1.55;
+  overflow-x:hidden;
+  width:100%;
+  max-width:100vw;
 }
-h1,h2,h3{margin:0;font-weight:600;letter-spacing:-0.01em}
-p{margin:0 0 .6rem}
+img, svg{max-width:100%}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-0.01em;overflow-wrap:break-word}
+p{margin:0 0 .6rem;overflow-wrap:break-word}
 a{color:var(--observed)}
 
-.wrap{max-width:1180px;margin:0 auto;padding:0 24px 72px}
+.wrap{
+  max-width:1180px;
+  margin:0 auto;
+  padding:0 24px 72px;
+  width:100%;
+}
 .visually-hidden{
   position:absolute;width:1px;height:1px;overflow:hidden;
   clip:rect(0 0 0 0);white-space:nowrap;
@@ -127,6 +139,8 @@ a{color:var(--observed)}
   50% { opacity: 0.4; transform: scale(0.85); }
 }
 .controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.tab-controls-group{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.controls-subgroup{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 select,button{font-family:var(--sans);font-size:.88rem}
 select{
   padding:8px 11px;border:1px solid var(--rule);border-radius:4px;
@@ -142,6 +156,52 @@ button.ghost{background:transparent;color:var(--ink);border-color:var(--rule)}
 button.ghost:hover{background:var(--sunk)}
 button.ghost[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
 :focus-visible{outline:2px solid var(--observed);outline-offset:2px}
+
+/* Dynamic mode header controls */
+.diff-select-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.diff-label {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.diff-select {
+  padding: 7px 10px;
+  font-size: 0.84rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.diff-vs-arrow {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+.primary-btn {
+  background: var(--observed);
+  color: #fff;
+  border: 1px solid var(--observed);
+  border-radius: 4px;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.primary-btn:hover {
+  background: #14556d;
+}
+.wifi-hero-btns {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 
 /* ---------- wire ribbon: the hero ---------- */
 .ribbon-block{margin-bottom:30px}
@@ -530,7 +590,13 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
 }
 
 /* ---------- Data Table ---------- */
-.table-responsive{overflow-x:auto}
+.table-responsive, .table-wrap{
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  width:100%;
+  max-width:100%;
+  position:relative;
+}
 .data-table{
   width:100%;
   border-collapse:collapse;
@@ -2600,54 +2666,114 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   color: var(--faint);
 }
 
-/* ---------- 10. Responsive Mobile Breakpoints ---------- */
+/* ==========================================================================
+   10. UNIVERSAL RESPONSIVE DESIGN SYSTEM (All Devices & Screen Sizes)
+   ========================================================================== */
 
-/* Tablet Breakpoint (max-width: 1024px) */
+/* ---------- A. 4K, Ultra-Wide & Large Desktop Displays (min-width: 1441px) ---------- */
+@media (min-width: 1441px) {
+  .wrap {
+    max-width: min(94vw, 1440px);
+    padding: 0 32px 80px;
+  }
+  .masthead-in {
+    max-width: min(94vw, 1440px);
+    padding: 22px 32px;
+  }
+  .cookie-banner-content {
+    max-width: min(94vw, 1440px);
+  }
+  .diff-summary-grid {
+    grid-template-columns: 1fr 160px 1fr;
+    gap: 24px;
+  }
+  .diff-capture-card {
+    padding: 20px 24px;
+  }
+  .statgrid {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 16px;
+  }
+  .spectrum-advisory-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* ---------- B. Medium Tablets & Small Laptops (max-width: 1024px) ---------- */
 @media (max-width: 1024px) {
   .wrap {
-    padding: 0 16px 80px;
+    padding: 0 18px 80px;
+  }
+  .masthead-in {
+    padding: 14px 18px;
+    gap: 14px;
   }
   .footer-grid {
     grid-template-columns: 1fr 1fr;
+    gap: 32px;
   }
   .footer-grid .footer-brand {
     grid-column: span 2;
   }
+  .spectrum-advisory-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .diff-summary-grid {
+    grid-template-columns: 1fr 110px 1fr;
+    gap: 12px;
+  }
+  .compliance-stats-row {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
 }
 
-/* Mobile Landscape & Tablet Portrait (max-width: 768px) */
+/* ---------- C. Tablets Portrait & Large Mobile Screens (max-width: 768px) ---------- */
 @media (max-width: 768px) {
+  html, body {
+    overflow-x: hidden;
+  }
+  .wrap {
+    padding: 0 14px 115px; /* Extra padding for sticky mobile dock */
+  }
+
+  /* Masthead & Brand */
+  .masthead {
+    margin-bottom: 18px;
+  }
   .masthead-in {
-    padding: 12px 16px;
+    padding: 12px 14px;
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
   }
-  .masthead-in .brand {
+  .brand {
+    display: flex;
+    align-items: center;
     justify-content: space-between;
     width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
   }
+  .brand h1 {
+    font-size: 1.15rem;
+  }
+  .backend-status-pill {
+    padding: 4px 10px;
+    font-size: 0.72rem;
+  }
+
+  /* Controls & Toggles */
   .controls {
     width: 100%;
-    justify-content: stretch;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
   }
   #ipsec-controls, #wifi-controls {
     width: 100%;
     flex-direction: column;
     align-items: stretch !important;
-  }
-  #ipsec-single-controls {
-    width: 100%;
-    flex-direction: column;
-    align-items: stretch !important;
-  }
-  #ipsec-single-controls select {
-    width: 100%;
-    min-width: unset;
-  }
-  #ipsec-single-controls button, #run, #wifi-refresh-btn {
-    width: 100%;
-    min-height: 44px; /* Mobile touch target */
+    gap: 10px;
   }
   .mode-toggle-group {
     width: 100%;
@@ -2656,75 +2782,275 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   .mode-toggle-btn {
     flex: 1;
     text-align: center;
+    min-height: 42px;
+    font-size: 0.82rem;
+    padding: 8px 10px;
   }
-  
-  /* Grids collapse to 1 column */
-  .grid.cols-2, .grid {
-    grid-template-columns: 1fr !important;
-  }
-  .vpn-detail-grid {
-    grid-template-columns: 1fr 1fr !important;
-  }
-  .diff-heroes-grid {
-    grid-template-columns: 1fr !important;
-  }
-  .diff-transformation-col {
-    padding: 16px 0;
-  }
-  .diff-ribbons-container {
-    grid-template-columns: 1fr !important;
-  }
-  .diff-findings-grid {
-    grid-template-columns: 1fr !important;
-  }
-
-  /* Wi-Fi Hero Section on Mobile */
-  .wifi-hero-card {
+  #ipsec-single-controls {
+    width: 100%;
     flex-direction: column;
-    align-items: stretch;
-    gap: 16px;
-  }
-  .wifi-hero-actions {
     align-items: stretch !important;
+    gap: 8px;
   }
-  .wifi-hero-actions div {
-    flex-direction: column;
+  #ipsec-single-controls select {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    font-size: 0.88rem;
   }
-  .wifi-hero-actions button {
+  #ipsec-single-controls button, #run, #wifi-refresh-btn, #wifi-header-export-btn, #ipsec-export-report {
     width: 100%;
     min-height: 44px;
+    font-size: 0.88rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 16px;
+  }
+  .cta-badge {
+    display: none;
   }
 
-  /* Tab Navigation touch sizing */
-  .nav-tabs {
+  /* Diff Controls on Mobile */
+  #ipsec-diff-controls {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 10px;
+  }
+  .diff-select-group {
+    width: 100%;
+    display: flex;
     flex-direction: column;
     gap: 4px;
+  }
+  .diff-select {
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+  }
+  .diff-vs-arrow {
+    text-align: center;
+    font-size: 1.25rem;
+    color: var(--muted);
+    transform: rotate(90deg);
+    margin: 2px 0;
+  }
+  #run-diff {
+    width: 100%;
+    min-height: 44px;
+    font-size: 0.88rem;
+  }
+
+  /* Navigation Tabs */
+  .nav-tabs {
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
   }
   .tab-btn {
     width: 100%;
     text-align: center;
     min-height: 44px;
-    padding: 10px 16px;
+    padding: 11px 16px;
+    font-size: 0.88rem;
+    justify-content: center;
   }
 
-  /* Table responsiveness */
-  .table-responsive {
+  /* Layout Grids */
+  .grid.cols-2, .grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px;
+  }
+  .vpn-detail-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Wi-Fi Hero Section */
+  .wifi-hero-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    padding: 16px;
+  }
+  .wifi-ssid-title {
+    font-size: 1.35rem;
+    word-break: break-word;
+  }
+  .wifi-meta-row {
+    gap: 6px 10px;
+    font-size: 0.82rem;
+  }
+  .wifi-hero-actions {
+    width: 100%;
+    align-items: stretch !important;
+  }
+  .wifi-hero-btns {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+  .wifi-hero-btns button, .wifi-hero-actions button {
+    width: 100%;
+    min-height: 44px;
+  }
+  .wifi-time-sub {
+    text-align: center;
+    margin-top: 4px;
+  }
+
+  /* Evil Twin Alert Banner */
+  .evil-twin-alert-banner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 16px;
+  }
+  .evil-twin-banner-main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .evil-twin-icon-box {
+    align-self: flex-start;
+  }
+  .evil-twin-desc {
+    max-width: 100%;
+    font-size: 0.84rem;
+  }
+  .evil-twin-banner-actions {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+  }
+  .inspect-rogue-btn {
+    flex: 1;
+    min-height: 44px;
+    text-align: center;
+    justify-content: center;
+  }
+
+  /* RF Spectrum Visualizer */
+  .spectrum-panel-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .spectrum-band-toggle {
+    width: 100%;
+    display: flex;
+  }
+  .spectrum-band-btn {
+    flex: 1;
+    text-align: center;
+    min-height: 40px;
+  }
+  .spectrum-advisory-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .spectrum-chart-container {
+    padding: 12px 10px;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
-  .data-table {
-    min-width: 600px;
+  .spectrum-svg-wrap {
+    min-width: 580px;
+  }
+  .spectrum-legend {
+    gap: 10px 14px;
+    font-size: 0.72rem;
   }
 
-  /* Show Sticky Mobile CTA Dock */
+  /* Playbook & Remediation */
+  .playbook-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .playbook-view-tabs {
+    display: flex;
+    width: 100%;
+    gap: 6px;
+  }
+  .playbook-tab {
+    flex: 1;
+    text-align: center;
+    padding: 8px 6px;
+    font-size: 0.75rem;
+    min-height: 40px;
+  }
+  .playbook-meta-chips {
+    justify-content: flex-start;
+    gap: 6px;
+  }
+  .playbook-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+  }
+  .playbook-actions button {
+    flex: 1 1 calc(50% - 4px);
+    min-height: 42px;
+    font-size: 0.82rem;
+    text-align: center;
+    justify-content: center;
+  }
+  #btn-playbook-approve {
+    flex: 1 1 100%;
+  }
+
+  /* Diff Comparison View */
+  .diff-summary-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px;
+  }
+  .diff-transformation-col {
+    padding: 12px 0;
+    flex-direction: row;
+    justify-content: center;
+    gap: 12px;
+  }
+  .diff-arrow-circle {
+    transform: rotate(90deg);
+    width: 38px;
+    height: 38px;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+  .diff-ribbons-container {
+    grid-template-columns: 1fr !important;
+    gap: 14px;
+  }
+  .diff-findings-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px;
+  }
+
+  /* Tables & Responsive Wrappers */
+  .table-responsive, .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+  .data-table, .compliance-matrix-table, .diff-matrix-table {
+    min-width: 580px;
+  }
+
+  /* Mobile Sticky Dock */
   .mobile-sticky-cta {
     display: block;
-  }
-  .wrap {
-    padding-bottom: 120px; /* Leave space for mobile CTA dock */
+    padding-bottom: max(10px, env(safe-area-inset-bottom, 10px));
   }
 
-  /* Footer stack */
+  /* Footer */
+  .site-footer {
+    margin-top: 36px;
+    padding: 32px 0 20px;
+  }
   .footer-grid {
     grid-template-columns: 1fr;
     gap: 24px;
@@ -2732,45 +3058,251 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   .footer-grid .footer-brand {
     grid-column: span 1;
   }
+  .footer-email-chip {
+    white-space: normal !important;
+    word-break: break-all;
+    max-width: 100%;
+  }
+  .footer-pgp-box {
+    flex-wrap: wrap;
+    word-break: break-all;
+  }
   .footer-bottom {
     flex-direction: column;
     align-items: flex-start;
+    gap: 10px;
+  }
+
+  /* Documentation Pages */
+  .doc-card, .ty-card, .error-card {
+    padding: 24px 18px !important;
   }
 }
 
-/* Small Smartphone Breakpoint (max-width: 480px) */
+/* ---------- D. Standard Smartphones (max-width: 480px) ---------- */
 @media (max-width: 480px) {
   body {
     font-size: 14px;
   }
+  .wrap {
+    padding: 0 10px 115px;
+  }
+  .panel {
+    padding: 14px 12px;
+  }
   .brand h1 {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
+  }
+  .brand .ps {
+    font-size: 0.65rem;
+    padding: 2px 5px;
+  }
+  .wifi-ssid-title {
+    font-size: 1.25rem;
   }
   .vpn-detail-grid {
     grid-template-columns: 1fr !important;
   }
-  .panel {
-    padding: 16px;
-  }
+
+  /* Posture & Scores */
   .scoreline {
     flex-direction: column;
     text-align: center;
-    gap: 14px;
+    gap: 12px;
+  }
+  .score-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .sev-row {
+    justify-content: center;
   }
   .statgrid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .stat .k {
+    font-size: 0.94rem;
+  }
+  .stat .l {
+    font-size: 0.72rem;
+  }
+
+  /* Health items */
+  .health-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 10px 12px;
+  }
+  .health-val {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .signal-bar-track {
+    flex: 1;
+    max-width: 120px;
+  }
+
+  /* Ribbon */
+  .field {
+    flex: 1 1 100%;
+  }
+
+  /* Cookie Consent */
+  .cookie-banner {
+    padding: 12px 14px;
   }
   .cookie-banner-content {
     flex-direction: column;
     align-items: stretch;
+    gap: 10px;
+  }
+  .cookie-text {
+    font-size: 0.80rem;
+    line-height: 1.45;
   }
   .cookie-actions {
     width: 100%;
     flex-direction: column;
+    gap: 8px;
   }
   .btn-cookie-accept, .btn-cookie-dismiss {
     width: 100%;
     min-height: 44px;
+    font-size: 0.84rem;
+  }
+
+  /* Backend Engine Modal */
+  .modal-backdrop {
+    padding: 8px;
+  }
+  .backend-modal-card {
+    max-width: 100%;
+    border-radius: 8px;
+  }
+  .backend-modal-header {
+    padding: 12px 14px;
+  }
+  .backend-modal-body {
+    padding: 14px 12px;
+    max-height: 80vh;
+  }
+  .modal-metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .backend-input-group {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .backend-input {
+    width: 100%;
+    min-height: 42px;
+  }
+  .backend-input-group button {
+    width: 100%;
+    min-height: 42px;
+  }
+  .code-snippet-box {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .btn-copy-cmd {
+    width: 100%;
+    min-height: 38px;
+    text-align: center;
+  }
+
+  /* Documentation Pages */
+  .doc-card, .ty-card, .error-card {
+    padding: 18px 12px !important;
+  }
+  .doc-title, .ty-title {
+    font-size: 1.3rem !important;
+  }
+  .error-code {
+    font-size: 2.8rem !important;
+  }
+}
+
+/* ---------- E. Ultra-Compact Mobiles & Foldable Cover Screens (max-width: 360px) ---------- */
+@media (max-width: 360px) {
+  body {
+    font-size: 13.5px;
+  }
+  .wrap {
+    padding: 0 8px 110px;
+  }
+  .brand {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .backend-status-pill {
+    align-self: flex-start;
+  }
+  .panel {
+    padding: 12px 8px;
+  }
+  .wifi-ssid-title {
+    font-size: 1.15rem;
+  }
+  .wifi-meta-row {
+    font-size: 0.75rem;
+    gap: 4px 6px;
+  }
+  .dial svg {
+    width: 96px;
+    height: 96px;
+  }
+  .score-num {
+    font-size: 1.6rem;
+  }
+  .statgrid {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .stat .k {
+    font-size: 0.86rem;
+  }
+  .stat .l {
+    font-size: 0.68rem;
+  }
+  .mobile-cta-main {
+    font-size: 0.82rem;
+    padding: 10px 10px;
+  }
+  .mobile-cta-sub {
+    font-size: 0.78rem;
+    padding: 10px 8px;
+  }
+  .doc-card, .ty-card, .error-card {
+    padding: 14px 8px !important;
+  }
+  .footer-card {
+    padding: 12px 10px;
+  }
+}
+
+/* ---------- F. Mobile Landscape Orientation (max-height: 520px and landscape) ---------- */
+@media (max-height: 520px) and (orientation: landscape) {
+  .backend-modal-card {
+    max-height: 94vh;
+  }
+  .backend-modal-body {
+    max-height: 62vh;
+  }
+  .mobile-sticky-cta {
+    padding: 6px 14px;
+  }
+  .wrap {
+    padding-bottom: 85px;
   }
 }
 

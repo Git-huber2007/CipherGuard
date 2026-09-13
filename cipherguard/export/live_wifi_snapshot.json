@@ -7,28 +7,28 @@
     "ssid": "White Devil",
     "bssid": "5a:04:bd:22:04:63",
     "band": "2.4 GHz",
-    "channel": 6,
+    "channel": 11,
     "radio_type": "802.11ax",
     "authentication": "WPA2-Personal",
     "cipher": "CCMP",
     "signal_percent": 84,
-    "rssi_dbm": -52,
+    "rssi_dbm": -41,
     "rx_rate_mbps": 286.8,
     "tx_rate_mbps": 286.8,
     "dns_servers": [
-      "10.2.0.1",
-      "10.187.105.202"
+      "10.187.105.202",
+      "2401"
     ],
-    "gateway_ip": "0.0.0.0",
-    "ipv4_address": "10.2.0.2"
+    "gateway_ip": "",
+    "ipv4_address": "10.187.105.210"
   },
   "networks_in_range": [
     {
       "ssid": "White Devil",
       "bssid": "5a:04:bd:22:04:63",
-      "signal_percent": 83,
-      "rssi_dbm": -58,
-      "channel": 6,
+      "signal_percent": 87,
+      "rssi_dbm": -56,
+      "channel": 11,
       "band": "2.4 GHz",
       "radio_type": "802.11ax",
       "authentication": "WPA2-Personal",
@@ -39,11 +39,45 @@
       "rogue_reason": "",
       "notes": "",
       "cipher": "CCMP"
+    },
+    {
+      "ssid": "vivo Y100A",
+      "bssid": "c2:0f:64:eb:45:f8",
+      "signal_percent": 76,
+      "rssi_dbm": -62,
+      "channel": 1,
+      "band": "2.4 GHz",
+      "radio_type": "802.11ac",
+      "authentication": "WPA2-Personal",
+      "encryption": "CCMP",
+      "security_grade": "B",
+      "connected": false,
+      "is_rogue": false,
+      "rogue_reason": "",
+      "notes": "",
+      "cipher": "CCMP"
+    },
+    {
+      "ssid": "OPPO Reno10 5G 7DC8",
+      "bssid": "4e:5e:1f:b5:c1:c8",
+      "signal_percent": 75,
+      "rssi_dbm": -62,
+      "channel": 4,
+      "band": "2.4 GHz",
+      "radio_type": "802.11ac",
+      "authentication": "WPA3-Personal",
+      "encryption": "CCMP",
+      "security_grade": "A+",
+      "connected": false,
+      "is_rogue": false,
+      "rogue_reason": "",
+      "notes": "",
+      "cipher": "CCMP"
     }
   ],
   "score": 80,
   "grade": "B",
-  "started": "2026-09-13T05:55:01.772817+00:00",
+  "started": "2026-09-13T15:52:07.126417+00:00",
   "findings": [
     {
       "severity": "medium",
@@ -59,7 +93,7 @@
       "severity": "info",
       "rule_id": "WIFI-011",
       "title": "2.4 GHz Band In Use (Crowded Spectrum)",
-      "subject": "Band: 2.4 GHz \u00b7 Channel 6",
+      "subject": "Band: 2.4 GHz \u00b7 Channel 11",
       "detail": "The 2.4 GHz spectrum has only 3 non-overlapping channels (1, 6, 11) and suffers significant co-channel interference from Bluetooth and microwave emitters.",
       "remediation": "Migrate clients to 5 GHz or 6 GHz (Wi-Fi 6/6E) for higher bandwidth and isolated DFS channels.",
       "reference": "IEEE 802.11ax / 802.11be",
@@ -69,7 +103,7 @@
       "severity": "medium",
       "rule_id": "WIFI-030",
       "title": "Local Gateway Unencrypted DNS Resolver",
-      "subject": "DNS: 10.2.0.1, 10.187.105.202",
+      "subject": "DNS: 10.187.105.202, 2401",
       "detail": "DNS queries are routed through the local router without DNS-over-HTTPS (DoH) or DNS-over-TLS (DoT). Local network eavesdroppers or malicious gateways can inspect visited hostnames and execute DNS spoofing / cache poisoning.",
       "remediation": "Configure encrypted DNS (DoH/DoT) using trusted resolvers like Cloudflare (1.1.1.1) or Quad9 (9.9.9.9), or enforce DNSSEC validation.",
       "reference": "RFC 8484 (DoH) / RFC 7858 (DoT)",
@@ -93,54 +127,42 @@
     "low": 0,
     "info": 2
   },
-  "summary": "Connected to 'White Devil' on 2.4 GHz (Channel 6). Security: WPA2-Personal / CCMP with 84% signal. Score: 80/100 (Grade B).",
+  "summary": "Connected to 'White Devil' on 2.4 GHz (Channel 11). Security: WPA2-Personal / CCMP with 84% signal. Score: 80/100 (Grade B).",
   "dns_posture": {
     "dns_servers": [
-      "10.2.0.1",
-      "10.187.105.202"
+      "10.187.105.202",
+      "2401"
     ],
-    "gateway": "0.0.0.0",
-    "ipv4": "10.2.0.2"
+    "gateway": "",
+    "ipv4": "10.187.105.210"
   },
   "quantum_risk": "Standard Classical (ECC/RSA Handshake at Risk to CRQC)",
   "rogue_aps": [],
   "vpn": {
-    "connected": true,
-    "adapter_name": "ProTUN",
-    "adapter_description": "Proton VPN Windows Tunnel",
-    "vpn_type": "ProtonVPN (WireGuard)",
-    "virtual_ip": "10.2.0.2",
+    "connected": false,
+    "adapter_name": "",
+    "adapter_description": "",
+    "vpn_type": "None",
+    "virtual_ip": "",
     "gateway_ip": "",
-    "route_metric": 1,
-    "is_default_route": true,
-    "dns_servers": [
-      "10.2.0.1"
-    ],
+    "route_metric": 0,
+    "is_default_route": false,
+    "dns_servers": [],
     "dns_leak_detected": false,
     "dns_leak_details": "",
-    "egress_ip": "212.102.51.91",
-    "egress_isp": "Datacamp Limited",
-    "egress_country": "Japan",
-    "egress_city": "Tokyo",
+    "egress_ip": "106.192.235.186",
+    "egress_isp": "Bharti Airtel Limited",
+    "egress_country": "India",
+    "egress_city": "Bengaluru",
     "findings": [
       {
         "severity": "info",
-        "rule_id": "VPN-001",
-        "title": "Active Encrypted ProtonVPN (WireGuard) Overlay Tunnel Verified",
-        "subject": "Adapter: ProTUN (ProtonVPN (WireGuard))",
-        "detail": "All transport layer payloads on 'ProTUN' are encapsulated in an encrypted ProtonVPN (WireGuard) tunnel. Even if local Wi-Fi encryption is compromised, intermediate nodes and the local access point cannot inspect or tamper with tunneled packets.",
-        "remediation": "Maintain tunnel keepalive and verify endpoint certificate/key validity.",
-        "reference": "RFC 4301 (IPsec) / RFC 9370 / WireGuard Technical Whitepaper",
-        "inferred": false
-      },
-      {
-        "severity": "info",
-        "rule_id": "VPN-003",
-        "title": "Encrypted Tunnel DNS Enforced",
-        "subject": "Tunnel DNS: 10.2.0.1",
-        "detail": "Domain name resolution is securely isolated inside the VPN tunnel.",
-        "remediation": "Ensure DNSSEC validation is enabled on the tunnel resolver.",
-        "reference": "RFC 8484 / RFC 7858",
+        "rule_id": "VPN-010",
+        "title": "Direct Physical Egress (No Virtual VPN Tunnel)",
+        "subject": "Egress: Direct to ISP (Bharti Airtel Limited)",
+        "detail": "Device network traffic egresses directly through the local Wi-Fi router to the public ISP without an outer IPsec or WireGuard protective tunnel. Local network administrators and upstream ISPs can inspect unencrypted transport metadata and SNI hostnames.",
+        "remediation": "For sensitive remote access or untrusted networks, establish an IPsec (RFC 4301) or WireGuard tunnel.",
+        "reference": "NIST SP 800-77 / NIST SP 800-113",
         "inferred": false
       }
     ]

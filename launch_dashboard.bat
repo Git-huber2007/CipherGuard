@@ -14,12 +14,29 @@ echo.
 
 set "PY_EXE="
 
-:: 1. Check Python 3.12 default install path
-if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
-    set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+:: 1. Check virtual environments (user profile venv and local project venv)
+if exist "%USERPROFILE%\venv\Scripts\python.exe" (
+    set "PY_EXE=%USERPROFILE%\venv\Scripts\python.exe"
+)
+if not defined PY_EXE if exist "%~dp0venv\Scripts\python.exe" (
+    set "PY_EXE=%~dp0venv\Scripts\python.exe"
+)
+if not defined PY_EXE if exist "%~dp0..\venv\Scripts\python.exe" (
+    set "PY_EXE=%~dp0..\venv\Scripts\python.exe"
 )
 
-:: 2. Check py launcher
+:: 2. Check installed Python distributions (3.12, 3.11, 3.10)
+if not defined PY_EXE if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
+    set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+)
+if not defined PY_EXE if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
+    set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+)
+if not defined PY_EXE if exist "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" (
+    set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
+)
+
+:: 3. Check py launcher
 if not defined PY_EXE (
     where py >nul 2>nul
     if !errorlevel! equ 0 (
@@ -27,7 +44,7 @@ if not defined PY_EXE (
     )
 )
 
-:: 3. Check python on PATH
+:: 4. Check python on PATH
 if not defined PY_EXE (
     where python >nul 2>nul
     if !errorlevel! equ 0 (
@@ -35,7 +52,7 @@ if not defined PY_EXE (
     )
 )
 
-:: 4. Verify python is available
+:: 5. Verify python is available
 if not defined PY_EXE (
     echo [ERROR] Python 3.10+ was not found on your system.
     echo Please install Python from https://www.python.org/downloads/
@@ -47,13 +64,24 @@ if not defined PY_EXE (
 
 echo [*] Project Directory: %CD%
 echo [*] Python Interpreter: !PY_EXE!
+
+:: Ensure PYTHONPATH includes current project directory for seamless module resolution
+set "PYTHONPATH=%CD%;!PYTHONPATH!"
+
+:: 6. Pre-scan and synchronize live physical Wi-Fi & VPN telemetry
+if exist "scripts\sync_live_wifi.py" (
+    echo [*] Auditing local wireless RF spectrum & hardware telemetry...
+    !PY_EXE! scripts\sync_live_wifi.py
+    echo.
+)
+
 echo [*] Launching CipherGuard Dashboard on http://127.0.0.1:8000/ ...
 echo [*] Opening your default web browser...
 echo [*] (Keep this window open. Press Ctrl+C anytime to stop the server.)
 echo ======================================================================
 echo.
 
-:: Open browser after 2 seconds in background
+:: Open browser in background
 start "" "http://127.0.0.1:8000/"
 
 :: Start dashboard server

@@ -60,12 +60,12 @@
     </div>
     <div class="controls" id="header-controls">
       <!-- Dynamic controls according to active tab -->
-      <div id="ipsec-controls" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <div id="ipsec-controls" class="tab-controls-group">
         <div class="mode-toggle-group" role="group" aria-label="IPsec Analysis Mode">
           <button type="button" id="btn-ipsec-single" class="mode-toggle-btn active">Single Assessment</button>
           <button type="button" id="btn-ipsec-diff" class="mode-toggle-btn">⚖️ Compare / Diff Captures</button>
         </div>
-        <div id="ipsec-single-controls" style="display:flex;gap:8px;align-items:center;">
+        <div id="ipsec-single-controls" class="controls-subgroup">
           <label for="capture" class="visually-hidden">Capture file</label>
           <select id="capture" aria-label="Select PCAP capture file"></select>
           <!-- Prominent CTA Above the Fold for IPsec -->
@@ -73,7 +73,7 @@
             <span class="cta-icon">⚡</span> Assess capture <span class="cta-badge">Alt + A</span>
           </button>
         </div>
-        <div id="ipsec-diff-controls" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;">
+        <div id="ipsec-diff-controls" class="controls-subgroup" style="display:none;">
           <span class="diff-select-group">
             <label for="diff-capture-a" class="diff-label">Baseline (A):</label>
             <select id="diff-capture-a" class="diff-select" aria-label="Baseline capture A"></select>
@@ -83,11 +83,11 @@
             <label for="diff-capture-b" class="diff-label">Hardened (B):</label>
             <select id="diff-capture-b" class="diff-select" aria-label="Remediated capture B"></select>
           </span>
-          <button id="run-diff" class="primary-btn" style="padding:7px 14px;font-size:0.85rem">Run Diff Comparison</button>
+          <button id="run-diff" class="primary-btn">Run Diff Comparison</button>
         </div>
         <button id="ipsec-export-report" class="action-btn secondary" style="padding:6px 12px;background:rgba(56,189,248,0.12);color:var(--accent);border:1px solid rgba(56,189,248,0.3);font-size:0.75rem;cursor:pointer" aria-label="Export IPsec security dossier">📥 Export Dossier</button>
       </div>
-      <div id="wifi-controls" style="display:none;gap:8px;align-items:center;">
+      <div id="wifi-controls" class="tab-controls-group" style="display:none;">
         <!-- Prominent CTA Above the Fold for Wi-Fi -->
         <button id="wifi-refresh-btn" class="hero-cta-btn">
           <span class="cta-icon">⚡</span> Analyze Live Wi-Fi <span class="cta-badge">Alt + S</span>
@@ -161,8 +161,8 @@
           <span>Radio: <b id="wifi-radio">&mdash;</b></span>
         </div>
       </div>
-      <div class="wifi-hero-actions" style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
-        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+      <div class="wifi-hero-actions">
+        <div class="wifi-hero-btns">
           <button id="wifi-scan-now" class="action-btn">Scan All Networks</button>
           <button id="wifi-simulate-evil-twin" class="action-btn" style="background:rgba(239,68,68,0.14);color:var(--crit);border:1px solid rgba(239,68,68,0.35);font-weight:600">🚨 Simulate Evil Twin AP</button>
           <button id="wifi-export-report" class="action-btn" style="background:rgba(56,189,248,0.14);color:var(--accent);border:1px solid rgba(56,189,248,0.35);font-weight:600">📥 Export Audit Dossier</button>
