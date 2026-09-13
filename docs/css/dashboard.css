@@ -4769,3 +4769,710 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   font-size: 0.82rem;
   padding: 0;
 }
+
+
+/* ==========================================================================
+   13. NEXT-GEN DEFENSE: HEX DISSECTOR, CBOM, SOC COPILOT, MITRE HEATMAP & FLEET
+   ========================================================================== */
+
+/* Top Masthead Extra Defense Buttons */
+.copilot-trigger-btn:hover {
+  border-color: #818cf8;
+  box-shadow: 0 0 8px rgba(129, 140, 248, 0.25);
+}
+.cbom-trigger-btn:hover {
+  border-color: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.25);
+}
+.fleet-trigger-btn:hover {
+  border-color: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.25);
+}
+
+/* 1. In-Browser Hex Packet Dissector & Protocol Inspector */
+.hex-dissector-panel {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+}
+.hex-dissector-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.hex-sample-selector-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.hex-packet-select {
+  padding: 4px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.hex-dissector-grid {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .hex-dissector-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dissector-tree-card {
+  background: #090d16;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: 380px;
+}
+.dissector-tree-title {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  color: #38bdf8;
+  font-weight: 700;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #1e293b;
+  padding-bottom: 4px;
+}
+.dissector-tree {
+  overflow-y: auto;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: #94a3b8;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tree-node {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+.tree-node-title {
+  color: #e2e8f0;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.tree-node-title:hover {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+}
+.tree-fields {
+  margin-left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-left: 1px dashed #334155;
+  padding-left: 6px;
+}
+.tree-field {
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.tree-field:hover, .tree-field.active {
+  background: #38bdf8;
+  color: #020617;
+  font-weight: 700;
+}
+
+.dissector-hex-card {
+  background: #020617;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: 380px;
+}
+.dissector-hex-header {
+  display: grid;
+  grid-template-columns: 55px 1fr 140px;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #64748b;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #1e293b;
+  margin-bottom: 8px;
+}
+.dissector-hex-dump {
+  overflow-y: auto;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  line-height: 1.55;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hex-row {
+  display: grid;
+  grid-template-columns: 55px 1fr 140px;
+  gap: 10px;
+  align-items: center;
+}
+.hex-offset {
+  color: #64748b;
+  font-weight: 600;
+}
+.hex-bytes {
+  color: #94a3b8;
+  letter-spacing: 0.04em;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.hex-byte {
+  padding: 1px 2px;
+  border-radius: 2px;
+  transition: all 0.1s ease;
+}
+.hex-byte.highlight {
+  background: #38bdf8;
+  color: #020617;
+  font-weight: 700;
+  box-shadow: 0 0 6px #38bdf8;
+}
+.hex-ascii {
+  color: #475569;
+  letter-spacing: 0.05em;
+}
+
+/* 2. MITRE ATT&CK Enterprise Threat Heatmap */
+.mitre-heatmap-panel {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+}
+.mitre-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.mitre-stats-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mitre-chip-item {
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.mitre-chip-item.mitigated {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+}
+.mitre-chip-item.vulnerable {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #be123c;
+}
+
+.mitre-heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+@media (max-width: 990px) {
+  .mitre-heatmap-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .mitre-heatmap-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mitre-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mitre-col-title {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--sunk);
+  padding: 6px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--rule);
+  text-align: center;
+  letter-spacing: -0.01em;
+}
+.mitre-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+.mitre-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+.mitre-card.status-mitigated {
+  border-left: 3px solid #10b981;
+}
+.mitre-card.status-vulnerable {
+  border-left: 3px solid #ef4444;
+  background: #fff1f2;
+}
+.mitre-card.status-monitored {
+  border-left: 3px solid #38bdf8;
+}
+.mitre-card-id {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+.mitre-card-name {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.3;
+}
+.mitre-status-badge {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  width: fit-content;
+}
+.mitre-card.status-mitigated .mitre-status-badge {
+  background: #dcfce7;
+  color: #15803d;
+}
+.mitre-card.status-vulnerable .mitre-status-badge {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.mitre-card.status-monitored .mitre-status-badge {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+/* 3. CycloneDX v1.6 Sovereign CBOM Viewer Modal */
+.cbom-modal-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  width: 94%;
+  max-width: 820px;
+  max-height: 90vh;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalScaleIn 0.25s ease-out;
+}
+.cbom-modal-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  height: 100%;
+}
+.cbom-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.cbom-search-input {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--rule);
+  background: var(--sunk);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  width: 260px;
+}
+.cbom-btn-group {
+  display: flex;
+  gap: 8px;
+}
+.btn-cbom-action {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-cbom-action:hover {
+  background: var(--sunk);
+}
+.btn-cbom-primary {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+}
+.btn-cbom-primary:hover {
+  background: #0369a1;
+}
+.cbom-summary-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  margin-bottom: 4px;
+}
+.cbom-sum-chip {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--sunk);
+  border: 1px solid var(--rule);
+}
+.cbom-json-view {
+  background: #020617;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 14px;
+  color: #38bdf8;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  line-height: 1.45;
+  overflow: auto;
+  max-height: 480px;
+}
+
+/* 4. Multi-Gateway Fleet Sentinel Modal */
+.fleet-modal-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  width: 94%;
+  max-width: 860px;
+  max-height: 90vh;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalScaleIn 0.25s ease-out;
+}
+.fleet-modal-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.fleet-summary-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--sunk);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  font-size: 0.8rem;
+}
+.btn-fleet-action {
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: #0284c7;
+  color: #ffffff;
+  border: none;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-fleet-action:hover {
+  background: #0369a1;
+}
+
+.fleet-matrix-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+@media (max-width: 680px) {
+  .fleet-matrix-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.fleet-gw-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+.fleet-gw-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+.fleet-gw-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.fleet-gw-title {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 0.84rem;
+  color: var(--ink);
+}
+.fleet-gw-grade {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.fleet-gw-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+.fleet-gw-meta span strong {
+  color: var(--ink);
+}
+.fleet-gw-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.fleet-gw-tag {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--sunk);
+  border: 1px solid var(--rule);
+  color: var(--dim);
+}
+
+/* 5. Autonomous SOC Cryptographic Copilot Drawer */
+.copilot-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 440px;
+  max-width: 90vw;
+  background: #030712;
+  border-left: 2px solid #6366f1;
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.6);
+  z-index: 99995;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: var(--mono);
+}
+.copilot-drawer.collapsed {
+  transform: translateX(100%);
+  pointer-events: none;
+}
+.copilot-header {
+  height: 52px;
+  background: #0b0f19;
+  border-bottom: 1px solid #1f2937;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+}
+.copilot-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.copilot-avatar {
+  font-size: 1.4rem;
+}
+.copilot-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #f3f4f6;
+  letter-spacing: -0.01em;
+}
+.copilot-subtitle {
+  font-size: 0.68rem;
+  color: #818cf8;
+}
+.copilot-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.copilot-ctrl-btn {
+  background: #1f2937;
+  border: 1px solid #374151;
+  color: #9ca3af;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+.copilot-ctrl-btn:hover {
+  background: #374151;
+  color: #ffffff;
+}
+
+.copilot-body {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.copilot-msg {
+  display: flex;
+  gap: 10px;
+  animation: fadeInModal 0.2s ease;
+}
+.copilot-msg-avatar {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.copilot-msg-content {
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #e5e7eb;
+}
+.copilot-msg-content p {
+  margin: 0 0 8px 0;
+}
+.copilot-msg-content p:last-child {
+  margin-bottom: 0;
+}
+.copilot-msg-content pre {
+  background: #030712;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid #374151;
+  overflow-x: auto;
+  color: #4ade80;
+  font-size: 0.72rem;
+  margin: 6px 0;
+}
+.copilot-msg-user .copilot-msg-content {
+  background: #312e81;
+  border-color: #4338ca;
+  color: #ffffff;
+}
+
+.copilot-suggestions {
+  display: flex;
+  gap: 6px;
+  padding: 8px 14px;
+  overflow-x: auto;
+  border-top: 1px solid #1f2937;
+  background: #0b0f19;
+}
+.copilot-chip {
+  padding: 4px 9px;
+  border-radius: 12px;
+  background: #1f2937;
+  border: 1px solid #374151;
+  color: #c7d2fe;
+  font-size: 0.68rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.copilot-chip:hover {
+  background: #4338ca;
+  color: #ffffff;
+}
+
+.copilot-input-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #1f2937;
+  background: #030712;
+}
+.copilot-input {
+  flex: 1;
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: #ffffff;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+}
+.copilot-input:focus {
+  outline: none;
+  border-color: #6366f1;
+}
+.btn-copilot-send {
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: #6366f1;
+  border: none;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.btn-copilot-send:hover {
+  background: #4f46e5;
+}

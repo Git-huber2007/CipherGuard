@@ -66,6 +66,15 @@
       <button type="button" id="btn-terminal-toggle" class="shortcuts-trigger-btn terminal-trigger-btn" onclick="toggleCyberTerminal()" title="Toggle Interactive SOC Terminal (Press ~)" aria-haspopup="dialog">
         <span>💻</span> <span>Terminal <kbd>~</kbd></span>
       </button>
+      <button type="button" id="btn-copilot-toggle" class="shortcuts-trigger-btn copilot-trigger-btn" onclick="toggleSocCopilot()" title="Launch Autonomous SOC Cryptographic Copilot" aria-haspopup="dialog">
+        <span>🤖</span> <span>Copilot</span>
+      </button>
+      <button type="button" id="btn-cbom-toggle" class="shortcuts-trigger-btn cbom-trigger-btn" onclick="openCbomModal()" title="View Sovereign Cryptographic Bill of Materials (CBOM)" aria-haspopup="dialog">
+        <span>📜</span> <span>CBOM</span>
+      </button>
+      <button type="button" id="btn-fleet-toggle" class="shortcuts-trigger-btn fleet-trigger-btn" onclick="openFleetModal()" title="Inspect Multi-Gateway Fleet Sentinel Matrix" aria-haspopup="dialog">
+        <span>🛡️</span> <span>Fleet</span>
+      </button>
     </div>
     <div class="controls" id="header-controls">
       <!-- Dynamic controls according to active tab -->
@@ -597,6 +606,62 @@
         </div>
       </section>
 
+      <!-- In-Browser Hex Packet Dissector & Protocol Inspector (Wireshark-Style) -->
+      <section class="panel hex-dissector-panel" id="hex-dissector-panel" style="margin-bottom:18px">
+        <div class="hex-dissector-header">
+          <div>
+            <h2>Passive Framing Dissector &amp; Raw Byte Inspector <span class="domain-tag obs">Zero-Decryption Wire Analysis</span></h2>
+            <div class="sub">Inspect RFC 4303 packet framing, IKEv2 security associations, and ESP padding modulo residues directly at the byte level.</div>
+          </div>
+          <div class="hex-sample-selector-wrap">
+            <label for="hex-packet-select">Sample Packet:</label>
+            <select id="hex-packet-select" class="hex-packet-select">
+              <option value="ike_init">IKE_SA_INIT (Exchange 34, Transform Neg)</option>
+              <option value="ike_auth">IKE_AUTH (Exchange 35, Encrypted SA)</option>
+              <option value="esp_wire">ESP Wire Framing (RFC 4303, Seq #142)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="hex-dissector-grid">
+          <!-- Protocol Dissection Tree -->
+          <div class="dissector-tree-card">
+            <div class="dissector-tree-title">PROTOCOL TREE DISSECTION</div>
+            <div id="dissector-tree" class="dissector-tree">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Hex Matrix & ASCII Dump -->
+          <div class="dissector-hex-card">
+            <div class="dissector-hex-header">
+              <span>OFFSET</span>
+              <span>RAW HEXADECIMAL FRAMING (16 BYTES / LINE)</span>
+              <span>ASCII</span>
+            </div>
+            <div id="dissector-hex-dump" class="dissector-hex-dump">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MITRE ATT&CK Enterprise Threat Matrix Heatmap -->
+      <section class="panel mitre-heatmap-panel" id="mitre-heatmap-panel" style="margin-bottom:18px">
+        <div class="mitre-header">
+          <div>
+            <h2>MITRE ATT&amp;CK&reg; Enterprise Threat Heatmap <span class="domain-tag obs">Tactical Adversary TTP Matrix</span></h2>
+            <div class="sub">Real-time mapping of detected wireless and cryptographic vulnerabilities against standardized cyber kill-chain adversary techniques.</div>
+          </div>
+          <div class="mitre-stats-chip" id="mitre-stats-chip">
+            <span class="mitre-chip-item mitigated">🛡️ 4 Mitigated</span>
+            <span class="mitre-chip-item vulnerable" id="mitre-vuln-count">⚠️ 2 Active Threats</span>
+          </div>
+        </div>
+        <div class="mitre-heatmap-grid" id="mitre-heatmap-grid">
+          <!-- Injected dynamically via JS -->
+        </div>
+      </section>
 
       <!-- MITRE ATT&CK & NIST SP 800-77 Compliance Matrix Panel -->
       <section class="panel compliance-panel" id="ipsec-compliance-panel" style="margin-bottom:18px">
@@ -1127,6 +1192,27 @@
           </div>
         </div>
         <div class="shortcut-item">
+          <div class="shortcut-keys"><kbd>C</kbd></div>
+          <div class="shortcut-desc">
+            <strong>CycloneDX CBOM Viewer</strong>
+            <span>Inspect and export cryptographic bill of materials</span>
+          </div>
+        </div>
+        <div class="shortcut-item">
+          <div class="shortcut-keys"><kbd>F</kbd></div>
+          <div class="shortcut-desc">
+            <strong>Fleet Sentinel Matrix</strong>
+            <span>Inspect distributed enterprise gateway health and posture</span>
+          </div>
+        </div>
+        <div class="shortcut-item">
+          <div class="shortcut-keys"><kbd>X</kbd></div>
+          <div class="shortcut-desc">
+            <strong>SOC Cryptographic Copilot</strong>
+            <span>Toggle autonomous AI defense advisor drawer</span>
+          </div>
+        </div>
+        <div class="shortcut-item">
           <div class="shortcut-keys"><kbd>Esc</kbd></div>
           <div class="shortcut-desc">
             <strong>Close Dialogs & Banners</strong>
@@ -1141,6 +1227,99 @@
   </div>
 </div>
 
+
+
+<!-- CycloneDX v1.6 Sovereign CBOM Viewer & Exporter Modal -->
+<div id="cbom-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="cbom-modal-title">
+  <div class="cbom-modal-card" role="document">
+    <div class="backend-modal-header">
+      <div class="backend-modal-title-group">
+        <span class="backend-modal-icon">📜</span>
+        <div>
+          <h2 id="cbom-modal-title">Cryptographic Bill of Materials (CBOM)</h2>
+          <div class="backend-modal-subtitle">CycloneDX v1.6 &bull; NIST SP 800-161 Supply Chain Inventory</div>
+        </div>
+      </div>
+      <button type="button" id="cbom-modal-close" class="modal-close-btn" onclick="closeCbomModal()" aria-label="Close dialog">&times;</button>
+    </div>
+    <div class="cbom-modal-body">
+      <div class="cbom-toolbar">
+        <div class="cbom-search-wrap">
+          <input type="text" id="cbom-search-input" class="cbom-search-input" placeholder="Filter algorithms, ciphers, key sizes...">
+        </div>
+        <div class="cbom-btn-group">
+          <button type="button" id="btn-copy-cbom" class="btn-cbom-action">📋 Copy JSON</button>
+          <button type="button" id="btn-download-cbom" class="btn-cbom-action btn-cbom-primary">📥 Download CycloneDX 1.6</button>
+        </div>
+      </div>
+      <div class="cbom-content-wrap">
+        <div class="cbom-summary-strip" id="cbom-summary-strip"></div>
+        <pre class="cbom-json-view"><code id="cbom-json-code">Loading Cryptographic Bill of Materials...</code></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Multi-Gateway Fleet Sentinel & Enterprise Matrix Modal -->
+<div id="fleet-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="fleet-modal-title">
+  <div class="fleet-modal-card" role="document">
+    <div class="backend-modal-header">
+      <div class="backend-modal-title-group">
+        <span class="backend-modal-icon">🛡️</span>
+        <div>
+          <h2 id="fleet-modal-title">Multi-Gateway Enterprise Fleet Sentinel</h2>
+          <div class="backend-modal-subtitle">Distributed Sovereign Cryptographic Posture &amp; Remote Health Nodes</div>
+        </div>
+      </div>
+      <button type="button" id="fleet-modal-close" class="modal-close-btn" onclick="closeFleetModal()" aria-label="Close dialog">&times;</button>
+    </div>
+    <div class="fleet-modal-body">
+      <div class="fleet-summary-bar">
+        <div><strong>4 Distributed Gateways Monitored</strong> &middot; 24 Secure Tunnels &middot; Zero Interruption</div>
+        <button type="button" id="btn-fleet-remediate-all" class="btn-fleet-action">⚡ Batch Remediate Fleet</button>
+      </div>
+      <div class="fleet-matrix-grid" id="fleet-matrix-grid">
+        <!-- Injected dynamically via JS -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Autonomous SOC Cryptographic Copilot Drawer -->
+<div id="copilot-drawer" class="copilot-drawer collapsed" role="region" aria-label="Autonomous SOC Cryptographic Copilot">
+  <div class="copilot-header">
+    <div class="copilot-title-group">
+      <span class="copilot-avatar">🤖</span>
+      <div>
+        <div class="copilot-title">SOC Cryptographic Copilot</div>
+        <div class="copilot-subtitle">Autonomous AI Defense Advisor</div>
+      </div>
+    </div>
+    <div class="copilot-controls">
+      <button type="button" id="btn-copilot-clear" class="copilot-ctrl-btn" title="Clear Chat">Clear</button>
+      <button type="button" id="btn-copilot-close" class="copilot-ctrl-btn" onclick="toggleSocCopilot()" title="Close Copilot">&times;</button>
+    </div>
+  </div>
+  <div class="copilot-body" id="copilot-chat-stream">
+    <div class="copilot-msg copilot-msg-ai">
+      <div class="copilot-msg-avatar">🤖</div>
+      <div class="copilot-msg-content">
+        <p><strong>Greetings, Security Analyst.</strong> I am your autonomous cryptographic copilot. I continuously monitor active 802.11 spectrum telemetry, passive IPsec ESP framing residues, and Post-Quantum Mosca risks.</p>
+        <p>How can I assist your defense evaluation today?</p>
+      </div>
+    </div>
+  </div>
+  <div class="copilot-suggestions">
+    <button type="button" class="copilot-chip" data-prompt="Why is my Wi-Fi security grade C?">Explain Wi-Fi score</button>
+    <button type="button" class="copilot-chip" data-prompt="Explain why DH Group 2 is vulnerable to SNDL attacks.">Why is DH Group 2 unsafe?</button>
+    <button type="button" class="copilot-chip" data-prompt="How do I harden Cisco ASA to CNSA 2.0 PQC?">Cisco ASA Hardening</button>
+    <button type="button" class="copilot-chip" data-prompt="Explain RFC 4303 zero-decryption framing inspection.">Zero-Decryption Math</button>
+  </div>
+  <div class="copilot-input-bar">
+    <input type="text" id="copilot-input" class="copilot-input" placeholder="Ask cryptographic copilot a question..." autocomplete="off">
+    <button type="button" id="btn-copilot-send" class="btn-copilot-send">Send</button>
+  </div>
+</div>
 
 <!-- Embedded Interactive Cyber Terminal Drawer -->
 <div id="cyber-terminal-drawer" class="cyber-terminal-drawer collapsed" role="region" aria-label="Interactive SOC Security Terminal">

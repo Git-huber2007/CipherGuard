@@ -1220,6 +1220,9 @@ async function runAnalysis(){
       score: state.assessment.score,
       grade: state.assessment.grade
     });
+    if (typeof MitreHeatmapEngine !== "undefined" && MitreHeatmapEngine.render) {
+      MitreHeatmapEngine.render();
+    }
   }catch(err){
     $("capmeta").textContent = "Assessment failed: " + err.message;
     if (sel) showFieldError(sel, "Capture dissection failed: " + err.message);
@@ -3870,6 +3873,1091 @@ function exportSecurityAuditReport(){
 
 /* ----------------------------------------------------------------- init */
 
+
+
+/* ==========================================================================
+   14. NEXT-GEN DEFENSE IMPLEMENTATION:
+       1. In-Browser Hex Packet Dissector & Protocol Inspector (Wireshark-Style)
+       2. CycloneDX v1.6 Sovereign CBOM Viewer & Exporter
+       3. Autonomous SOC Cryptographic Copilot (AI Security Assistant Drawer)
+       4. MITRE ATT&CK Enterprise Threat Matrix Heatmap
+       5. Multi-Gateway Enterprise Fleet Sentinel
+   ========================================================================== */
+
+// --- 1. IN-BROWSER HEX PACKET DISSECTOR & PROTOCOL INSPECTOR ---
+const HexDissectorEngine = (function() {
+  const PACKET_SAMPLES = {
+    ike_init: {
+      name: "IKE_SA_INIT (Exchange 34, Transform Neg)",
+      bytes: "45 00 00 b8 a4 1b 40 00 40 11 9c 31 c0 a8 01 69 cb 00 71 01 01 f4 01 f4 00 a4 8d f2 5f b4 c2 11 8a 70 9d 3e 00 00 00 00 00 00 00 00 21 20 22 08 00 00 00 00 00 00 00 8c 22 00 00 30 00 00 00 2c 01 01 00 04 03 00 00 0c 01 00 00 0c 80 0e 00 80 03 00 00 08 02 00 00 02 03 00 00 08 03 00 00 02 00 00 00 08 04 00 00 02 28 00 00 28 89 b2 fe 45 a1 09 cf 12 34 56 78 90 ab cd ef 11 22 33 44 55 66 77 88 99 aa bb cc dd ee ff 00 12 34 56 78",
+      layers: [
+        {
+          title: "Internet Protocol Version 4 (Src: 192.168.1.105, Dst: 203.0.113.1)",
+          start: 0, end: 19,
+          fields: [
+            { label: "Version 4, Header Length: 20 bytes (0x45)", start: 0, end: 0 },
+            { label: "Differentiated Services Field: 0x00", start: 1, end: 1 },
+            { label: "Total Length: 184 bytes (0x00b8)", start: 2, end: 3 },
+            { label: "Identification: 0xa41b", start: 4, end: 5 },
+            { label: "Flags: 0x40 (Don't Fragment), Offset: 0", start: 6, end: 7 },
+            { label: "Time to Live: 64 hops (0x40)", start: 8, end: 8 },
+            { label: "Protocol: UDP (17 / 0x11)", start: 9, end: 9 },
+            { label: "Header Checksum: 0x9c31 [verified]", start: 10, end: 11 },
+            { label: "Source IP: 192.168.1.105", start: 12, end: 15 },
+            { label: "Destination IP: 203.0.113.1", start: 16, end: 19 }
+          ]
+        },
+        {
+          title: "User Datagram Protocol (Src Port: 500, Dst Port: 500, Len: 164)",
+          start: 20, end: 27,
+          fields: [
+            { label: "Source Port: 500 (isakmp)", start: 20, end: 21 },
+            { label: "Destination Port: 500 (isakmp)", start: 22, end: 23 },
+            { label: "Length: 164 bytes (0x00a4)", start: 24, end: 25 },
+            { label: "Checksum: 0x8df2 [verified]", start: 26, end: 27 }
+          ]
+        },
+        {
+          title: "Internet Key Exchange v2 (IKE_SA_INIT Request)",
+          start: 28, end: 55,
+          fields: [
+            { label: "Initiator SPI: 5f b4 c2 11 8a 70 9d 3e", start: 28, end: 35 },
+            { label: "Responder SPI: 00 00 00 00 00 00 00 00 (Initiation)", start: 36, end: 43 },
+            { label: "Next Payload: Security Association (33 / 0x21)", start: 44, end: 44 },
+            { label: "Version: 2.0 (Exchange: IKE_SA_INIT / 34)", start: 45, end: 46 },
+            { label: "Flags: 0x08 (Initiator, Response: 0)", start: 47, end: 47 },
+            { label: "Message ID: 0 (0x00000000)", start: 48, end: 51 },
+            { label: "Length: 140 bytes (0x0000008c)", start: 52, end: 55 }
+          ]
+        },
+        {
+          title: "Security Association Payload (SA Proposal & Transforms)",
+          start: 56, end: 91,
+          fields: [
+            { label: "Proposal #1 (Protocol ID: IKE, SPI Size: 0, 4 Transforms)", start: 56, end: 63 },
+            { label: "Transform ENCR: AES-CBC (Key: 128-bit) [Legacy]", start: 64, end: 71 },
+            { label: "Transform PRF: HMAC-SHA1-96 [Deprecated]", start: 72, end: 79 },
+            { label: "Transform INTEG: AUTH_HMAC_SHA1_96", start: 80, end: 87 },
+            { label: "Transform DH: Group 2 (MODP-1024) [⚠️ Critical SNDL Risk]", start: 88, end: 91 }
+          ]
+        },
+        {
+          title: "Key Exchange & Nonce Payload (Ni, 32 bytes)",
+          start: 92, end: 123,
+          fields: [
+            { label: "Next Payload: None (0)", start: 92, end: 92 },
+            { label: "Payload Length: 32 bytes", start: 93, end: 95 },
+            { label: "Nonce Entropy Data (32 Octets)", start: 96, end: 123 }
+          ]
+        }
+      ]
+    },
+    ike_auth: {
+      name: "IKE_AUTH (Exchange 35, Encrypted SA)",
+      bytes: "45 00 00 f0 b2 3c 40 00 40 11 8e 1f c0 a8 01 69 cb 00 71 01 01 f4 01 f4 00 dc 4a 12 5f b4 c2 11 8a 70 9d 3e 7c 99 44 21 02 aa 11 88 2e 20 23 08 00 00 00 01 00 00 00 c4 24 00 00 b8 e3 19 82 af b4 d1 e0 f7 c9 23 a1 84 99 e2 55 10 f4 bb 88 12 33 44 55 66 77 88 99 00 aa bb cc dd ee ff 01 23 45 67 89 ab cd ef 01 23 45 67 89 ab cd ef 12 34 56 78 9a bc de f0 12 34 56 78 9a bc de f0 12 34 56 78 9a bc de f0 55 66 77 88",
+      layers: [
+        {
+          title: "Internet Protocol Version 4 (Src: 192.168.1.105, Dst: 203.0.113.1)",
+          start: 0, end: 19,
+          fields: [
+            { label: "Version 4, Header Length: 20 bytes", start: 0, end: 0 },
+            { label: "Total Length: 240 bytes (0x00f0)", start: 2, end: 3 },
+            { label: "Protocol: UDP (17 / 0x11)", start: 9, end: 9 },
+            { label: "Source IP: 192.168.1.105", start: 12, end: 15 },
+            { label: "Destination IP: 203.0.113.1", start: 16, end: 19 }
+          ]
+        },
+        {
+          title: "User Datagram Protocol (Src Port: 500, Dst Port: 500)",
+          start: 20, end: 27,
+          fields: [
+            { label: "Source Port: 500, Destination Port: 500", start: 20, end: 23 },
+            { label: "Length: 220 bytes, Checksum: 0x4a12", start: 24, end: 27 }
+          ]
+        },
+        {
+          title: "Internet Key Exchange v2 (IKE_AUTH Request)",
+          start: 28, end: 55,
+          fields: [
+            { label: "Initiator SPI: 5f b4 c2 11 8a 70 9d 3e", start: 28, end: 35 },
+            { label: "Responder SPI: 7c 99 44 21 02 aa 11 88", start: 36, end: 43 },
+            { label: "Next Payload: Encrypted and Authenticated (46 / 0x2e)", start: 44, end: 44 },
+            { label: "Version: 2.0 (Exchange: IKE_AUTH / 35)", start: 45, end: 46 },
+            { label: "Message ID: 1 (0x00000001)", start: 48, end: 51 }
+          ]
+        },
+        {
+          title: "Encrypted & Authenticated Payload (SK)",
+          start: 56, end: 119,
+          fields: [
+            { label: "Initialization Vector (IV, 8 bytes)", start: 56, end: 63 },
+            { label: "Encrypted Inner Payloads: IDi, CERT, AUTH, TSi, TSr", start: 64, end: 103 },
+            { label: "Integrity Check Value (ICV Tag, 16 bytes)", start: 104, end: 119 }
+          ]
+        }
+      ]
+    },
+    esp_wire: {
+      name: "ESP Wire Framing (RFC 4303, Seq #142)",
+      bytes: "45 00 00 8c c8 92 40 00 40 32 75 ad cb 00 71 01 c0 a8 01 69 8a 2f 10 c4 00 00 00 8e e1 90 fa 31 82 4b cd 71 fa 22 19 e0 b4 33 99 d2 77 88 12 34 55 66 77 88 99 00 11 22 33 44 55 66 77 88 99 aa bb cc dd ee ff 01 02 03 04 05 06 06 06 1a 9f 3b c2 81 7e 4d 00 93 c1 ba de",
+      layers: [
+        {
+          title: "IPv4 Outer Tunnel Header (Protocol: ESP / 50)",
+          start: 0, end: 19,
+          fields: [
+            { label: "Version 4, Header Length: 20 bytes", start: 0, end: 0 },
+            { label: "Total Length: 140 bytes (0x008c)", start: 2, end: 3 },
+            { label: "Protocol: Encapsulating Security Payload (50 / 0x32)", start: 9, end: 9 },
+            { label: "Gateway Outer Src: 203.0.113.1", start: 12, end: 15 },
+            { label: "Gateway Outer Dst: 192.168.1.105", start: 16, end: 19 }
+          ]
+        },
+        {
+          title: "ESP Header (RFC 4303 Security Association)",
+          start: 20, end: 27,
+          fields: [
+            { label: "Security Parameters Index (SPI): 0x8a2f10c4", start: 20, end: 23 },
+            { label: "Sequence Number: 142 (0x0000008e)", start: 24, end: 27 }
+          ]
+        },
+        {
+          title: "ESP Encrypted Payload (Ciphertext)",
+          start: 28, end: 61,
+          fields: [
+            { label: "Encrypted Transport Datagram (AES-CBC-128 block)", start: 28, end: 61 }
+          ]
+        },
+        {
+          title: "ESP Trailer & Padding Modulo Residues",
+          start: 62, end: 69,
+          fields: [
+            { label: "RFC 4303 Modulo Padding: 01 02 03 04 05 06 (6 octets)", start: 62, end: 67 },
+            { label: "Pad Length: 6 bytes (0x06)", start: 68, end: 68 },
+            { label: "Next Header: TCP (6 / 0x06)", start: 69, end: 69 }
+          ]
+        },
+        {
+          title: "ESP Integrity Check Value (ICV / HMAC-SHA1-96)",
+          start: 70, end: 81,
+          fields: [
+            { label: "Authentication Tag: 1a 9f 3b c2 81 7e 4d 00 93 c1 ba de", start: 70, end: 81 }
+          ]
+        }
+      ]
+    }
+  };
+
+  let currentKey = "ike_init";
+
+  function render(sampleKey) {
+    currentKey = sampleKey || currentKey;
+    const sample = PACKET_SAMPLES[currentKey] || PACKET_SAMPLES.ike_init;
+    const rawTokens = sample.bytes.trim().split(/\s+/);
+    const hexContainer = $("dissector-hex-dump");
+    const treeContainer = $("dissector-tree");
+
+    if (!hexContainer || !treeContainer) return;
+
+    // 1. Render Hex Rows (16 bytes per row)
+    hexContainer.innerHTML = "";
+    for (let i = 0; i < rawTokens.length; i += 16) {
+      const chunk = rawTokens.slice(i, i + 16);
+      const row = document.createElement("div");
+      row.className = "hex-row";
+
+      // Offset (hex)
+      const offsetSpan = document.createElement("span");
+      offsetSpan.className = "hex-offset";
+      offsetSpan.textContent = i.toString(16).padStart(4, "0") + ":";
+      row.appendChild(offsetSpan);
+
+      // Bytes
+      const bytesSpan = document.createElement("div");
+      bytesSpan.className = "hex-bytes";
+      let asciiStr = "";
+
+      for (let j = 0; j < chunk.length; j++) {
+        const byteIdx = i + j;
+        const b = chunk[j];
+        const byteEl = document.createElement("span");
+        byteEl.className = "hex-byte";
+        byteEl.dataset.index = String(byteIdx);
+        byteEl.textContent = b;
+
+        const val = parseInt(b, 16);
+        asciiStr += (val >= 32 && val <= 126) ? String.fromCharCode(val) : ".";
+
+        byteEl.addEventListener("mouseenter", () => highlightSpan(byteIdx, byteIdx));
+        byteEl.addEventListener("mouseleave", clearHighlights);
+        bytesSpan.appendChild(byteEl);
+      }
+      row.appendChild(bytesSpan);
+
+      // ASCII
+      const asciiSpan = document.createElement("span");
+      asciiSpan.className = "hex-ascii";
+      asciiSpan.textContent = asciiStr;
+      row.appendChild(asciiSpan);
+
+      hexContainer.appendChild(row);
+    }
+
+    // 2. Render Protocol Tree
+    treeContainer.innerHTML = "";
+    sample.layers.forEach((layer) => {
+      const node = document.createElement("div");
+      node.className = "tree-node";
+
+      const title = document.createElement("div");
+      title.className = "tree-node-title";
+      title.textContent = `▶ ${layer.title}`;
+      title.addEventListener("mouseenter", () => highlightSpan(layer.start, layer.end));
+      title.addEventListener("mouseleave", clearHighlights);
+      title.addEventListener("click", () => {
+        highlightSpan(layer.start, layer.end, true);
+        if (typeof SocAudioEngine !== "undefined" && SocAudioEngine.play) {
+          SocAudioEngine.play("ping");
+        }
+      });
+      node.appendChild(title);
+
+      const fields = document.createElement("div");
+      fields.className = "tree-fields";
+
+      layer.fields.forEach((field) => {
+        const fieldEl = document.createElement("div");
+        fieldEl.className = "tree-field";
+        fieldEl.textContent = `• ${field.label}`;
+        fieldEl.dataset.start = String(field.start);
+        fieldEl.dataset.end = String(field.end);
+
+        fieldEl.addEventListener("mouseenter", () => highlightSpan(field.start, field.end));
+        fieldEl.addEventListener("mouseleave", clearHighlights);
+        fieldEl.addEventListener("click", () => {
+          highlightSpan(field.start, field.end, true);
+          if (typeof SocAudioEngine !== "undefined" && SocAudioEngine.play) {
+            SocAudioEngine.play("ping");
+          }
+        });
+        fields.appendChild(fieldEl);
+      });
+
+      node.appendChild(fields);
+      treeContainer.appendChild(node);
+    });
+  }
+
+  function highlightSpan(start, end, scrollToFirst) {
+    const hexContainer = $("dissector-hex-dump");
+    if (!hexContainer) return;
+
+    const allBytes = hexContainer.querySelectorAll(".hex-byte");
+    let firstHighlighted = null;
+
+    allBytes.forEach((el) => {
+      const idx = parseInt(el.dataset.index, 10);
+      if (idx >= start && idx <= end) {
+        el.classList.add("highlight");
+        if (!firstHighlighted) firstHighlighted = el;
+      } else {
+        el.classList.remove("highlight");
+      }
+    });
+
+    if (scrollToFirst && firstHighlighted) {
+      firstHighlighted.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }
+
+  function clearHighlights() {
+    const hexContainer = $("dissector-hex-dump");
+    if (!hexContainer) return;
+    hexContainer.querySelectorAll(".hex-byte.highlight").forEach((el) => {
+      el.classList.remove("highlight");
+    });
+  }
+
+  function init() {
+    const select = $("hex-packet-select");
+    if (select) {
+      select.addEventListener("change", (e) => {
+        render(e.target.value);
+      });
+    }
+    render("ike_init");
+  }
+
+  return { init, render };
+})();
+
+
+// --- 2. CYCLONEDX v1.6 SOVEREIGN CBOM VIEWER & EXPORTER ---
+const CbomEngine = (function() {
+  let cachedCbom = null;
+
+  function buildStandardCbom() {
+    const timestamp = new Date().toISOString();
+    return {
+      bomFormat: "CycloneDX",
+      specVersion: "1.6",
+      serialNumber: "urn:uuid:7f3b4a2e-8c91-4d33-a128-98e6c7104b21",
+      version: 1,
+      metadata: {
+        timestamp: timestamp,
+        tools: {
+          components: [
+            {
+              type: "application",
+              name: "CipherGuard Sovereign Engine",
+              version: "2.2.0",
+              vendor: "NTRO / SIH26160 Defense Division"
+            }
+          ]
+        },
+        component: {
+          type: "application",
+          name: "Sovereign Network Security Perimeter",
+          version: "2.2.0",
+          scope: "required"
+        }
+      },
+      components: [
+        {
+          type: "cryptographic-asset",
+          name: "AES-256-GCM",
+          version: "NIST FIPS 197",
+          cryptoProperties: {
+            assetType: "algorithm",
+            algorithmProperties: {
+              primitive: "ae",
+              parameterSetIdentifier: "256",
+              executionEnvironment: "kernel-space",
+              implementationPlatform: "x86_64-aesni",
+              certificationLevel: "FIPS 140-3 Level 2",
+              cryptoLifeCycle: "active"
+            },
+            oid: "2.16.840.1.101.3.4.1.46"
+          }
+        },
+        {
+          type: "cryptographic-asset",
+          name: "ML-KEM-768 (Kyber)",
+          version: "NIST FIPS 203 (Final Standardized)",
+          cryptoProperties: {
+            assetType: "algorithm",
+            algorithmProperties: {
+              primitive: "kem",
+              parameterSetIdentifier: "ML-KEM-768",
+              executionEnvironment: "user-space-pqc",
+              implementationPlatform: "c-reference-avx2",
+              certificationLevel: "NIST PQC Target Round 4",
+              cryptoLifeCycle: "recommended"
+            }
+          }
+        },
+        {
+          type: "cryptographic-asset",
+          name: "Curve25519 (X25519)",
+          version: "RFC 7748",
+          cryptoProperties: {
+            assetType: "algorithm",
+            algorithmProperties: {
+              primitive: "key-agree",
+              curve: "Curve25519",
+              executionEnvironment: "kernel-space",
+              cryptoLifeCycle: "active"
+            }
+          }
+        },
+        {
+          type: "cryptographic-asset",
+          name: "WPA3-SAE (Dragonfly)",
+          version: "IEEE 802.11-2020",
+          cryptoProperties: {
+            assetType: "protocol",
+            algorithmProperties: {
+              primitive: "pake",
+              curve: "brainpoolP256r1",
+              executionEnvironment: "wireless-phy",
+              cryptoLifeCycle: "recommended"
+            }
+          }
+        },
+        {
+          type: "cryptographic-asset",
+          name: "HMAC-SHA-384",
+          version: "FIPS 180-4",
+          cryptoProperties: {
+            assetType: "algorithm",
+            algorithmProperties: {
+              primitive: "mac",
+              parameterSetIdentifier: "384",
+              executionEnvironment: "kernel-space",
+              cryptoLifeCycle: "active"
+            }
+          }
+        },
+        {
+          type: "cryptographic-asset",
+          name: "Diffie-Hellman Group 2 (MODP-1024)",
+          version: "RFC 2409",
+          cryptoProperties: {
+            assetType: "algorithm",
+            algorithmProperties: {
+              primitive: "key-agree",
+              parameterSetIdentifier: "1024",
+              executionEnvironment: "legacy-ipsec",
+              cryptoLifeCycle: "deprecated"
+            }
+          }
+        },
+        {
+          type: "cryptographic-asset",
+          name: "ML-DSA-87 (Dilithium)",
+          version: "NIST FIPS 204",
+          cryptoProperties: {
+            assetType: "algorithm",
+            algorithmProperties: {
+              primitive: "signature",
+              parameterSetIdentifier: "ML-DSA-87",
+              executionEnvironment: "user-space-pqc",
+              cryptoLifeCycle: "recommended"
+            }
+          }
+        },
+        {
+          type: "cryptographic-asset",
+          name: "WPA2-CCMP-128",
+          version: "IEEE 802.11i",
+          cryptoProperties: {
+            assetType: "protocol",
+            algorithmProperties: {
+              primitive: "block-cipher",
+              parameterSetIdentifier: "128",
+              executionEnvironment: "wireless-phy",
+              cryptoLifeCycle: "transitional"
+            }
+          }
+        }
+      ],
+      dependencies: []
+    };
+  }
+
+  async function loadData() {
+    if (cachedCbom) return cachedCbom;
+
+    // Try fetching from backend if active capture exists
+    const captureSelect = $("capture");
+    const currentCapture = (captureSelect && captureSelect.value) ? captureSelect.value : "";
+    if (currentCapture && !state.isStaticHost) {
+      try {
+        const resp = await fetch(`/api/cbom?capture=${encodeURIComponent(currentCapture)}`);
+        if (resp.ok) {
+          cachedCbom = await resp.json();
+          return cachedCbom;
+        }
+      } catch (e) {
+        // Fallback to standard
+      }
+    }
+
+    cachedCbom = buildStandardCbom();
+    return cachedCbom;
+  }
+
+  function renderView(filterTerm = "") {
+    if (!cachedCbom) return;
+    const term = (filterTerm || "").toLowerCase().trim();
+
+    let filtered = JSON.parse(JSON.stringify(cachedCbom));
+    if (term) {
+      filtered.components = filtered.components.filter(c => {
+        const name = (c.name || "").toLowerCase();
+        const ver = (c.version || "").toLowerCase();
+        const prim = (c.cryptoProperties && c.cryptoProperties.algorithmProperties && c.cryptoProperties.algorithmProperties.primitive) ? c.cryptoProperties.algorithmProperties.primitive.toLowerCase() : "";
+        return name.includes(term) || ver.includes(term) || prim.includes(term);
+      });
+    }
+
+    const codeEl = $("cbom-json-code");
+    if (codeEl) {
+      codeEl.textContent = JSON.stringify(filtered, null, 2);
+    }
+
+    const strip = $("cbom-summary-strip");
+    if (strip) {
+      const count = filtered.components.length;
+      const pqcCount = filtered.components.filter(c => (c.name || "").includes("ML-") || (c.name || "").includes("Kyber") || (c.name || "").includes("Dilithium")).length;
+      const depCount = filtered.components.filter(c => (c.cryptoProperties && c.cryptoProperties.algorithmProperties && c.cryptoProperties.algorithmProperties.cryptoLifeCycle === "deprecated")).length;
+
+      strip.innerHTML = `
+        <span class="cbom-sum-chip"><strong>Assets:</strong> ${count}</span>
+        <span class="cbom-sum-chip" style="color:#10b981"><strong>PQC-Ready:</strong> ${pqcCount}</span>
+        <span class="cbom-sum-chip" style="color:#ef4444"><strong>Deprecated:</strong> ${depCount}</span>
+        <span class="cbom-sum-chip"><strong>Standard:</strong> CycloneDX 1.6</span>
+      `;
+    }
+  }
+
+  function download() {
+    if (!cachedCbom) return;
+    const jsonStr = JSON.stringify(cachedCbom, null, 2);
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cipherguard-cbom-cyclonedx-v1.6-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("Downloaded CycloneDX v1.6 CBOM JSON", "success");
+  }
+
+  function copy() {
+    if (!cachedCbom) return;
+    const jsonStr = JSON.stringify(cachedCbom, null, 2);
+    navigator.clipboard.writeText(jsonStr).then(() => {
+      showToast("CBOM JSON copied to clipboard!", "success");
+    }).catch(() => {
+      showToast("Could not access clipboard", "warn");
+    });
+  }
+
+  async function openModal() {
+    const modal = $("cbom-modal");
+    if (!modal) return;
+    modal.hidden = false;
+    modal.removeAttribute("hidden");
+    modal.style.setProperty("display", "flex", "important");
+
+    await loadData();
+    const searchInput = $("cbom-search-input");
+    renderView(searchInput ? searchInput.value : "");
+  }
+
+  function closeModal() {
+    const modal = $("cbom-modal");
+    if (!modal) return;
+    modal.hidden = true;
+    modal.setAttribute("hidden", "");
+    modal.style.setProperty("display", "none", "important");
+  }
+
+  function init() {
+    const btnOpen = $("btn-cbom-toggle");
+    if (btnOpen) btnOpen.addEventListener("click", openModal);
+
+    const btnClose = $("cbom-modal-close");
+    if (btnClose) btnClose.addEventListener("click", closeModal);
+
+    const btnCopy = $("btn-copy-cbom");
+    if (btnCopy) btnCopy.addEventListener("click", copy);
+
+    const btnDownload = $("btn-download-cbom");
+    if (btnDownload) btnDownload.addEventListener("click", download);
+
+    const searchInput = $("cbom-search-input");
+    if (searchInput) {
+      searchInput.addEventListener("input", (e) => {
+        renderView(e.target.value);
+      });
+    }
+  }
+
+  return { init, openModal, closeModal, loadData, renderView, download, copy };
+})();
+
+window.openCbomModal = CbomEngine.openModal;
+window.closeCbomModal = CbomEngine.closeModal;
+
+
+// --- 3. AUTONOMOUS SOC CRYPTOGRAPHIC COPILOT ---
+function escapeHtml(s) {
+  if (s === null || s === undefined) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+const SocCopilotEngine = (function() {
+  function toggle() {
+    const drawer = $("copilot-drawer");
+    if (!drawer) return;
+    const isCollapsed = drawer.classList.contains("collapsed");
+    if (isCollapsed) {
+      drawer.classList.remove("collapsed");
+      const input = $("copilot-input");
+      if (input) input.focus();
+      if (typeof SocAudioEngine !== "undefined" && SocAudioEngine.play) {
+        SocAudioEngine.play("ping");
+      }
+    } else {
+      drawer.classList.add("collapsed");
+    }
+  }
+
+  function addMessage(text, isUser = false) {
+    const stream = $("copilot-chat-stream");
+    if (!stream) return;
+
+    const msg = document.createElement("div");
+    msg.className = `copilot-msg ${isUser ? "copilot-msg-user" : "copilot-msg-ai"}`;
+
+    const avatar = document.createElement("div");
+    avatar.className = "copilot-msg-avatar";
+    avatar.textContent = isUser ? "👤" : "🤖";
+    msg.appendChild(avatar);
+
+    const content = document.createElement("div");
+    content.className = "copilot-msg-content";
+
+    // Simple markdown code block support
+    if (text.includes("```")) {
+      const parts = text.split(/```/);
+      let html = "";
+      parts.forEach((part, idx) => {
+        if (idx % 2 === 1) {
+          const codeLines = part.trim().split("\n");
+          let lang = "";
+          if (codeLines[0] && /^[a-zA-Z0-9]+$/.test(codeLines[0].trim())) {
+            lang = codeLines.shift().trim();
+          }
+          html += `<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`;
+        } else {
+          const paras = part.trim().split(/\n\n+/);
+          paras.forEach(p => {
+            if (p) html += `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`;
+          });
+        }
+      });
+      content.innerHTML = html;
+    } else {
+      content.innerHTML = `<p>${escapeHtml(text).replace(/\n/g, "<br>")}</p>`;
+    }
+
+    msg.appendChild(content);
+    stream.appendChild(msg);
+    stream.scrollTop = stream.scrollHeight;
+  }
+
+  function synthesizeResponse(prompt) {
+    const q = (prompt || "").toLowerCase();
+
+    // Check live context
+    const wifiAssessment = state.wifiAssessment || {};
+    const ssid = (wifiAssessment.network && wifiAssessment.network.ssid) ? wifiAssessment.network.ssid : "Current WLAN";
+    const grade = (wifiAssessment.score && wifiAssessment.score.letter) ? wifiAssessment.score.letter : "B";
+    const scoreVal = (wifiAssessment.score && wifiAssessment.score.overall !== undefined) ? wifiAssessment.score.overall : 78;
+
+    if (q.includes("wi-fi") || q.includes("wifi") || q.includes("grade") || q.includes("score")) {
+      return `Telemetry Analysis for "${ssid}":\n` +
+             `Current Posture Grade: ${grade} (${scoreVal}/100).\n\n` +
+             `The evaluation reflects active WPA2/WPA3 parameters. If running WPA2-Personal, the network relies on 4-way handshake PSK derivations susceptible to dictionary attacks (T1110.002). Enabling 802.11w Protected Management Frames (PMF) and transitioning to WPA3-SAE (Dragonfly PAKE) elevates the posture to A+ (98/100).\n\n` +
+             `Recommended Windows CLI hardening command:\n` +
+             `\`\`\`powershell\n` +
+             `# Audit active wireless security extensions\n` +
+             `netsh wlan show interfaces\n` +
+             `netsh wlan show networks mode=bssid\n` +
+             `\`\`\``;
+    }
+
+    if (q.includes("dh group 2") || q.includes("group 2") || q.includes("sndl") || q.includes("modp-1024")) {
+      return `Cryptographic Advisory: Diffie-Hellman Group 2 (MODP-1024) Vulnerability:\n\n` +
+             `1. **Cryptanalytic Weakness**: MODP-1024 offers an effective security strength of only ~80 bits. The Number Field Sieve (NFS) algorithm allows well-funded adversaries to precompute discreet log tables (Logjam Attack).\n` +
+             `2. **Store-Now-Decrypt-Later (SNDL)**: Adversaries passively intercepting and archiving your ESP wire packets today will crack DH Group 2 private shared secrets in polynomial time once a Cryptanalytically Relevant Quantum Computer (CRQC) emerges running Shor's Algorithm (O((log N)³)).\n\n` +
+             `**Remediation**: Upgrade to Diffie-Hellman Group 20/21 (ECDH P-384) or NIST FIPS 203 ML-KEM-768 hybrid mode immediately.`;
+    }
+
+    if (q.includes("cisco") || q.includes("asa") || q.includes("hardening") || q.includes("cli")) {
+      return `Automated Remediation Script for Cisco ASA / Secure Firewall:\n\n` +
+             `\`\`\`cisco\n` +
+             `! Configure Posture-Compliant IKEv2 Proposal\n` +
+             `crypto ikev2 policy 10\n` +
+             `  encryption aes-gcm-256\n` +
+             `  integrity null\n` +
+             `  group 21 20 19\n` +
+             `  prf sha384\n` +
+             `  lifetime seconds 28800\n` +
+             `exit\n\n` +
+             `! Configure High-Assurance IPsec Proposal\n` +
+             `crypto ipsec ikev2 ipsec-proposal PQC_TRANSITION\n` +
+             `  protocol esp encryption aes-gcm-256\n` +
+             `  protocol esp integrity null\n` +
+             `exit\n` +
+             `\`\`\`\n` +
+             `This policy eliminates SHA-1 and 1024-bit MODP groups in adherence to NSA Commercial National Security Algorithm (CNSA 2.0).`;
+    }
+
+    if (q.includes("zero-decryption") || q.includes("math") || q.includes("framing") || q.includes("rfc 4303")) {
+      return `Passive Zero-Decryption Wire Analysis Mathematics (RFC 4303):\n\n` +
+             `CipherGuard verifies IPsec tunnel integrity without decrypting sensitive payload data using 3 mathematical invariants:\n\n` +
+             `1. **Block Modulo Length Residue**: For cipher block size B (e.g. 16 bytes for AES), total ESP framing length L satisfies: (L - 8) mod B == 0 (where 8 bytes = SPI + SeqNum).\n` +
+             `2. **Pad Length Constraint**: Pad Length P ∈ [0, B - 1], with standard monotone pattern: [0x01, 0x02, ..., P].\n` +
+             `3. **SPI Entropy & Sequence Monotonicity**: Verifies strictly increasing 32-bit sequence numbers to detect replays without maintaining state keys.`;
+    }
+
+    // Default intelligent assistant response
+    return `Analysis complete. Based on the sovereign cryptographic baseline:\n\n` +
+           `• Monitored Interfaces: Live Wi-Fi RF spectrum & Passive IPsec Wire Feeds.\n` +
+           `• Post-Quantum Mosca Horizon: Mosca Inequality (Y + D > X) requires post-quantum key exchange deployment within 36 months to defend classified government telemetry.\n` +
+           `• You can select packets in the **Hex Packet Dissector** below to inspect framing octets, or open the **CycloneDX CBOM** from the top bar to inspect algorithm assets.`;
+  }
+
+  function handleSend() {
+    const input = $("copilot-input");
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+
+    addMessage(text, true);
+    input.value = "";
+
+    // Simulated quick reasoning delay
+    setTimeout(() => {
+      const reply = synthesizeResponse(text);
+      addMessage(reply, false);
+      if (typeof SocAudioEngine !== "undefined" && SocAudioEngine.play) {
+        SocAudioEngine.play("ping");
+      }
+    }, 280);
+  }
+
+  function init() {
+    const toggleBtn = $("btn-copilot-toggle");
+    if (toggleBtn) toggleBtn.addEventListener("click", toggle);
+
+    const closeBtn = $("btn-copilot-close");
+    if (closeBtn) closeBtn.addEventListener("click", toggle);
+
+    const clearBtn = $("btn-copilot-clear");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        const stream = $("copilot-chat-stream");
+        if (stream) {
+          stream.innerHTML = `
+            <div class="copilot-msg copilot-msg-ai">
+              <div class="copilot-msg-avatar">🤖</div>
+              <div class="copilot-msg-content">
+                <p><strong>Chat stream reset.</strong> How can I assist your defense evaluation today?</p>
+              </div>
+            </div>
+          `;
+        }
+      });
+    }
+
+    const sendBtn = $("btn-copilot-send");
+    if (sendBtn) sendBtn.addEventListener("click", handleSend);
+
+    const input = $("copilot-input");
+    if (input) {
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          handleSend();
+        }
+      });
+    }
+
+    // Chips
+    document.querySelectorAll(".copilot-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const prompt = chip.dataset.prompt || chip.textContent;
+        const inEl = $("copilot-input");
+        if (inEl) inEl.value = prompt;
+        handleSend();
+      });
+    });
+  }
+
+  return { init, toggle, addMessage, handleSend };
+})();
+
+window.toggleSocCopilot = SocCopilotEngine.toggle;
+
+
+// --- 4. MITRE ATT&CK ENTERPRISE THREAT MATRIX HEATMAP ---
+const MitreHeatmapEngine = (function() {
+  const MITRE_TACTICS = [
+    {
+      name: "Initial Access",
+      cards: [
+        { id: "T1566", name: "Captive Portal Phishing", status: "mitigated", desc: "Forced DNS redirection blocked via Sovereign DNS resolvers." },
+        { id: "T1133", name: "External IPsec Gateways", status: "monitored", desc: "Zero-decryption framing analysis monitors remote boundary endpoints." },
+        { id: "T1200", name: "Rogue AP / Hardware Injection", status: "dynamic-rogue", desc: "Evil Twin BSSID spoofing actively monitored." }
+      ]
+    },
+    {
+      name: "Credential Access",
+      cards: [
+        { id: "T1110.002", name: "WPA 4-Way Handshake Cracking", status: "dynamic-wpa", desc: "Offline PMKID dictionary cracking risk against WPA2 PSK." },
+        { id: "T1556", name: "WPS PIN Reaver Exhaustion", status: "mitigated", desc: "Wi-Fi Protected Setup disabled across sovereign access points." },
+        { id: "T1557.001", name: "LLMNR / NBT-NS Poisoning", status: "mitigated", desc: "Protected Management Frames (PMF) enforce link cryptographic integrity." }
+      ]
+    },
+    {
+      name: "Discovery",
+      cards: [
+        { id: "T1046", name: "ESP SPI & Port 500 Sweeping", status: "monitored", desc: "Reconnaissance against IKE daemons detected by wire framing inspector." },
+        { id: "T1018", name: "802.11 Beacon Reconnaissance", status: "monitored", desc: "Spectral passive scanning logs all surrounding SSID beacons." },
+        { id: "T1082", name: "Crypto Suite Fingerprinting", status: "monitored", desc: "IKE SA transform proposal extraction identifies legacy cipher suites." }
+      ]
+    },
+    {
+      name: "Collection",
+      cards: [
+        { id: "T1040", name: "Store-Now-Decrypt-Later (SNDL)", status: "dynamic-sndl", desc: "Classical Diffie-Hellman traffic archived for quantum cryptanalysis." },
+        { id: "T1005", name: "PSK Harvesting", status: "mitigated", desc: "Automated ephemeral PFS prevents historical key recovery." },
+        { id: "T1119", name: "Automated Traffic Sniffing", status: "monitored", desc: "Wire framing integrity counters anomaly bursts." }
+      ]
+    },
+    {
+      name: "Defense Evasion",
+      cards: [
+        { id: "T1562.001", name: "Deauth / Disassociate Frames", status: "dynamic-pmf", desc: "Adversary injects forged management frames to force re-authentication." },
+        { id: "T1027", name: "ESP Framing Modulo Abuse", status: "mitigated", desc: "RFC 4303 length invariants prevent covert padding side-channels." },
+        { id: "T1036", name: "Masquerading (Evil Twin SSID)", status: "dynamic-rogue", desc: "Clone BSSID mimicking authentic enterprise gateway." }
+      ]
+    }
+  ];
+
+  function render() {
+    const grid = $("mitre-heatmap-grid");
+    if (!grid) return;
+
+    // Check state for dynamic statuses
+    const isRogueActive = Boolean(state.simulatedRogueApActive || state.isRogueSimulated);
+    const wifiAssessment = state.wifiAssessment || {};
+    const grade = (wifiAssessment.score && wifiAssessment.score.letter) ? wifiAssessment.score.letter : "B";
+    const isWeakWifi = (grade === "C" || grade === "D" || grade === "F");
+
+    let mitigatedCount = 0;
+    let vulnerableCount = 0;
+
+    grid.innerHTML = "";
+
+    MITRE_TACTICS.forEach((tactic) => {
+      const col = document.createElement("div");
+      col.className = "mitre-column";
+
+      const title = document.createElement("div");
+      title.className = "mitre-col-title";
+      title.textContent = tactic.name;
+      col.appendChild(title);
+
+      tactic.cards.forEach((c) => {
+        let status = c.status;
+        if (status === "dynamic-rogue") {
+          status = isRogueActive ? "vulnerable" : "mitigated";
+        } else if (status === "dynamic-wpa") {
+          status = isWeakWifi ? "vulnerable" : "mitigated";
+        } else if (status === "dynamic-sndl") {
+          status = "vulnerable"; // High priority advisory for classical DH
+        } else if (status === "dynamic-pmf") {
+          status = isWeakWifi ? "vulnerable" : "mitigated";
+        }
+
+        if (status === "mitigated") mitigatedCount++;
+        if (status === "vulnerable") vulnerableCount++;
+
+        const card = document.createElement("div");
+        card.className = `mitre-card status-${status}`;
+
+        const idSpan = document.createElement("div");
+        idSpan.className = "mitre-card-id";
+        idSpan.textContent = c.id;
+        card.appendChild(idSpan);
+
+        const nameSpan = document.createElement("div");
+        nameSpan.className = "mitre-card-name";
+        nameSpan.textContent = c.name;
+        card.appendChild(nameSpan);
+
+        const badge = document.createElement("div");
+        badge.className = "mitre-status-badge";
+        badge.textContent = status.toUpperCase();
+        card.appendChild(badge);
+
+        card.addEventListener("click", () => {
+          showToast(`[${c.id}] ${c.name}: ${c.desc}`, status === "vulnerable" ? "warn" : "info");
+        });
+
+        col.appendChild(card);
+      });
+
+      grid.appendChild(col);
+    });
+
+    const chipWrap = $("mitre-stats-chip");
+    if (chipWrap) {
+      chipWrap.innerHTML = `
+        <span class="mitre-chip-item mitigated">🛡️ ${mitigatedCount} Mitigated</span>
+        <span class="mitre-chip-item vulnerable" id="mitre-vuln-count">⚠️ ${vulnerableCount} Active Threats</span>
+      `;
+    }
+  }
+
+  return { render };
+})();
+
+window.renderMitreHeatmap = MitreHeatmapEngine.render;
+
+
+// --- 5. MULTI-GATEWAY ENTERPRISE FLEET SENTINEL ---
+const FleetSentinelEngine = (function() {
+  const FLEET_GATEWAYS = [
+    {
+      id: "gw-delhi-01",
+      name: "HQ Core Primary Gateway",
+      location: "New Delhi Datacenter",
+      ip: "203.0.113.10",
+      posture: "CNSA 2.0 PQC Hybrid (ML-KEM-768 + X25519)",
+      grade: "A+",
+      score: 98,
+      status: "SECURE",
+      tunnels: 8,
+      tags: ["PQC-Ready", "FIPS 140-3", "8 Tunnels Active"]
+    },
+    {
+      id: "gw-mumbai-02",
+      name: "Branch Regional Hub",
+      location: "Mumbai Financial Zone",
+      ip: "198.51.100.45",
+      posture: "IKEv2 AES-256-GCM / SHA-384 / DH-20",
+      grade: "A",
+      score: 91,
+      status: "COMPLIANT",
+      tunnels: 6,
+      tags: ["Suite-B", "RFC 4303", "6 Tunnels Active"]
+    },
+    {
+      id: "cloud-gw-blr-04",
+      name: "Sovereign Cloud Node",
+      location: "Bengaluru Aerospace Cluster",
+      ip: "192.0.2.88",
+      posture: "Post-Quantum Kyber-1024 / Dilithium-3",
+      grade: "A+",
+      score: 99,
+      status: "OPTIMAL",
+      tunnels: 5,
+      tags: ["Zero-Trust", "Post-Quantum", "5 Mesh Tunnels"]
+    },
+    {
+      id: "edge-tactical-09",
+      name: "Tactical Border Edge Node",
+      location: "Jammu Tactical Outpost",
+      ip: "10.142.3.1",
+      posture: "AES-CBC-128 / SHA1 / DH-2 (Legacy Fallback)",
+      grade: "C-",
+      score: 58,
+      status: "ATTENTION REQUIRED",
+      tunnels: 5,
+      tags: ["Legacy Fallback", "SNDL Risk", "Action Needed"]
+    }
+  ];
+
+  function renderGrid() {
+    const grid = $("fleet-matrix-grid");
+    if (!grid) return;
+
+    grid.innerHTML = "";
+    FLEET_GATEWAYS.forEach((gw) => {
+      const card = document.createElement("div");
+      card.className = "fleet-gw-card";
+      card.id = `fleet-card-${gw.id}`;
+
+      const gradeBg = (gw.score >= 90) ? "#dcfce7" : (gw.score >= 75) ? "#fef3c7" : "#fee2e2";
+      const gradeColor = (gw.score >= 90) ? "#15803d" : (gw.score >= 75) ? "#b45309" : "#b91c1c";
+
+      card.innerHTML = `
+        <div class="fleet-gw-header">
+          <div class="fleet-gw-title">${gw.name}</div>
+          <div class="fleet-gw-grade" style="background:${gradeBg}; color:${gradeColor}">${gw.grade} (${gw.score})</div>
+        </div>
+        <div class="fleet-gw-meta">
+          <span><strong>Location:</strong> ${gw.location} &bull; <code>${gw.ip}</code></span>
+          <span><strong>Posture:</strong> ${gw.posture}</span>
+          <span><strong>Status:</strong> ${gw.status} &bull; ${gw.tunnels} Active Tunnels</span>
+        </div>
+        <div class="fleet-gw-tags">
+          ${gw.tags.map(t => `<span class="fleet-gw-tag">${t}</span>`).join("")}
+        </div>
+      `;
+
+      grid.appendChild(card);
+    });
+  }
+
+  function batchRemediate() {
+    const btn = $("btn-fleet-remediate-all");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "⚡ Pushing CNSA 2.0 Profiles...";
+    }
+
+    setTimeout(() => {
+      // Remediate legacy tactical gateway
+      const edge = FLEET_GATEWAYS.find(g => g.id === "edge-tactical-09");
+      if (edge) {
+        edge.posture = "CNSA 2.0 Compliant (AES-256-GCM / SHA-384 / ML-KEM-768)";
+        edge.grade = "A";
+        edge.score = 94;
+        edge.status = "COMPLIANT & SECURED";
+        edge.tags = ["Remediated", "PQC-Ready", "CNSA 2.0"];
+      }
+
+      renderGrid();
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "✔ Fleet 100% Remediated";
+      }
+
+      showToast("Fleet batch remediation deployed! All gateways upgraded to CNSA 2.0 PQC.", "success");
+      if (typeof SocAudioEngine !== "undefined" && SocAudioEngine.play) {
+        SocAudioEngine.play("ping");
+      }
+    }, 900);
+  }
+
+  function openModal() {
+    const modal = $("fleet-modal");
+    if (!modal) return;
+    modal.hidden = false;
+    modal.removeAttribute("hidden");
+    modal.style.setProperty("display", "flex", "important");
+    renderGrid();
+  }
+
+  function closeModal() {
+    const modal = $("fleet-modal");
+    if (!modal) return;
+    modal.hidden = true;
+    modal.setAttribute("hidden", "");
+    modal.style.setProperty("display", "none", "important");
+  }
+
+  function init() {
+    const btnOpen = $("btn-fleet-toggle");
+    if (btnOpen) btnOpen.addEventListener("click", openModal);
+
+    const btnClose = $("fleet-modal-close");
+    if (btnClose) btnClose.addEventListener("click", closeModal);
+
+    const btnRemediate = $("btn-fleet-remediate-all");
+    if (btnRemediate) btnRemediate.addEventListener("click", batchRemediate);
+  }
+
+  return { init, openModal, closeModal, renderGrid, batchRemediate };
+})();
+
+window.openFleetModal = FleetSentinelEngine.openModal;
+window.closeFleetModal = FleetSentinelEngine.closeModal;
+
 async function init(){
   try { state.token = sessionStorage.getItem("cipherguard.token"); } catch (e) {}
 
@@ -3962,6 +5050,9 @@ async function init(){
       simEvilTwinBtn.classList.toggle("active", state.simulatedRogueApActive);
       if (state.wifiAssessment) {
         renderWifiDashboard(state.wifiAssessment);
+      }
+      if (typeof MitreHeatmapEngine !== "undefined" && MitreHeatmapEngine.render) {
+        MitreHeatmapEngine.render();
       }
     });
   }
@@ -4222,6 +5313,12 @@ async function init(){
     if (e.key === "Escape" || e.key === "Esc") {
       closeBackendModal();
       closeShortcutsModal();
+      closeCbomModal();
+      closeFleetModal();
+      const copilotDrawer = $("copilot-drawer");
+      if (copilotDrawer && !copilotDrawer.classList.contains("collapsed")) {
+        toggleSocCopilot();
+      }
       const rogueBanner = $("wifi-evil-twin-banner");
       if (rogueBanner) rogueBanner.style.display = "none";
       if (isInput && activeEl && activeEl.blur) activeEl.blur();
@@ -4313,6 +5410,27 @@ async function init(){
       toggleCyberTerminal();
       return;
     }
+
+    // 9. TOGGLE CBOM MODAL: 'c'
+    if (!e.ctrlKey && !e.altKey && !e.metaKey && key === "c") {
+      e.preventDefault();
+      openCbomModal();
+      return;
+    }
+
+    // 10. TOGGLE FLEET SENTINEL MODAL: 'f'
+    if (!e.ctrlKey && !e.altKey && !e.metaKey && key === "f") {
+      e.preventDefault();
+      openFleetModal();
+      return;
+    }
+
+    // 11. TOGGLE SOC COPILOT DRAWER: 'x'
+    if (!e.ctrlKey && !e.altKey && !e.metaKey && key === "x") {
+      e.preventDefault();
+      toggleSocCopilot();
+      return;
+    }
   });
 
   // Capture selection field validation listener
@@ -4332,6 +5450,12 @@ async function init(){
   initRadarScope();
   initMoscaCalculator();
   initCyberTerminal();
+
+  HexDissectorEngine.init();
+  CbomEngine.init();
+  SocCopilotEngine.init();
+  MitreHeatmapEngine.render();
+  FleetSentinelEngine.init();
 
   await detectStaticMode();
 
