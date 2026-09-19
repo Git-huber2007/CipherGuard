@@ -153,6 +153,12 @@ def create_app(
     # would leave an authenticated deployment rendering an unstyled page before
     # the token prompt ever appears.
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    if os.path.exists(os.path.join(STATIC_DIR, "css")):
+        app.mount("/css", StaticFiles(directory=os.path.join(STATIC_DIR, "css")), name="css")
+    if os.path.exists(os.path.join(STATIC_DIR, "js")):
+        app.mount("/js", StaticFiles(directory=os.path.join(STATIC_DIR, "js")), name="js")
+    if os.path.exists(os.path.join(STATIC_DIR, "img")):
+        app.mount("/img", StaticFiles(directory=os.path.join(STATIC_DIR, "img")), name="img")
 
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
