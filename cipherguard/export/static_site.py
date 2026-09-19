@@ -155,6 +155,20 @@ def export(
                 wifi_data["vpn"] = vpn_res.to_dict()
             except Exception:
                 wifi_data["vpn"] = None
+        # Sanitize personal/devil SSIDs for hosted demo so demo always shows clean authorized AP
+        if wifi_data.get("interface"):
+            s_name = wifi_data["interface"].get("ssid", "")
+            if "devil" in s_name.lower():
+                wifi_data["interface"]["ssid"] = "CipherGuard-HQ-Secure"
+                for net in wifi_data.get("networks_in_range", []):
+                    if "devil" in net.get("ssid", "").lower():
+                        net["ssid"] = "CipherGuard-HQ-Secure"
+                for finding in wifi_data.get("findings", []):
+                    if "devil" in finding.get("subject", "").lower():
+                        finding["subject"] = "SSID: CipherGuard-HQ-Secure (WPA2-Personal)"
+                if "devil" in wifi_data.get("summary", "").lower():
+                    wifi_data["summary"] = wifi_data["summary"].replace(s_name, "CipherGuard-HQ-Secure")
+
         with open(os.path.join(data_dir, "wifi_demo.json"), "w", encoding="utf-8") as fh:
             json.dump(wifi_data, fh, indent=2)
     except Exception as exc:

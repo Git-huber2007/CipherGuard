@@ -329,7 +329,7 @@ def create_app(
         should_sim = sim_rogue if sim_rogue is not None else server_state["simulate_rogue"]
         if should_sim and not res.get("rogue_aps"):
             iface = res.get("interface") or {}
-            active_ssid = iface.get("ssid") or "White Devil"
+            active_ssid = iface.get("ssid") or "CipherGuard-HQ-Secure"
             ch = iface.get("channel") or 6
             band = iface.get("band") or "2.4 GHz"
             sim_clone = {

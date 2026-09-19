@@ -4,7 +4,7 @@
     "description": "MediaTek MT7921 Wi-Fi 6 802.11ax PCIe Adapter",
     "mac_address": "2c:3b:70:fc:74:8b",
     "state": "connected",
-    "ssid": "White Devil",
+    "ssid": "CipherGuard-HQ-Secure",
     "bssid": "5a:04:bd:22:04:63",
     "band": "2.4 GHz",
     "channel": 11,
@@ -24,7 +24,7 @@
   },
   "networks_in_range": [
     {
-      "ssid": "White Devil",
+      "ssid": "CipherGuard-HQ-Secure",
       "bssid": "5a:04:bd:22:04:63",
       "signal_percent": 87,
       "rssi_dbm": -56,
@@ -83,7 +83,7 @@
       "severity": "medium",
       "rule_id": "WIFI-004",
       "title": "WPA2 Pre-Shared Key (PSK) Vulnerable to Offline Dictionary Attack",
-      "subject": "SSID: White Devil (WPA2-Personal)",
+      "subject": "SSID: CipherGuard-HQ-Secure (WPA2-Personal)",
       "detail": "WPA2 4-Way Handshake allows passive adversaries recording the handshake to execute offline dictionary and brute-force attacks against the pre-shared key (PMK/PTK).",
       "remediation": "Enable WPA3-Personal (SAE - Simultaneous Authentication of Equals) with Protected Management Frames (PMF / 802.11w) on your router.",
       "reference": "IEEE 802.11-2020 / NIST SP 800-162",
@@ -127,7 +127,7 @@
     "low": 0,
     "info": 2
   },
-  "summary": "Connected to 'White Devil' on 2.4 GHz (Channel 11). Security: WPA2-Personal / CCMP with 84% signal. Score: 80/100 (Grade B).",
+  "summary": "Connected to 'CipherGuard-HQ-Secure' on 2.4 GHz (Channel 11). Security: WPA2-Personal / CCMP with 84% signal. Score: 80/100 (Grade B).",
   "dns_posture": {
     "dns_servers": [
       "10.187.105.202",

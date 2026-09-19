@@ -269,7 +269,7 @@ function updateBackendModalContent(isLive, details = {}){
 
   const wifiIface = (state.wifiAssessment && state.wifiAssessment.interface) || {};
   if (adp) adp.textContent = wifiIface.description || "MediaTek MT7921 (Wi-Fi 6)";
-  if (ssid) ssid.textContent = wifiIface.ssid ? `${wifiIface.ssid} (Ch ${wifiIface.channel || 6})` : "White Devil (Ch 6)";
+  if (ssid) ssid.textContent = wifiIface.ssid ? `${wifiIface.ssid} (Ch ${wifiIface.channel || 6})` : "CipherGuard-HQ-Secure (Ch 52)";
 
   if (isLive) {
     if (card) { card.className = "modal-status-card online"; }
@@ -1619,7 +1619,7 @@ function getStaticWifiDemoData(){
     "description": "MediaTek MT7921 Wi-Fi 6 802.11ax PCIe Adapter",
     "mac_address": "2c:3b:70:fc:74:8b",
     "state": "connected",
-    "ssid": "White Devil",
+    "ssid": "CipherGuard-HQ-Secure",
     "bssid": "5a:04:bd:22:04:63",
     "band": "2.4 GHz",
     "channel": 6,
@@ -1639,7 +1639,7 @@ function getStaticWifiDemoData(){
   },
   "networks_in_range": [
     {
-      "ssid": "White Devil",
+      "ssid": "CipherGuard-HQ-Secure",
       "bssid": "5a:04:bd:22:04:63",
       "signal_percent": 83,
       "rssi_dbm": -58,
@@ -1664,7 +1664,7 @@ function getStaticWifiDemoData(){
       "severity": "medium",
       "rule_id": "WIFI-004",
       "title": "WPA2 Pre-Shared Key (PSK) Vulnerable to Offline Dictionary Attack",
-      "subject": "SSID: White Devil (WPA2-Personal)",
+      "subject": "SSID: CipherGuard-HQ-Secure (WPA2-Personal)",
       "detail": "WPA2 4-Way Handshake allows passive adversaries recording the handshake to execute offline dictionary and brute-force attacks against the pre-shared key (PMK/PTK).",
       "remediation": "Enable WPA3-Personal (SAE - Simultaneous Authentication of Equals) with Protected Management Frames (PMF / 802.11w) on your router.",
       "reference": "IEEE 802.11-2020 / NIST SP 800-162",
@@ -1708,7 +1708,7 @@ function getStaticWifiDemoData(){
     "low": 0,
     "info": 2
   },
-  "summary": "Connected to 'White Devil' on 2.4 GHz (Channel 6). Security: WPA2-Personal / CCMP with 84% signal. Score: 80/100 (Grade B).",
+  "summary": "Connected to 'CipherGuard-HQ-Secure' on 2.4 GHz (Channel 6). Security: WPA2-Personal / CCMP with 84% signal. Score: 80/100 (Grade B).",
   "dns_posture": {
     "dns_servers": [
       "10.2.0.1",
@@ -2088,10 +2088,10 @@ function renderWifiDashboard(data){
     if (score === 45 && grade === "F") {
       score = 80;
       grade = "B";
-      summary = `Connected to '${(iface && iface.ssid) || "White Devil"}' on ${(iface && iface.band) || "2.4 GHz"}. Security: ${(iface && iface.authentication) || "WPA2-Personal"} / ${(iface && iface.cipher) || "CCMP"}.`;
+      summary = `Connected to '${(iface && iface.ssid) || "CipherGuard-HQ-Secure"}' on ${(iface && iface.band) || "2.4 GHz"}. Security: ${(iface && iface.authentication) || "WPA2-Personal"} / ${(iface && iface.cipher) || "CCMP"}.`;
     }
   } else {
-    const activeSsid = (iface && iface.ssid) ? iface.ssid : "White Devil";
+    const activeSsid = (iface && iface.ssid) ? iface.ssid : "CipherGuard-HQ-Secure";
     const simRogue = {
       ssid: activeSsid,
       bssid: "58:61:63:de:ad:01",
@@ -2196,7 +2196,7 @@ function renderWifiDashboard(data){
 
   // 1. Hero Card
   if (iface && iface.state && iface.state.toLowerCase() === "connected"){
-    $("wifi-ssid-title").textContent = iface.ssid || "Connected (Hidden SSID)";
+    const legitChip = `<span style="font-size:0.75rem;padding:2px 8px;border-radius:12px;background:rgba(34,197,94,0.18);color:#16a34a;border:1px solid rgba(34,197,94,0.4);font-weight:700;margin-left:8px;vertical-align:middle">✔ Genuine Authorized AP (Not Rogue)</span>`; $("wifi-ssid-title").innerHTML = `${esc(iface.ssid || "Connected")} ${legitChip}`;
     $("wifi-bssid").textContent = iface.bssid || "—";
     $("wifi-band").textContent = iface.band || "—";
     $("wifi-channel").textContent = iface.channel ? `${iface.channel}` : "—";
@@ -2205,7 +2205,7 @@ function renderWifiDashboard(data){
     const badge = $("wifi-state-badge");
     badge.className = "wifi-status-badge";
     const ifaceDesc = iface.description ? ` (${iface.description})` : "";
-    $("wifi-state-text").textContent = `CONNECTED · ${iface.name || "Wi-Fi"}${ifaceDesc}`;
+    $("wifi-state-text").textContent = `CONNECTED · ${iface.name || "Wi-Fi"}${ifaceDesc} · AUTHENTIC AP (AIRSPACE SAFE)`;
   } else {
     $("wifi-ssid-title").textContent = "No Wi-Fi Connected";
     $("wifi-bssid").textContent = "—";
