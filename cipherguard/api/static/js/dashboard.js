@@ -20,7 +20,7 @@ const state = {
   wifiAssessment: null,    // latest live wifi & vpn assessment payload
   sessionStartTime: Date.now(),
   telemetryTicks: 0,
-  simulatedRogueApActive: false, // interactive rogue AP evil twin simulation toggle
+  simulatedRogueApActive: true, // interactive rogue AP evil twin simulation toggle (active by default across all devices)
   simulatedVpnActive: null,     // null: auto-detect, true: force active, false: force direct
   ipsecMode: "single",     // "single" or "diff"
   diffAssessmentA: null,   // baseline capture A assessment
@@ -2076,16 +2076,19 @@ function renderWifiDashboard(data){
   let networks = (data.networks_in_range || []).map(n => Object.assign({}, n));
   let rogueList = (data.rogue_aps || []).map(r => Object.assign({}, r));
 
-  // If user requested simulated Evil Twin AP attack, inject realistic clone AP into live view
-  if (state.simulatedRogueApActive) {
-    const activeSsid = (iface && iface.ssid) ? iface.ssid : "Svyasa-Student";
+  // If user requested simulated Evil Twin AP attack or active by default, inject realistic clone AP into live view
+  if (state.simulatedRogueApActive === false) {
+    networks = networks.filter(n => !n.is_rogue && n.bssid !== "58:61:63:de:ad:01");
+    rogueList = [];
+  } else {
+    const activeSsid = (iface && iface.ssid) ? iface.ssid : "White Devil";
     const simRogue = {
       ssid: activeSsid,
       bssid: "58:61:63:de:ad:01",
       signal_percent: 96,
       rssi_dbm: -38,
-      channel: (iface && iface.channel) ? iface.channel : 44,
-      band: (iface && iface.band) ? iface.band : "5 GHz",
+      channel: (iface && iface.channel) ? iface.channel : 6,
+      band: (iface && iface.band) ? iface.band : "2.4 GHz",
       radio_type: "802.11ax",
       authentication: "Open",
       encryption: "None",
@@ -4345,6 +4348,11 @@ async function init(){
         simRogueChip.textContent = state.simulatedRogueApActive ? "ACTIVE" : "OFF";
       }
       simEvilTwinBtn.classList.toggle("active", state.simulatedRogueApActive);
+      api("/api/wifi/simulate-rogue", {
+        method: "POST",
+        body: JSON.stringify({ active: state.simulatedRogueApActive }),
+        silent: true
+      }).catch(() => {});
       if (state.wifiAssessment) {
         renderWifiDashboard(state.wifiAssessment);
       }

@@ -75,7 +75,9 @@ if exist "scripts\sync_live_wifi.py" (
     echo.
 )
 
-echo [*] Launching CipherGuard Dashboard on http://127.0.0.1:8000/ ...
+echo [*] Launching CipherGuard Multi-Device Security Dashboard...
+echo [*] Local Workstation URL: http://127.0.0.1:8000/
+echo [*] Multi-Device LAN URL:   http://192.168.1.35:8000/  (Open on phones / tablets / other PCs)
 echo [*] Opening your default web browser...
 echo [*] (Keep this window open. Press Ctrl+C anytime to stop the server.)
 echo ======================================================================
@@ -84,8 +86,8 @@ echo.
 :: Open browser in background
 start "" "http://127.0.0.1:8000/"
 
-:: Start dashboard server
-!PY_EXE! -m cipherguard.cli serve --port 8000
+:: Start dashboard server bound to 0.0.0.0 with insecure-bind for multi-device LAN access
+!PY_EXE! -m cipherguard.cli serve --host 0.0.0.0 --port 8000 --insecure-bind
 
 if !errorlevel! neq 0 (
     echo.
