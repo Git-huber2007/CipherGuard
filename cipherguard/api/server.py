@@ -307,7 +307,7 @@ def create_app(
     def rules() -> dict:
         return {"rules": rule_catalogue()}
 
-    server_state = {"simulate_rogue": True}
+    server_state = {"simulate_rogue": False}
 
     @app.get("/api/wifi/simulate-rogue")
     def get_simulate_rogue() -> dict:

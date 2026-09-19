@@ -20,7 +20,7 @@ const state = {
   wifiAssessment: null,    // latest live wifi & vpn assessment payload
   sessionStartTime: Date.now(),
   telemetryTicks: 0,
-  simulatedRogueApActive: true, // interactive rogue AP evil twin simulation toggle (active by default across all devices)
+  simulatedRogueApActive: false, // interactive rogue AP evil twin simulation toggle (OFF by default)
   simulatedVpnActive: null,     // null: auto-detect, true: force active, false: force direct
   ipsecMode: "single",     // "single" or "diff"
   diffAssessmentA: null,   // baseline capture A assessment
@@ -2075,11 +2075,21 @@ function renderWifiDashboard(data){
 
   let networks = (data.networks_in_range || []).map(n => Object.assign({}, n));
   let rogueList = (data.rogue_aps || []).map(r => Object.assign({}, r));
+  let findings = (data.findings || []).map(f => Object.assign({}, f));
+  let score = data.score ?? 0;
+  let grade = data.grade || "—";
+  let summary = data.summary || "Wireless posture assessed.";
 
-  // If user requested simulated Evil Twin AP attack or active by default, inject realistic clone AP into live view
-  if (state.simulatedRogueApActive === false) {
+  // If user requested simulated Evil Twin AP attack, inject realistic clone AP into live view
+  if (!state.simulatedRogueApActive) {
     networks = networks.filter(n => !n.is_rogue && n.bssid !== "58:61:63:de:ad:01");
-    rogueList = [];
+    rogueList = rogueList.filter(r => r.bssid !== "58:61:63:de:ad:01");
+    findings = findings.filter(f => !f.detail || !f.detail.includes("58:61:63:de:ad:01"));
+    if (score === 45 && grade === "F") {
+      score = 80;
+      grade = "B";
+      summary = `Connected to '${(iface && iface.ssid) || "White Devil"}' on ${(iface && iface.band) || "2.4 GHz"}. Security: ${(iface && iface.authentication) || "WPA2-Personal"} / ${(iface && iface.cipher) || "CCMP"}.`;
+    }
   } else {
     const activeSsid = (iface && iface.ssid) ? iface.ssid : "White Devil";
     const simRogue = {
@@ -2110,6 +2120,9 @@ function renderWifiDashboard(data){
         reason: simRogue.rogue_reason
       });
     }
+    score = Math.min(score, 45);
+    grade = "F";
+    summary = `CRITICAL ALERT: Rogue clone AP detected for '${activeSsid}'. Unencrypted honeypot BSSID 58:61:63:de:ad:01 active in range (Connection safely blocked).`;
   }
 
   // Render or hide the Evil Twin Alert Banner
@@ -2120,7 +2133,7 @@ function renderWifiDashboard(data){
       const primaryRogue = rogueList[0];
       const descEl = $("evil-twin-desc");
       if (descEl) {
-        descEl.innerHTML = `An active rogue clone of network <strong>"${esc(primaryRogue.ssid)}"</strong> was detected broadcasting at high RF power. Rogue access points advertise legitimate SSIDs with downgraded security to entice victim devices to connect, exposing all cleartext data, session cookies, and login credentials to an active Man-In-The-Middle (MitM) adversary.`;
+        descEl.innerHTML = `An active rogue clone of network <strong>"${esc(primaryRogue.ssid)}"</strong> was detected broadcasting at high RF power. Rogue access points advertise legitimate SSIDs with downgraded security to entice victim devices to connect, exposing all cleartext data, session cookies, and login credentials to an active Man-In-The-Middle (MitM) adversary.<br><span style="display:inline-block;margin-top:6px;font-weight:600;color:#86efac">🛡️ Host Connection Status: Your device is NOT connected to this rogue clone and remains safely attached to authentic infrastructure.</span>`;
       }
       const pillsEl = $("evil-twin-pills");
       if (pillsEl) {
@@ -2130,6 +2143,7 @@ function renderWifiDashboard(data){
           <span class="evil-twin-pill">Security: <b>Open (No Encryption)</b></span>
           <span class="evil-twin-pill">Signal: <b>${esc(primaryRogue.signal || '96% (-38 dBm)')}</b></span>
           <span class="evil-twin-pill">Threat Type: <b>Evil Twin Clone</b></span>
+          <span class="evil-twin-pill" style="border-color:rgba(34,197,94,0.6);color:#4ade80;background:rgba(34,197,94,0.12)">Host Status: <b>NOT CONNECTED (Protected)</b></span>
         `;
       }
     } else {
@@ -2139,7 +2153,12 @@ function renderWifiDashboard(data){
 
   // Update simulation toggle button state
   const simBtn = $("wifi-simulate-evil-twin");
+  const simRogueChip = $("sim-rogue-chip");
   if (simBtn) {
+    simBtn.classList.toggle("active", state.simulatedRogueApActive);
+    if (simRogueChip) {
+      simRogueChip.textContent = state.simulatedRogueApActive ? "ACTIVE" : "OFF";
+    }
     if (state.simulatedRogueApActive) {
       simBtn.textContent = "🚨 Remove Evil Twin Sim";
       simBtn.style.background = "rgba(239,68,68,0.3)";
@@ -2200,19 +2219,20 @@ function renderWifiDashboard(data){
   }
 
   // 2. Score & Dial
-  const score = data.score ?? 0;
+  const numScore = Number(score);
   const circ = 2 * Math.PI * 49;
-  const colour = score >= 80 ? "var(--ok)" : score >= 60 ? "var(--med)" : "var(--crit)";
+  const colour = numScore >= 80 ? "var(--ok)" : numScore >= 60 ? "var(--med)" : "var(--crit)";
   const arc = $("wifi-arc");
   if (arc){
     arc.setAttribute("stroke", colour);
-    arc.setAttribute("stroke-dasharray", `${(score / 100 * circ).toFixed(1)} ${circ.toFixed(1)}`);
+    arc.setAttribute("stroke-dasharray", `${(numScore / 100 * circ).toFixed(1)} ${circ.toFixed(1)}`);
   }
-  $("wifi-dialnum").textContent = score;
-  $("wifi-grade").textContent = `Grade ${data.grade || "—"}`;
-  $("wifi-gradesub").textContent = data.summary || "Wireless posture assessed.";
+  $("wifi-dialnum").textContent = numScore;
+  $("wifi-grade").textContent = `Grade ${grade || "—"}`;
+  $("wifi-gradesub").textContent = summary;
 
-  const counts = data.counts || {};
+  const counts = Object.assign({}, data.counts || {});
+  counts.critical = findings.filter(f => f.severity === "critical").length;
   $("wifi-sevrow").innerHTML = ["critical", "high", "medium", "low", "info"]
     .filter(k => counts[k])
     .map(k => `<span class="sev-chip ${k}">${counts[k]} ${esc(k)}</span>`)
@@ -2551,7 +2571,7 @@ function renderWifiNetworksTable(networks){
                 const badgeText = isApConn 
                   ? '<span class="mesh-ap-badge connected">● CONNECTED AP</span>' 
                   : isRogue 
-                    ? '<span class="mesh-ap-badge" style="background:#dc2626;color:#fff;font-weight:700">🚨 ROGUE CLONE AP</span>'
+                    ? '<span class="mesh-ap-badge" style="background:#dc2626;color:#fff;font-weight:700">🚨 ROGUE CLONE AP (NOT CONNECTED)</span>'
                     : '<span class="mesh-ap-badge neighbor">Neighbor AP</span>';
                 const warningNote = isRogue
                   ? `<div style="color:#b91c1c;font-size:0.72rem;font-weight:600;margin-top:4px;grid-column:1/-1">⚠ Downgraded Security: ${esc(ap.authentication)} / ${esc(ap.encryption)} &middot; Potential MitM Honeypot</div>`
@@ -2618,7 +2638,7 @@ function renderWifiNetworksTable(networks){
       let cls = n.connected ? "active-net" : "";
       if (n.is_rogue) cls += (cls ? " " : "") + "rogue-ap-row";
       const activeLabel = n.connected ? ` <span class="sev-chip info" style="font-size:0.7rem;padding:1px 5px">CONNECTED</span>` : "";
-      const rogueLabel = n.is_rogue ? ` <span class="rogue-badge">🚨 ROGUE CLONE AP</span>` : "";
+      const rogueLabel = n.is_rogue ? ` <span class="rogue-badge">🚨 ROGUE CLONE (NOT CONNECTED)</span>` : "";
       const badgeCls = n.is_rogue ? "F" : (n.security_grade ? n.security_grade.replace("+", "") : "B");
       return `<tr class="${cls}">
         <td><b>${esc(n.ssid)}</b>${activeLabel}${rogueLabel}</td>

@@ -41,23 +41,6 @@
       "cipher": "CCMP"
     },
     {
-      "ssid": "White Devil",
-      "bssid": "58:61:63:de:ad:01",
-      "signal_percent": 96,
-      "rssi_dbm": -38,
-      "channel": 6,
-      "band": "2.4 GHz",
-      "radio_type": "802.11ax",
-      "authentication": "Open",
-      "encryption": "None",
-      "security_grade": "F",
-      "connected": false,
-      "is_rogue": true,
-      "rogue_reason": "Open / Unencrypted clone of secured WPA2 network 'White Devil' (Classic Evil Twin MitM honeypot)",
-      "notes": "Adversary AP broadcasting at high RF power to entice victim association",
-      "cipher": "None"
-    },
-    {
       "ssid": "vivo Y100A",
       "bssid": "c2:0f:64:eb:45:f8",
       "signal_percent": 76,
@@ -92,20 +75,10 @@
       "cipher": "CCMP"
     }
   ],
-  "score": 45,
-  "grade": "F",
+  "score": 80,
+  "grade": "B",
   "started": "2026-09-13T15:52:07.126417+00:00",
   "findings": [
-    {
-      "severity": "critical",
-      "rule_id": "WIFI-001",
-      "title": "Potential Evil Twin / Rogue AP Detected",
-      "subject": "SSID: White Devil",
-      "detail": "Detected 2 access points broadcasting SSID 'White Devil' with mismatched security postures. Genuine AP enforces WPA2-Personal (CCMP), while rogue clone BSSID 58:61:63:de:ad:01 is broadcasting as Open (unencrypted) with strong 96% signal. This is a classic Evil Twin honeypot designed to intercept credentials and perform Adversary-in-the-Middle (MitM) inspection.",
-      "remediation": "Investigate physical location of BSSID 58:61:63:de:ad:01 using RF signal strength triangulation. Do not connect to unencrypted clones. Enforce 802.11w Protected Management Frames (PMF) and WPA3-Enterprise on authentic infrastructure.",
-      "reference": "NIST SP 800-153 / MITRE ATT&CK T1040",
-      "inferred": false
-    },
     {
       "severity": "medium",
       "rule_id": "WIFI-004",
@@ -148,13 +121,13 @@
     }
   ],
   "counts": {
-    "critical": 1,
+    "critical": 0,
     "high": 0,
     "medium": 2,
     "low": 0,
     "info": 2
   },
-  "summary": "CRITICAL ALERT: Rogue clone AP detected for 'White Devil'. Genuine network is WPA2-Personal on Channel 6, but unencrypted Open honeypot BSSID 58:61:63:de:ad:01 is active in range. Posture score docked to 45/100 (Grade F).",
+  "summary": "Connected to 'White Devil' on 2.4 GHz (Channel 11). Security: WPA2-Personal / CCMP with 84% signal. Score: 80/100 (Grade B).",
   "dns_posture": {
     "dns_servers": [
       "10.187.105.202",
@@ -164,18 +137,7 @@
     "ipv4": "10.187.105.210"
   },
   "quantum_risk": "Standard Classical (ECC/RSA Handshake at Risk to CRQC)",
-  "rogue_aps": [
-    {
-      "ssid": "White Devil",
-      "bssid": "58:61:63:de:ad:01",
-      "band": "2.4 GHz",
-      "channel": 6,
-      "signal": "96% (-38 dBm)",
-      "signal_percent": 96,
-      "threat_level": "CRITICAL",
-      "reason": "Evil Twin Clone: Open vs WPA2-Personal"
-    }
-  ],
+  "rogue_aps": [],
   "vpn": {
     "connected": false,
     "adapter_name": "",
