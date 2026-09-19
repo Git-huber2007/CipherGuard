@@ -37,7 +37,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/dashboard.css?v=2.2">
+  <link rel="stylesheet" href="css/dashboard.css">
 </head>
 <body>
 
@@ -60,20 +60,8 @@
       <button type="button" id="btn-shortcuts-help" class="shortcuts-trigger-btn" onclick="openShortcutsModal()" title="Keyboard Shortcuts Cheat Sheet (Press ? or H)" aria-haspopup="dialog">
         <span>⌨️</span> <span>Hotkeys <kbd>?</kbd> / <kbd>H</kbd></span>
       </button>
-      <button type="button" id="btn-audio-toggle" class="shortcuts-trigger-btn audio-toggle-btn" title="Toggle Tactical SOC Audio Alerts" aria-pressed="true">
-        <span id="audio-icon">🔊</span> <span id="audio-label">Audio ON</span>
-      </button>
-      <button type="button" id="btn-terminal-toggle" class="shortcuts-trigger-btn terminal-trigger-btn" onclick="toggleCyberTerminal()" title="Toggle Interactive SOC Terminal (Press ~)" aria-haspopup="dialog">
-        <span>💻</span> <span>Terminal <kbd>~</kbd></span>
-      </button>
-      <button type="button" id="btn-copilot-toggle" class="shortcuts-trigger-btn copilot-trigger-btn" onclick="toggleSocCopilot()" title="Launch Autonomous SOC Cryptographic Copilot" aria-haspopup="dialog">
-        <span>🤖</span> <span>Copilot</span>
-      </button>
       <button type="button" id="btn-cbom-toggle" class="shortcuts-trigger-btn cbom-trigger-btn" onclick="openCbomModal()" title="View Sovereign Cryptographic Bill of Materials (CBOM)" aria-haspopup="dialog">
         <span>📜</span> <span>CBOM</span>
-      </button>
-      <button type="button" id="btn-fleet-toggle" class="shortcuts-trigger-btn fleet-trigger-btn" onclick="openFleetModal()" title="Inspect Multi-Gateway Fleet Sentinel Matrix" aria-haspopup="dialog">
-        <span>🛡️</span> <span>Fleet</span>
       </button>
     </div>
     <div class="controls" id="header-controls">
@@ -81,6 +69,7 @@
       <div id="ipsec-controls" class="tab-controls-group">
         <div class="mode-toggle-group" role="group" aria-label="IPsec Analysis Mode">
           <button type="button" id="btn-ipsec-single" class="mode-toggle-btn active">Single Assessment</button>
+          <button type="button" id="btn-ipsec-live" class="mode-toggle-btn">📡 Live Sniffer</button>
           <button type="button" id="btn-ipsec-diff" class="mode-toggle-btn">⚖️ Compare / Diff Captures</button>
         </div>
         <div id="ipsec-single-controls" class="controls-subgroup">
@@ -122,16 +111,16 @@
 
   <!-- Main View Navigation Tabs -->
   <nav class="nav-tabs" role="tablist">
-    <button class="tab-btn active" id="tab-wifi" role="tab" aria-selected="true" aria-controls="view-wifi">
-      <span class="live-dot"></span> Live Wi-Fi &amp; Wireless Security
+    <button class="tab-btn active" id="tab-ipsec" role="tab" aria-selected="true" aria-controls="view-ipsec">
+      🛡️ IPsec VPN Protocol Analyzer
     </button>
-    <button class="tab-btn" id="tab-ipsec" role="tab" aria-selected="false" aria-controls="view-ipsec">
-      IPsec VPN Protocol Analyzer
+    <button class="tab-btn" id="tab-wifi" role="tab" aria-selected="false" aria-controls="view-wifi">
+      <span class="live-dot"></span> Live Wi-Fi &amp; Wireless Security
     </button>
   </nav>
 
   <!-- ==================== VIEW 1: LIVE WI-FI POSTURE ==================== -->
-  <main id="view-wifi" class="tab-content active">
+  <main id="view-wifi" class="tab-content">
 
     <!-- Evaluator & Jury Threat Simulation Control Bar -->
     <div class="simulation-control-bar" role="region" aria-label="Interactive Threat Simulator">
@@ -153,7 +142,7 @@
           <span class="sim-btn-text">Toggle Encrypted VPN Tunnel</span>
           <span class="sim-status-chip" id="sim-vpn-chip">AUTO</span>
         </button>
-        <button type="button" id="wifi-scan-now" class="sim-btn sim-btn-scan" title="Force fresh physical wireless hardware scan">
+        <button type="button" id="wifi-scan-now-sim" class="sim-btn sim-btn-scan" title="Force fresh physical wireless hardware scan">
           <span class="sim-btn-icon">🔄</span>
           <span class="sim-btn-text">Force RF Re-scan</span>
         </button>
@@ -209,7 +198,6 @@
       <div class="wifi-hero-actions">
         <div class="wifi-hero-btns">
           <button id="wifi-scan-now" class="action-btn">Scan All Networks</button>
-          <button id="wifi-simulate-evil-twin" class="action-btn" style="background:rgba(239,68,68,0.14);color:var(--crit);border:1px solid rgba(239,68,68,0.35);font-weight:600">🚨 Simulate Evil Twin AP</button>
           <button id="wifi-export-report" class="action-btn" style="background:rgba(56,189,248,0.14);color:var(--accent);border:1px solid rgba(56,189,248,0.35);font-weight:600">📥 Export Audit Dossier</button>
         </div>
         <div class="wifi-time-sub" id="wifi-last-scan">Last scanned: just now</div>
@@ -289,7 +277,7 @@
           <div class="sub">Encrypted overlay status, route redirection, and DNS leak inspection.</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button id="btn-toggle-sim-vpn" type="button" class="ghost-mini" style="font-size:0.75rem;padding:4px 9px;border:1px solid var(--rule);border-radius:4px;cursor:pointer" title="Toggle VPN simulation between Encrypted Tunnel and Direct ISP">
+          <button id="btn-toggle-sim-vpn-card" type="button" class="ghost-mini" style="font-size:0.75rem;padding:4px 9px;border:1px solid var(--rule);border-radius:4px;cursor:pointer" title="Toggle VPN simulation between Encrypted Tunnel and Direct ISP">
             🔒 Toggle VPN State
           </button>
           <div id="vpn-status-indicator" class="vpn-status-badge vpn-status-inactive">
@@ -328,22 +316,7 @@
         (WireGuard / OpenVPN / IPsec), securing data even on untrusted or compromised Wi-Fi networks.
       </div>
     </section>
-    <!-- Sovereign Tunnel & Geo-IP Egress Vector Map -->
-    <section class="panel sovereign-map-panel" id="sovereign-map-panel" style="margin-bottom:18px">
-      <div class="sovereign-map-header">
-        <div>
-          <h2>Sovereign Cryptographic Routing &amp; Geo-IP Egress Map <span class="domain-tag obs" id="sovereign-status-pill">Sovereign Protected</span></h2>
-          <div class="sub">Continuous topological route tracer from local physical NIC through sovereign NTRO cryptographic tunnels to public egress.</div>
-        </div>
-        <div class="sovereign-route-stats" id="sovereign-route-stats">
-          <span class="sov-stat-chip" id="sov-stat-enc">🔒 Post-Quantum Encrypted</span>
-          <span class="sov-stat-chip" id="sov-stat-dns">🛡️ Zero DNS Leaks</span>
-        </div>
-      </div>
-      <div class="sovereign-map-canvas-container">
-        <svg id="sovereign-route-svg" class="sovereign-route-svg" viewBox="0 0 920 180" preserveAspectRatio="xMidYMid meet"></svg>
-      </div>
-    </section>
+
 
 
     <!-- Wi-Fi Findings -->
@@ -421,51 +394,10 @@
         </div>
       </div>
     </section>
-    <!-- Tactical 360° RF Radar Sweep Display (SIGINT HUD) -->
-    <section class="panel radar-hud-panel" id="radar-hud-panel" style="margin-top:18px">
-      <div class="radar-hud-header">
-        <div>
-          <h2>Tactical 360&deg; RF Radar Scope <span class="domain-tag obs">SIGINT Electronic Warfare HUD</span></h2>
-          <div class="sub">Active 360-degree polar RF spatial mapping. Access points plotted radially by signal attenuation (RSSI dBm) with threat targeting lock.</div>
-        </div>
-        <div class="radar-hud-telemetry" id="radar-hud-telemetry">
-          <span class="radar-stat-item"><strong id="radar-target-count">0</strong> APs Locked</span>
-          <span class="radar-stat-item radar-alert-item" id="radar-threat-alert">THREAT: CLEAR</span>
-        </div>
-      </div>
-      <div class="radar-hud-display-container">
-        <div class="radar-canvas-wrap">
-          <canvas id="rf-radar-canvas" width="460" height="460"></canvas>
-          <div class="radar-crosshair-overlay"></div>
-        </div>
-        <div class="radar-hud-sidebar">
-          <div class="radar-bearing-card">
-            <div class="radar-bearing-title">POLAR SPATIAL POSITIONING</div>
-            <div class="radar-bearing-grid">
-              <div><span>000&deg; (N)</span><strong>Ch 1 / 36</strong></div>
-              <div><span>090&deg; (E)</span><strong>Ch 6 / 48</strong></div>
-              <div><span>180&deg; (S)</span><strong>Ch 11 / 149</strong></div>
-              <div><span>270&deg; (W)</span><strong>DFS Bands</strong></div>
-            </div>
-          </div>
-          <div class="radar-target-details" id="radar-target-details">
-            <div class="radar-target-hint">Hover over any radar blip to inspect live beacon frame telemetry, signal dBm, and MAC/OUI authenticity.</div>
-          </div>
-          <div class="radar-hud-legend">
-            <span><i class="radar-dot dot-assoc"></i> Associated AP</span>
-            <span><i class="radar-dot dot-rogue"></i> Threat / Rogue AP</span>
-            <span><i class="radar-dot dot-secure"></i> Secure AP</span>
-            <span><i class="radar-dot dot-open"></i> Insecure / Open AP</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-
   </main>
 
   <!-- ==================== VIEW 2: IPSEC VPN PROTOCOL ANALYZER ==================== -->
-  <main id="view-ipsec" class="tab-content">
+  <main id="view-ipsec" class="tab-content active">
 
     <!-- IPsec Single Capture Analysis Mode -->
     <div id="ipsec-single-view">
@@ -543,16 +475,7 @@
         <div class="pqc-cockpit-header">
           <div>
             <h2>Interactive "Q-Day" Mosca Calculator &amp; PQC Readiness Cockpit <span class="domain-tag obs">NIST FIPS 203/204/205</span></h2>
-            <div class="sub">Dynamic calculation of Mosca's Theorem (X + Y &gt; Z) and live countdown clocks to NSA CNSA 2.0 Post-Quantum mandatory migration timelines.</div>
-          </div>
-          <div class="q-day-countdown-strip" id="q-day-countdown-strip" title="Time remaining until CNSA 2.0 2030 Quantum Cutoff">
-            <div class="q-tile"><span id="q-days">--</span><label>DAYS</label></div>
-            <div class="q-sep">:</div>
-            <div class="q-tile"><span id="q-hours">--</span><label>HRS</label></div>
-            <div class="q-sep">:</div>
-            <div class="q-tile"><span id="q-mins">--</span><label>MIN</label></div>
-            <div class="q-sep">:</div>
-            <div class="q-tile"><span id="q-secs">--</span><label>SEC</label></div>
+            <div class="sub">Dynamic calculation of Mosca's Theorem (X + Y &gt; Z) and NSA CNSA 2.0 Post-Quantum migration risk assessment.</div>
           </div>
         </div>
 
@@ -622,6 +545,9 @@
             </select>
           </div>
         </div>
+
+        <div id="dissector-anatomy-bar" class="dissector-anatomy-bar"></div>
+        <div id="dissector-modulo-card" class="dissector-modulo-card"></div>
 
         <div class="hex-dissector-grid">
           <!-- Protocol Dissection Tree -->
@@ -869,138 +795,79 @@
 
     </div>
 
+    <!-- IPsec Live Wire Sniffer Cockpit -->
+    <div id="ipsec-live-view" style="display:none;">
+      <section class="panel live-sniffer-panel" style="margin-bottom:18px">
+        <div class="sniffer-panel-header">
+          <div>
+            <h2>Live Network Interface Packet Sniffer <span class="domain-tag live">Real-Time Ingestion</span></h2>
+            <div class="sub">Stream live IPsec/ESP and IKE packets in real-time. Inspect active security associations as they traverse the wire.</div>
+          </div>
+          <div class="sniffer-controls-wrap">
+            <select id="sniffer-iface-select" class="sniffer-iface-select" aria-label="Select network interface">
+              <option value="All Interfaces">All Active Interfaces (Promiscuous)</option>
+            </select>
+            <button type="button" id="btn-sniffer-start" class="btn btn-primary">
+              <span>▶</span> Start Live Sniffing
+            </button>
+            <button type="button" id="btn-sniffer-stop" class="btn btn-subtle" disabled>
+              <span>⏹</span> Stop
+            </button>
+            <button type="button" id="btn-sniffer-analyze" class="btn btn-accent" disabled title="Analyze captured packet buffer">
+              <span>⚡</span> Analyze Live Snapshot
+            </button>
+          </div>
+        </div>
+
+        <!-- Live Sniffer HUD Ticker Strip -->
+        <div class="sniffer-hud-grid">
+          <div class="sniffer-metric-card">
+            <div class="hud-label">SENSOR STATUS</div>
+            <div class="hud-val" id="sniffer-status-val"><span class="hud-dot idle"></span> IDLE</div>
+          </div>
+          <div class="sniffer-metric-card">
+            <div class="hud-label">PACKET RATE</div>
+            <div class="hud-val" id="sniffer-rate-pps">0.0 <small>pps</small></div>
+          </div>
+          <div class="sniffer-metric-card">
+            <div class="hud-label">THROUGHPUT</div>
+            <div class="hud-val" id="sniffer-rate-kbps">0.0 <small>kbps</small></div>
+          </div>
+          <div class="sniffer-metric-card">
+            <div class="hud-label">BUFFERED PACKETS</div>
+            <div class="hud-val" id="sniffer-total-pkts">0</div>
+          </div>
+          <div class="sniffer-metric-card">
+            <div class="hud-label">ACTIVE SPIS</div>
+            <div class="hud-val" id="sniffer-active-spis">0</div>
+          </div>
+        </div>
+
+        <!-- Live Streaming Packet Terminal Feed -->
+        <div class="sniffer-feed-card">
+          <div class="sniffer-feed-header">
+            <strong>LIVE PACKET STREAM FEED (SSE)</strong>
+            <span class="sniffer-feed-status">Auto-scrolling wire telemetry</span>
+          </div>
+          <div class="sniffer-live-feed" id="sniffer-live-feed">
+            <div class="feed-placeholder">Standby. Click &quot;Start Live Sniffing&quot; to begin capturing wire telemetry.</div>
+          </div>
+        </div>
+
+        <!-- Active Security Associations Discovered Grid -->
+        <div class="sniffer-spis-section">
+          <h3>Discovered Security Associations (Active SAs)</h3>
+          <div class="sub">Dynamically grouped by ESP SPI and IKE peer pairs detected on the wire.</div>
+          <div class="sniffer-spis-grid" id="sniffer-spis-grid">
+            <div class="empty">No active security associations observed yet.</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
   </main>
 
-  <footer class="site-footer" role="contentinfo">
-    <div class="footer-top-accent"></div>
-    <div class="footer-in">
-      <div class="footer-grid">
-        <!-- Column 1: Brand & National Framework Mandate -->
-        <div class="footer-brand">
-          <h4 class="footer-heading">
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            <span>Sovereign Framework</span>
-          </h4>
-          <div class="footer-brand-header">
-            <div class="footer-logo-wrap">
-              <img src="img/favicon.svg" alt="CipherGuard Shield Emblem" width="34" height="34" class="footer-logo">
-              <span class="footer-logo-glow"></span>
-            </div>
-            <div class="footer-brand-text">
-              <div class="footer-title-row">
-                <h3 class="footer-title">CipherGuard</h3>
-                <span class="footer-title-badge">SECURITY FRAMEWORK</span>
-              </div>
-              <span class="footer-subtitle">Autonomous Protocol Dissector &bull; Wireless RF Auditor</span>
-            </div>
-          </div>
-          <p class="footer-desc">
-            AI-powered passive IPsec protocol analyzer and real-time 802.11 wireless security assessment framework. Inspects RFC 4303 framing and RF spectrum with zero payload decryption and zero external telemetry egress.
-          </p>
-          <div class="footer-org-badge">
-            <div class="badge-emblem-box">🏛️</div>
-            <div class="badge-text-wrap">
-              <span class="badge-primary">National Technical Research Organisation (NTRO)</span>
-              <span class="badge-secondary">Smart India Hackathon &middot; Problem Statement SIH26160</span>
-            </div>
-          </div>
-        </div>
 
-        <!-- Column 2: Specifications & Legal Dossier -->
-        <div class="footer-col footer-col-links">
-          <h4 class="footer-heading">
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            <span>Architecture &amp; Legal</span>
-          </h4>
-          <ul class="footer-links">
-            <li>
-              <a href="/privacy" class="footer-link-item">
-                <svg class="link-chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                <span class="link-label">Privacy &amp; Custody Policy</span>
-                <span class="link-tag">POLICY</span>
-              </a>
-            </li>
-            <li>
-              <a href="/terms" class="footer-link-item">
-                <svg class="link-chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                <span class="link-label">Terms of Engagement (RoE)</span>
-                <span class="link-tag">ROE</span>
-              </a>
-            </li>
-            <li>
-              <a href="/thank-you" class="footer-link-item">
-                <svg class="link-chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                <span class="link-label">Audit Confirmation Dossier</span>
-                <span class="link-tag">DOSSIER</span>
-              </a>
-            </li>
-            <li>
-              <a href="/robots.txt" class="footer-link-item">
-                <svg class="link-chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                <span class="link-label">Robots.txt Directives</span>
-                <span class="link-tag">DIRECTIVE</span>
-              </a>
-            </li>
-            <li>
-              <a href="/sitemap.xml" class="footer-link-item">
-                <svg class="link-chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                <span class="link-label">Machine-Readable Site Map</span>
-                <span class="link-tag">XML</span>
-              </a>
-            </li>
-          </ul>
-        </div>
-
-        <!-- Column 3: Operations & Cyber Lab Command -->
-        <div class="footer-col footer-col-hq">
-          <h4 class="footer-heading">
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            <span>Operations &amp; Security HQ</span>
-          </h4>
-          <div class="footer-card">
-            <div class="footer-card-header">
-              <div class="footer-station-indicator">
-                <span class="live-station-dot"></span>
-                <span class="footer-lab-name">Cyber Defence &amp; Protocol Analysis Lab</span>
-              </div>
-              <span class="footer-station-badge">NODE-01</span>
-            </div>
-            <div class="footer-lab-address">
-              <span class="address-pin">📍</span>
-              <span>Block-III, Technical Complex &bull; Old JNU Campus, New Delhi 110067, India</span>
-            </div>
-            <div class="footer-pgp-box" title="Click to copy PGP fingerprint" id="footer-pgp-btn" onclick="navigator.clipboard.writeText('0x9F4B3C2A8D1E7F60'); const el = document.getElementById('footer-pgp-copy-txt'); el.textContent='Copied!'; setTimeout(()=>el.textContent='📋', 1500);">
-              <span class="pgp-label">PGP KEY</span>
-              <code class="pgp-val">0x9F4B3C2A8D1E7F60</code>
-              <span class="pgp-copy-btn" id="footer-pgp-copy-txt" title="Copy key">📋</span>
-            </div>
-            <a href="mailto:security-disclosure@cipherguard.gov.in" class="footer-email-chip" title="Send encrypted vulnerability disclosure">
-              <span class="email-icon">🔒</span>
-              <span class="email-text">security-disclosure@cipherguard.gov.in</span>
-              <span class="email-arrow">&rarr;</span>
-            </a>
-          </div>
-        </div>
-      </div>
-
-      <!-- Footer Bottom Integrity & Custody Bar -->
-      <div class="footer-bottom">
-        <div class="footer-custody-notice">
-          <span class="custody-radar-dot">
-            <span class="radar-ring"></span>
-            <span class="radar-core"></span>
-          </span>
-          <span class="custody-text">
-            Findings marked <span class="telemetry-badge-inferred">inferred</span> are derived from mathematical RFC 4303 framing analysis without keys. Wi-Fi audits capture real-time RF telemetry directly from local hardware adapters.
-          </span>
-        </div>
-        <div class="footer-copy-wrap">
-          <span class="footer-pqc-pill">NIST SP 800-77 &bull; RFC 8247 COMPLIANT</span>
-          <span class="footer-copy">&copy; 2026 CipherGuard &middot; Sovereign Cyber Defence Platform</span>
-        </div>
-      </div>
-    </div>
-  </footer>
 
 </div> <!-- Closes .wrap cleanly with footer aligned inside -->
 
@@ -1008,25 +875,11 @@
 <aside class="mobile-sticky-cta" id="mobile-sticky-cta" aria-label="Mobile Quick Actions">
   <div class="mobile-sticky-cta-inner">
     <button type="button" id="mobile-primary-cta" class="mobile-cta-main">
-      <span>⚡</span> <span id="mobile-cta-label">Analyze Live Wi-Fi</span>
+      <span>⚡</span> <span id="mobile-cta-label">Assess IPsec Capture</span>
     </button>
     <button type="button" id="mobile-secondary-cta" class="mobile-cta-sub" title="Export Security Dossier">
       📥 Export
     </button>
-  </div>
-</aside>
-
-<!-- Cookie & Local Storage Consent Banner -->
-<aside id="cookie-banner" class="cookie-banner" role="dialog" aria-label="Data Privacy &amp; Storage Notice">
-  <div class="cookie-banner-content">
-    <div class="cookie-text">
-      <strong>🔐 Local Storage &amp; Privacy Notice:</strong>
-      CipherGuard operates on strict zero-payload principles. We store assessment preferences, active capture filters, and local telemetry metrics in your browser’s local storage. We do not transmit tracking cookies to third parties. Review our <a href="/privacy">Privacy Policy</a> and <a href="/terms">Terms of Engagement</a>.
-    </div>
-    <div class="cookie-actions">
-      <button type="button" id="btn-cookie-accept" class="btn-cookie-accept">Accept &amp; Continue</button>
-      <button type="button" id="btn-cookie-dismiss" class="btn-cookie-dismiss">Dismiss</button>
-    </div>
   </div>
 </aside>
 
@@ -1199,20 +1052,6 @@
           </div>
         </div>
         <div class="shortcut-item">
-          <div class="shortcut-keys"><kbd>F</kbd></div>
-          <div class="shortcut-desc">
-            <strong>Fleet Sentinel Matrix</strong>
-            <span>Inspect distributed enterprise gateway health and posture</span>
-          </div>
-        </div>
-        <div class="shortcut-item">
-          <div class="shortcut-keys"><kbd>X</kbd></div>
-          <div class="shortcut-desc">
-            <strong>SOC Cryptographic Copilot</strong>
-            <span>Toggle autonomous AI defense advisor drawer</span>
-          </div>
-        </div>
-        <div class="shortcut-item">
           <div class="shortcut-keys"><kbd>Esc</kbd></div>
           <div class="shortcut-desc">
             <strong>Close Dialogs & Banners</strong>
@@ -1221,7 +1060,7 @@
         </div>
       </div>
       <div class="shortcuts-footer-note">
-        💡 <em>Pro-tip for Evaluators: Press <kbd>1</kbd> or <kbd>W</kbd> to sweep Wi-Fi, <kbd>2</kbd> or <kbd>A</kbd> for IPsec analysis, <kbd>R</kbd> for Rogue AP attack, or <kbd>?</kbd> / <kbd>H</kbd> to open this guide anytime. Modifier combos (<kbd>Alt+S</kbd>, <kbd>Alt+A</kbd>, <kbd>Alt+D</kbd>, <kbd>Alt+E</kbd>) are also fully supported.</em>
+        💡 <em>Pro-tip for Evaluators: Press <kbd>1</kbd> or <kbd>A</kbd> for IPsec analysis, <kbd>2</kbd> or <kbd>W</kbd> to sweep Wi-Fi, <kbd>3</kbd> or <kbd>D</kbd> for Diff mode, or <kbd>?</kbd> / <kbd>H</kbd> to open this guide anytime. Modifier combos (<kbd>Alt+A</kbd>, <kbd>Alt+S</kbd>, <kbd>Alt+D</kbd>, <kbd>Alt+E</kbd>) are also fully supported.</em>
       </div>
     </div>
   </div>
@@ -1260,94 +1099,6 @@
   </div>
 </div>
 
-<!-- Multi-Gateway Fleet Sentinel & Enterprise Matrix Modal -->
-<div id="fleet-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="fleet-modal-title">
-  <div class="fleet-modal-card" role="document">
-    <div class="backend-modal-header">
-      <div class="backend-modal-title-group">
-        <span class="backend-modal-icon">🛡️</span>
-        <div>
-          <h2 id="fleet-modal-title">Multi-Gateway Enterprise Fleet Sentinel</h2>
-          <div class="backend-modal-subtitle">Distributed Sovereign Cryptographic Posture &amp; Remote Health Nodes</div>
-        </div>
-      </div>
-      <button type="button" id="fleet-modal-close" class="modal-close-btn" onclick="closeFleetModal()" aria-label="Close dialog">&times;</button>
-    </div>
-    <div class="fleet-modal-body">
-      <div class="fleet-summary-bar">
-        <div><strong>4 Distributed Gateways Monitored</strong> &middot; 24 Secure Tunnels &middot; Zero Interruption</div>
-        <button type="button" id="btn-fleet-remediate-all" class="btn-fleet-action">⚡ Batch Remediate Fleet</button>
-      </div>
-      <div class="fleet-matrix-grid" id="fleet-matrix-grid">
-        <!-- Injected dynamically via JS -->
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Autonomous SOC Cryptographic Copilot Drawer -->
-<div id="copilot-drawer" class="copilot-drawer collapsed" role="region" aria-label="Autonomous SOC Cryptographic Copilot">
-  <div class="copilot-header">
-    <div class="copilot-title-group">
-      <span class="copilot-avatar">🤖</span>
-      <div>
-        <div class="copilot-title">SOC Cryptographic Copilot</div>
-        <div class="copilot-subtitle">Autonomous AI Defense Advisor</div>
-      </div>
-    </div>
-    <div class="copilot-controls">
-      <button type="button" id="btn-copilot-clear" class="copilot-ctrl-btn" title="Clear Chat">Clear</button>
-      <button type="button" id="btn-copilot-close" class="copilot-ctrl-btn" onclick="toggleSocCopilot()" title="Close Copilot">&times;</button>
-    </div>
-  </div>
-  <div class="copilot-body" id="copilot-chat-stream">
-    <div class="copilot-msg copilot-msg-ai">
-      <div class="copilot-msg-avatar">🤖</div>
-      <div class="copilot-msg-content">
-        <p><strong>Greetings, Security Analyst.</strong> I am your autonomous cryptographic copilot. I continuously monitor active 802.11 spectrum telemetry, passive IPsec ESP framing residues, and Post-Quantum Mosca risks.</p>
-        <p>How can I assist your defense evaluation today?</p>
-      </div>
-    </div>
-  </div>
-  <div class="copilot-suggestions">
-    <button type="button" class="copilot-chip" data-prompt="Why is my Wi-Fi security grade C?">Explain Wi-Fi score</button>
-    <button type="button" class="copilot-chip" data-prompt="Explain why DH Group 2 is vulnerable to SNDL attacks.">Why is DH Group 2 unsafe?</button>
-    <button type="button" class="copilot-chip" data-prompt="How do I harden Cisco ASA to CNSA 2.0 PQC?">Cisco ASA Hardening</button>
-    <button type="button" class="copilot-chip" data-prompt="Explain RFC 4303 zero-decryption framing inspection.">Zero-Decryption Math</button>
-  </div>
-  <div class="copilot-input-bar">
-    <input type="text" id="copilot-input" class="copilot-input" placeholder="Ask cryptographic copilot a question..." autocomplete="off">
-    <button type="button" id="btn-copilot-send" class="btn-copilot-send">Send</button>
-  </div>
-</div>
-
-<!-- Embedded Interactive Cyber Terminal Drawer -->
-<div id="cyber-terminal-drawer" class="cyber-terminal-drawer collapsed" role="region" aria-label="Interactive SOC Security Terminal">
-  <div class="terminal-header" id="terminal-header-bar">
-    <div class="terminal-title-group">
-      <span class="terminal-status-dot"></span>
-      <span class="terminal-title">CIPHERGUARD DEFENSE CLI &bull; SOC INTERACTIVE TERMINAL</span>
-      <span class="terminal-shortcut-pill">Press <kbd>~</kbd> or <kbd>`</kbd></span>
-    </div>
-    <div class="terminal-controls">
-      <button type="button" id="btn-terminal-clear" class="terminal-ctrl-btn" title="Clear Terminal Screen">Clear</button>
-      <button type="button" id="btn-terminal-expand" class="terminal-ctrl-btn" title="Expand/Restore Terminal">⛶</button>
-      <button type="button" id="btn-terminal-close" class="terminal-ctrl-btn" title="Minimize Terminal">&minus;</button>
-    </div>
-  </div>
-  <div class="terminal-body" id="terminal-body-scroll">
-    <div class="terminal-banner">
-CipherGuard Autonomous Cryptographic Security Engine [v2.2.0-NTRO]
-Type 'help' for tactical defense commands, 'scan' for RF sweep, 'audit' for IPsec analysis.
-    </div>
-    <div id="terminal-history" class="terminal-history"></div>
-    <div class="terminal-input-row">
-      <span class="terminal-prompt">cipherguard@soc-node:~$</span>
-      <input type="text" id="terminal-input" class="terminal-input" autocomplete="off" spellcheck="false" aria-label="Terminal input command">
-    </div>
-  </div>
-</div>
-
-<script src="js/dashboard.js?v=2.2"></script>
+<script src="js/dashboard.js"></script>
 </body>
 </html>

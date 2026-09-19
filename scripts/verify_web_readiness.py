@@ -32,41 +32,14 @@ def run_tests():
     assert "CipherGuard" in r.text
     assert "og-image.png" in r.text
     assert "site.webmanifest" in r.text
-    assert "cookie-banner" in r.text
-    assert "mobile-sticky-cta" in r.text
-    print("[OK] GET / (Dashboard with OG tags, meta descriptions, sticky CTA, cookie banner) passed")
+    assert "view-ipsec" in r.text
+    print("[OK] GET / (Dashboard with IPsec primary view and metadata) passed")
 
-    # 2. Privacy Policy page
-    r = client.get("/privacy")
-    assert r.status_code == 200, f"GET /privacy failed: {r.status_code}"
-    assert "Zero-Payload Architecture" in r.text
-    print("[OK] GET /privacy passed")
-
-    # 3. Terms of Engagement page
-    r = client.get("/terms")
-    assert r.status_code == 200, f"GET /terms failed: {r.status_code}"
-    assert "Terms of Engagement" in r.text
-    print("[OK] GET /terms passed")
-
-    # 4. Thank You page
-    r = client.get("/thank-you")
-    assert r.status_code == 200, f"GET /thank-you failed: {r.status_code}"
-    assert "Assessment Complete" in r.text
-    print("[OK] GET /thank-you passed")
-
-    # 5. Robots.txt
-    r = client.get("/robots.txt")
-    assert r.status_code == 200, f"GET /robots.txt failed: {r.status_code}"
-    assert "User-agent" in r.text
-    assert "Sitemap: /sitemap.xml" in r.text
-    print("[OK] GET /robots.txt passed")                                    
-
-    # 6. Sitemap.xml
-    r = client.get("/sitemap.xml")
-    assert r.status_code == 200, f"GET /sitemap.xml failed: {r.status_code}"
-    assert "<urlset" in r.text
-    assert "/privacy" in r.text
-    print("[OK] GET /sitemap.xml passed")
+    # 2. Verify decommissioned marketing pages return 404
+    for route in ["/privacy", "/terms", "/thank-you", "/robots.txt", "/sitemap.xml"]:
+        r_old = client.get(route)
+        assert r_old.status_code == 404, f"Decommissioned {route} should return 404"
+    print("[OK] Marketing and consumer SaaS routes correctly decommissioned")
 
     # 7. Favicon.ico
     r = client.get("/favicon.ico")
@@ -95,7 +68,30 @@ def run_tests():
     assert "detail" in data
     print("[OK] API 404 JSON response preserved")
 
-    print("\nALL 20-POINT CHECKLIST BACKEND VERIFICATIONS PASSED SUCCESSFULLY!")
+    # 11. Wire Framing Dissection & Modulo Proof Endpoint
+    r_wire = client.get("/api/captures/backbone.pcap/flows/0x93a339dd/wire")
+    assert r_wire.status_code == 200, f"Wire inspection failed: {r_wire.status_code}"
+    wire_data = r_wire.json()
+    assert wire_data["spi"] == "0x93a339dd"
+    assert len(wire_data["samples"]) > 0
+    assert "modulo_proof" in wire_data["samples"][0]
+    print("[OK] ESP Wire Dissector & RFC 4303 Modulo Proof API passed")
+
+    # 12. Live Network Sniffer Status & Control Endpoints
+    r_sniff_status = client.get("/api/sniff/status")
+    assert r_sniff_status.status_code == 200
+    assert "running" in r_sniff_status.json()
+
+    r_sniff_start = client.post("/api/sniff/start", json={"force_simulation": True})
+    assert r_sniff_start.status_code == 200
+    assert r_sniff_start.json()["running"] is True
+
+    r_sniff_stop = client.post("/api/sniff/stop")
+    assert r_sniff_stop.status_code == 200
+    assert r_sniff_stop.json()["running"] is False
+    print("[OK] Live Packet Sniffer & Streamer Endpoints passed")
+
+    print("\nALL VERIFICATIONS PASSED SUCCESSFULLY!")
 
 if __name__ == "__main__":
     run_tests()

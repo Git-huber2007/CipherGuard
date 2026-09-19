@@ -7,12 +7,12 @@
     "ssid": "White Devil",
     "bssid": "5a:04:bd:22:04:63",
     "band": "2.4 GHz",
-    "channel": 11,
+    "channel": 6,
     "radio_type": "802.11ax",
     "authentication": "WPA2-Personal",
     "cipher": "CCMP",
-    "signal_percent": 84,
-    "rssi_dbm": -41,
+    "signal_percent": 82,
+    "rssi_dbm": -53,
     "rx_rate_mbps": 286.8,
     "tx_rate_mbps": 286.8,
     "dns_servers": [
@@ -26,9 +26,9 @@
     {
       "ssid": "White Devil",
       "bssid": "5a:04:bd:22:04:63",
-      "signal_percent": 87,
-      "rssi_dbm": -56,
-      "channel": 11,
+      "signal_percent": 82,
+      "rssi_dbm": -59,
+      "channel": 6,
       "band": "2.4 GHz",
       "radio_type": "802.11ax",
       "authentication": "WPA2-Personal",
@@ -43,8 +43,8 @@
     {
       "ssid": "vivo Y100A",
       "bssid": "c2:0f:64:eb:45:f8",
-      "signal_percent": 76,
-      "rssi_dbm": -62,
+      "signal_percent": 85,
+      "rssi_dbm": -57,
       "channel": 1,
       "band": "2.4 GHz",
       "radio_type": "802.11ac",
@@ -56,28 +56,11 @@
       "rogue_reason": "",
       "notes": "",
       "cipher": "CCMP"
-    },
-    {
-      "ssid": "OPPO Reno10 5G 7DC8",
-      "bssid": "4e:5e:1f:b5:c1:c8",
-      "signal_percent": 75,
-      "rssi_dbm": -62,
-      "channel": 4,
-      "band": "2.4 GHz",
-      "radio_type": "802.11ac",
-      "authentication": "WPA3-Personal",
-      "encryption": "CCMP",
-      "security_grade": "A+",
-      "connected": false,
-      "is_rogue": false,
-      "rogue_reason": "",
-      "notes": "",
-      "cipher": "CCMP"
     }
   ],
   "score": 80,
   "grade": "B",
-  "started": "2026-09-13T15:52:07.126417+00:00",
+  "started": "2026-09-14T16:30:27.546848+00:00",
   "findings": [
     {
       "severity": "medium",
@@ -93,7 +76,7 @@
       "severity": "info",
       "rule_id": "WIFI-011",
       "title": "2.4 GHz Band In Use (Crowded Spectrum)",
-      "subject": "Band: 2.4 GHz \u00b7 Channel 11",
+      "subject": "Band: 2.4 GHz \u00b7 Channel 6",
       "detail": "The 2.4 GHz spectrum has only 3 non-overlapping channels (1, 6, 11) and suffers significant co-channel interference from Bluetooth and microwave emitters.",
       "remediation": "Migrate clients to 5 GHz or 6 GHz (Wi-Fi 6/6E) for higher bandwidth and isolated DFS channels.",
       "reference": "IEEE 802.11ax / 802.11be",
@@ -127,7 +110,7 @@
     "low": 0,
     "info": 2
   },
-  "summary": "Connected to 'White Devil' on 2.4 GHz (Channel 11). Security: WPA2-Personal / CCMP with 84% signal. Score: 80/100 (Grade B).",
+  "summary": "Connected to 'White Devil' on 2.4 GHz (Channel 6). Security: WPA2-Personal / CCMP with 82% signal. Score: 80/100 (Grade B).",
   "dns_posture": {
     "dns_servers": [
       "10.187.105.202",
@@ -150,7 +133,7 @@
     "dns_servers": [],
     "dns_leak_detected": false,
     "dns_leak_details": "",
-    "egress_ip": "106.192.235.186",
+    "egress_ip": "2401:4900:c8f5:b0fa:3cf9:7a8f:73c0:424c",
     "egress_isp": "Bharti Airtel Limited",
     "egress_country": "India",
     "egress_city": "Bengaluru",

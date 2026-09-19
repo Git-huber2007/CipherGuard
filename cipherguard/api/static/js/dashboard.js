@@ -565,6 +565,11 @@ function renderFlows(a){
       <div class="confbar"><i style="width:${pct}%"></i></div>
       <div class="cand">${pct}% confidence in the framing class</div>
       ${candidates}
+      <div style="margin-top:8px">
+        <button type="button" class="btn-wire-inspect" onclick="HexDissectorEngine.loadFlowWire('${esc(f.spi)}', '${esc(f.framing_class || '')}')">
+          🔬 Inspect Wire Framing &amp; Hex
+        </button>
+      </div>
     </div>`;
   }).join("");
 }
@@ -1236,31 +1241,29 @@ async function runAnalysis(){
 function switchIpsecMode(mode){
   state.ipsecMode = mode;
   const singleBtn = $("btn-ipsec-single");
+  const liveBtn = $("btn-ipsec-live");
   const diffBtn = $("btn-ipsec-diff");
   const singleControls = $("ipsec-single-controls");
   const diffControls = $("ipsec-diff-controls");
   const singleView = $("ipsec-single-view");
+  const liveView = $("ipsec-live-view");
   const diffView = $("ipsec-diff-view");
 
-  if (mode === "diff"){
-    if (singleBtn) singleBtn.classList.remove("active");
-    if (diffBtn) diffBtn.classList.add("active");
-    if (singleControls) singleControls.style.display = "none";
-    if (diffControls) diffControls.style.display = "flex";
-    if (singleView) singleView.style.display = "none";
-    if (diffView) diffView.style.display = "block";
+  if (singleBtn) singleBtn.classList.toggle("active", mode === "single");
+  if (liveBtn) liveBtn.classList.toggle("active", mode === "live");
+  if (diffBtn) diffBtn.classList.toggle("active", mode === "diff");
 
-    // Auto-run diff if not already analyzed
+  if (singleControls) singleControls.style.display = (mode === "single") ? "flex" : "none";
+  if (diffControls) diffControls.style.display = (mode === "diff") ? "flex" : "none";
+
+  if (singleView) singleView.style.display = (mode === "single") ? "block" : "none";
+  if (liveView) liveView.style.display = (mode === "live") ? "block" : "none";
+  if (diffView) diffView.style.display = (mode === "diff") ? "block" : "none";
+
+  if (mode === "diff"){
     if (!state.diffAssessmentA || !state.diffAssessmentB){
       runDiffAnalysis();
     }
-  } else {
-    if (singleBtn) singleBtn.classList.add("active");
-    if (diffBtn) diffBtn.classList.remove("active");
-    if (singleControls) singleControls.style.display = "flex";
-    if (diffControls) diffControls.style.display = "none";
-    if (singleView) singleView.style.display = "block";
-    if (diffView) diffView.style.display = "none";
   }
 }
 
@@ -1983,523 +1986,24 @@ async function loadWifiAssessment(forceScan = false, silent = false){
 
   
 /* ==========================================================================
-   TACTICAL DEFENSE ENGINES: AUDIO, RADAR SCOPE, SOVEREIGN MAP, PQC & CLI (OPTIMIZED)
+   POST-QUANTUM CRYPTOGRAPHY & ANALYSIS ENGINES
    ========================================================================== */
 
-// 1. Tactical SOC Web Audio Synthesizer (Zero external dependencies & throttled)
+// Silent no-op audio stub for compatibility
 const SocAudioEngine = {
-  ctx: null,
-  enabled: true,
-  lastKeyClick: 0,
-  lastPingTime: 0,
-  lastAlarmTime: 0,
-
-  init() {
-    try {
-      const saved = localStorage.getItem("cipherguard_audio_enabled");
-      if (saved !== null) {
-        this.enabled = (saved === "true");
-      }
-      this.updateUI();
-    } catch (e) {}
-  },
-
-  getContext() {
-    if (!this.enabled) return null;
-    if (!this.ctx) {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (AudioCtx) this.ctx = new AudioCtx();
-    }
-    if (this.ctx && this.ctx.state === "suspended") {
-      this.ctx.resume().catch(() => {});
-    }
-    return this.ctx;
-  },
-
-  toggle() {
-    this.enabled = !this.enabled;
-    try {
-      localStorage.setItem("cipherguard_audio_enabled", String(this.enabled));
-    } catch (e) {}
-    this.updateUI();
-    if (this.enabled) {
-      this.secureChime();
-      showToast("🔊 Tactical SOC Audio Alerts: Enabled", "info");
-    } else {
-      showToast("🔇 Tactical SOC Audio Alerts: Muted", "info");
-    }
-  },
-
-  updateUI() {
-    const btn = $("btn-audio-toggle");
-    const icon = $("audio-icon");
-    const label = $("audio-label");
-    if (!btn) return;
-    btn.classList.toggle("muted", !this.enabled);
-    btn.setAttribute("aria-pressed", String(this.enabled));
-    if (icon) icon.textContent = this.enabled ? "🔊" : "🔇";
-    if (label) label.textContent = this.enabled ? "Audio ON" : "Audio OFF";
-  },
-
-  radarPing(force = false) {
-    const now = Date.now();
-    if (!force && now - this.lastPingTime < 180) return; // Prevent audio swarm on fast mousemove
-    this.lastPingTime = now;
-
-    const ctx = this.getContext();
-    if (!ctx) return;
-    try {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(880, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.14);
-      gain.gain.setValueAtTime(0.05, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.16);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.17);
-    } catch (e) {}
-  },
-
-  threatAlarm(force = false) {
-    const now = Date.now();
-    if (!force && now - this.lastAlarmTime < 12000) return; // Siren fires at most once every 12s on poll
-    this.lastAlarmTime = now;
-
-    const ctx = this.getContext();
-    if (!ctx) return;
-    try {
-      const startTime = ctx.currentTime;
-      for (let i = 0; i < 2; i++) {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "sawtooth";
-        const t = startTime + i * 0.14;
-        osc.frequency.setValueAtTime(600, t);
-        osc.frequency.setValueAtTime(400, t + 0.07);
-        gain.gain.setValueAtTime(0.07, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(t);
-        osc.stop(t + 0.14);
-      }
-    } catch (e) {}
-  },
-
-  secureChime() {
-    const ctx = this.getContext();
-    if (!ctx) return;
-    try {
-      const freqs = [523.25, 659.25, 783.99];
-      const now = ctx.currentTime;
-      freqs.forEach((f, idx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "triangle";
-        osc.frequency.setValueAtTime(f, now + idx * 0.05);
-        gain.gain.setValueAtTime(0.06, now + idx * 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.3);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now + idx * 0.05);
-        osc.stop(now + idx * 0.05 + 0.31);
-      });
-    } catch (e) {}
-  },
-
-  keyClick() {
-    const now = Date.now();
-    if (now - this.lastKeyClick < 45) return; // Debounce rapid keystroke sounds
-    this.lastKeyClick = now;
-
-    const ctx = this.getContext();
-    if (!ctx) return;
-    try {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "square";
-      osc.frequency.setValueAtTime(1100, ctx.currentTime);
-      gain.gain.setValueAtTime(0.012, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.025);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.03);
-    } catch (e) {}
-  }
+  enabled: false,
+  init() {},
+  toggle() {},
+  getContext() { return null; },
+  radarPing() {},
+  threatAlarm() {},
+  secureChime() {},
+  keyClick() {},
+  play() {}
 };
 window.SocAudioEngine = SocAudioEngine;
 
-// 2. Tactical 360° RF Radar Scope Engine (Crisp High-DPI, Zero Smearing, 60 FPS)
-let radarCanvas = null;
-let radarCtx = null;
-let radarAngle = 0;
-let radarAnimFrame = null;
-let currentRadarBlips = [];
-let hoveredRadarBlip = null;
-let lastHoveredBssid = null;
-
-function initRadarScope() {
-  radarCanvas = $("rf-radar-canvas");
-  if (!radarCanvas) return;
-  radarCtx = radarCanvas.getContext("2d");
-
-  // Setup High-DPI crisp rendering
-  setupRadarDpi();
-  window.addEventListener("resize", setupRadarDpi);
-
-  radarCanvas.addEventListener("mousemove", handleRadarMouseMove);
-  radarCanvas.addEventListener("mouseleave", () => {
-    hoveredRadarBlip = null;
-    lastHoveredBssid = null;
-    const details = $("radar-target-details");
-    if (details) {
-      details.innerHTML = `<div class="radar-target-hint">Hover over any radar blip to inspect live beacon frame telemetry, signal dBm, and MAC/OUI authenticity.</div>`;
-    }
-  });
-
-  if (!radarAnimFrame) {
-    animateRadarScope();
-  }
-}
-
-function setupRadarDpi() {
-  if (!radarCanvas || !radarCtx) return;
-  const dpr = window.devicePixelRatio || 1;
-  const rect = radarCanvas.getBoundingClientRect();
-  const size = Math.min(rect.width || 460, 460);
-  radarCanvas.width = size * dpr;
-  radarCanvas.height = size * dpr;
-  radarCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
-
-function updateRadarBlips(networks, isRogueActive) {
-  if (!networks) return;
-  const countEl = $("radar-target-count");
-  const threatAlert = $("radar-threat-alert");
-
-  if (countEl) countEl.textContent = String(networks.length);
-
-  let hasRogue = false;
-  currentRadarBlips = networks.map(ap => {
-    const bssid = ap.bssid || "00:00:00:00:00:00";
-    let hash = 0;
-    for (let i = 0; i < bssid.length; i++) {
-      hash = (hash << 5) - hash + bssid.charCodeAt(i);
-      hash |= 0;
-    }
-    const channel = parseInt(ap.channel, 10) || 6;
-    const angle = Math.abs((channel * 37 + hash) % 360) * (Math.PI / 180);
-
-    const rssi = typeof ap.rssi_dbm === "number" ? ap.rssi_dbm : -70;
-    // Normalize RSSI between -30 dBm (center) and -95 dBm (outer ring)
-    const norm = Math.max(0.12, Math.min(0.96, (-rssi - 30) / 65));
-    const isRogue = !!(ap.is_rogue || (isRogueActive && (ap.bssid === "58:61:63:de:ad:01" || ap.ssid === "Svyasa-Student")));
-    if (isRogue) hasRogue = true;
-
-    return {
-      ap,
-      angle,
-      norm,
-      isRogue,
-      connected: !!ap.connected
-    };
-  });
-
-  if (threatAlert) {
-    if (hasRogue) {
-      threatAlert.textContent = "🚨 THREAT LOCKED: BSSID SPOOF";
-      threatAlert.classList.add("alert-active");
-      SocAudioEngine.threatAlarm();
-    } else {
-      threatAlert.textContent = "THREAT: CLEAR";
-      threatAlert.classList.remove("alert-active");
-    }
-  }
-}
-
-function handleRadarMouseMove(e) {
-  if (!radarCanvas || currentRadarBlips.length === 0) return;
-  const rect = radarCanvas.getBoundingClientRect();
-  const mx = e.clientX - rect.left;
-  const my = e.clientY - rect.top;
-
-  const cx = rect.width / 2;
-  const cy = rect.height / 2;
-  const maxR = cx - 18;
-
-  let nearest = null;
-  let minDist = 20;
-
-  currentRadarBlips.forEach(b => {
-    const r = b.norm * maxR;
-    const bx = cx + r * Math.cos(b.angle);
-    const by = cy + r * Math.sin(b.angle);
-    const d = Math.hypot(mx - bx, my - by);
-    if (d < minDist) {
-      minDist = d;
-      nearest = b;
-    }
-  });
-
-  hoveredRadarBlip = nearest;
-  const details = $("radar-target-details");
-
-  if (nearest) {
-    const ap = nearest.ap;
-    const bssid = ap.bssid || "N/A";
-
-    // Only ping audio ONCE when cursor transitions onto a new blip
-    if (bssid !== lastHoveredBssid) {
-      lastHoveredBssid = bssid;
-      SocAudioEngine.radarPing(true);
-    }
-
-    if (details) {
-      details.innerHTML = `
-        <div class="radar-target-spec">
-          <strong>${esc(ap.ssid || 'Hidden Network')} ${nearest.isRogue ? '<span style="color:#ef4444;font-size:0.75rem;font-weight:700">[ROGUE AP CLONE]</span>' : ''}</strong>
-          <span>BSSID: ${esc(bssid)} | Ch: ${ap.channel || 'N/A'} (${ap.band || '2.4 GHz'})</span>
-          <span>Signal: ${ap.signal_percent || 0}% (${ap.rssi_dbm || -100} dBm) | Radio: ${esc(ap.radio_type || '802.11')}</span>
-          <span>Security: <strong>${esc(ap.authentication || 'Open')} / ${esc(ap.encryption || 'None')}</strong> &bull; Grade: <strong>${esc(ap.security_grade || 'C')}</strong></span>
-        </div>
-      `;
-    }
-  } else {
-    lastHoveredBssid = null;
-  }
-}
-
-function animateRadarScope() {
-  // Only loop if Wi-Fi view is currently active, saving CPU/GPU cycles
-  const wifiView = $("view-wifi");
-  if (!wifiView || !wifiView.classList.contains("active")) {
-    radarAnimFrame = requestAnimationFrame(animateRadarScope);
-    return;
-  }
-
-  if (!radarCanvas || !radarCtx) {
-    radarAnimFrame = requestAnimationFrame(animateRadarScope);
-    return;
-  }
-
-  const rect = radarCanvas.getBoundingClientRect();
-  const w = rect.width || 460;
-  const h = rect.height || 460;
-  const cx = w / 2;
-  const cy = h / 2;
-  const maxR = cx - 18;
-
-  // Clear canvas completely each frame to prevent ghost smears
-  radarCtx.clearRect(0, 0, w, h);
-
-  // Background radial phosphor gradient
-  const bgGrad = radarCtx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
-  bgGrad.addColorStop(0, "#08281e");
-  bgGrad.addColorStop(0.7, "#03140e");
-  bgGrad.addColorStop(1, "#010705");
-  radarCtx.fillStyle = bgGrad;
-  radarCtx.beginPath();
-  radarCtx.arc(cx, cy, maxR, 0, Math.PI * 2);
-  radarCtx.fill();
-
-  // Concentric radar range rings
-  [0.25, 0.5, 0.75, 1.0].forEach((ratio, idx) => {
-    const r = maxR * ratio;
-    radarCtx.beginPath();
-    radarCtx.arc(cx, cy, r, 0, Math.PI * 2);
-    radarCtx.strokeStyle = idx === 3 ? "rgba(16, 185, 129, 0.5)" : "rgba(16, 185, 129, 0.18)";
-    radarCtx.lineWidth = idx === 3 ? 1.5 : 1;
-    radarCtx.stroke();
-
-    // Range dBm markers
-    radarCtx.fillStyle = "rgba(56, 189, 248, 0.65)";
-    radarCtx.font = "9px 'IBM Plex Mono', monospace";
-    radarCtx.fillText(`-${Math.round(30 + ratio * 65)} dBm`, cx + 4, cy - r + 11);
-  });
-
-  // Cross axes
-  radarCtx.strokeStyle = "rgba(16, 185, 129, 0.15)";
-  radarCtx.lineWidth = 1;
-  radarCtx.beginPath();
-  radarCtx.moveTo(cx, cy - maxR);
-  radarCtx.lineTo(cx, cy + maxR);
-  radarCtx.moveTo(cx - maxR, cy);
-  radarCtx.lineTo(cx + maxR, cy);
-  radarCtx.stroke();
-
-  // Draw sweep beam
-  radarAngle += 0.022;
-  if (radarAngle >= Math.PI * 2) radarAngle = 0;
-
-  // Phosphor tail sector
-  radarCtx.beginPath();
-  radarCtx.moveTo(cx, cy);
-  radarCtx.arc(cx, cy, maxR, radarAngle - 0.42, radarAngle);
-  radarCtx.closePath();
-  const tailGrad = radarCtx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
-  tailGrad.addColorStop(0, "rgba(56, 189, 248, 0.22)");
-  tailGrad.addColorStop(1, "rgba(16, 185, 129, 0.0)");
-  radarCtx.fillStyle = tailGrad;
-  radarCtx.fill();
-
-  // Sweep leading edge line
-  radarCtx.beginPath();
-  radarCtx.moveTo(cx, cy);
-  radarCtx.lineTo(cx + maxR * Math.cos(radarAngle), cy + maxR * Math.sin(radarAngle));
-  radarCtx.strokeStyle = "rgba(56, 189, 248, 0.95)";
-  radarCtx.lineWidth = 2;
-  radarCtx.stroke();
-
-  // Render AP Blips
-  currentRadarBlips.forEach(b => {
-    const r = b.norm * maxR;
-    const bx = cx + r * Math.cos(b.angle);
-    const by = cy + r * Math.sin(b.angle);
-    const isHovered = (hoveredRadarBlip === b);
-
-    radarCtx.save();
-    if (b.isRogue) {
-      // Pulsating Rogue Diamond
-      const pulse = (Math.sin(Date.now() / 140) + 1) * 3;
-      radarCtx.strokeStyle = "#ef4444";
-      radarCtx.fillStyle = "#e11d48";
-      radarCtx.lineWidth = 2;
-
-      radarCtx.beginPath();
-      radarCtx.arc(bx, by, 7 + pulse, 0, Math.PI * 2);
-      radarCtx.stroke();
-
-      radarCtx.beginPath();
-      radarCtx.moveTo(bx, by - 6);
-      radarCtx.lineTo(bx + 6, by);
-      radarCtx.lineTo(bx, by + 6);
-      radarCtx.lineTo(bx - 6, by);
-      radarCtx.closePath();
-      radarCtx.fill();
-
-      // Threat Reticle
-      radarCtx.strokeStyle = "rgba(239, 68, 68, 0.85)";
-      radarCtx.strokeRect(bx - 10, by - 10, 20, 20);
-    } else if (b.connected) {
-      radarCtx.fillStyle = "#38bdf8";
-      radarCtx.shadowColor = "#38bdf8";
-      radarCtx.shadowBlur = 10;
-      radarCtx.beginPath();
-      radarCtx.arc(bx, by, 5, 0, Math.PI * 2);
-      radarCtx.fill();
-    } else {
-      const auth = (b.ap.authentication || "").toLowerCase();
-      const isWeak = auth.includes("open") || auth.includes("wep");
-      radarCtx.fillStyle = isWeak ? "#f59e0b" : "#10b981";
-      radarCtx.beginPath();
-      radarCtx.arc(bx, by, 3.5, 0, Math.PI * 2);
-      radarCtx.fill();
-    }
-
-    // Draw targeting bracket on hover
-    if (isHovered) {
-      radarCtx.strokeStyle = "#38bdf8";
-      radarCtx.lineWidth = 1.5;
-      radarCtx.strokeRect(bx - 8, by - 8, 16, 16);
-    }
-    radarCtx.restore();
-  });
-
-  radarAnimFrame = requestAnimationFrame(animateRadarScope);
-}
-
-// 3. Sovereign Cryptographic Routing & Geo-IP Egress Vector Map (Cached & Non-Blinking)
-let lastSovereignSignature = "";
-
-function renderSovereignEgressMap(vpn, iface) {
-  const svg = $("sovereign-route-svg");
-  if (!svg) return;
-
-  const connected = !!(vpn && vpn.connected);
-  const dnsLeak = !!(vpn && vpn.dns_leak_detected);
-  const localIp = (iface && iface.gateway_ip) ? iface.gateway_ip.replace(/\d+$/, '104') : "192.168.1.104";
-  const ssid = (iface && iface.ssid) ? iface.ssid : "Local Wireless Link";
-  const gatewayIp = connected ? (vpn.virtual_ip || "10.8.0.2") : "Direct Transit";
-  const egressIp = (vpn && vpn.egress_ip) ? vpn.egress_ip : "103.21.244.18";
-  const egressLoc = (vpn && vpn.egress_city) ? `${vpn.egress_city}, ${vpn.egress_country || 'IN'}` : "New Delhi, India";
-  const egressIsp = (vpn && vpn.egress_isp) ? vpn.egress_isp : "National NIC Gateway";
-
-  // Create signature to prevent wiping innerHTML every 5s unless state actually changes
-  const signature = `${connected}-${dnsLeak}-${localIp}-${ssid}-${gatewayIp}-${egressIp}`;
-  if (signature === lastSovereignSignature) return;
-  lastSovereignSignature = signature;
-
-  const statusPill = $("sovereign-status-pill");
-  const encChip = $("sov-stat-enc");
-  const dnsChip = $("sov-stat-dns");
-
-  if (statusPill) {
-    statusPill.textContent = connected ? (dnsLeak ? "DNS Leak Exposed" : "Sovereign Protected") : "Direct ISP Egress";
-    statusPill.className = `domain-tag ${connected && !dnsLeak ? 'obs' : 'inf'}`;
-  }
-  if (encChip) {
-    encChip.textContent = connected ? `🔒 Encrypted Overlay: ${vpn.vpn_type || 'WireGuard'}` : "⚠️ Unencrypted Raw ISP Route";
-    encChip.className = `sov-stat-chip ${connected ? '' : 'alert'}`;
-  }
-  if (dnsChip) {
-    dnsChip.textContent = dnsLeak ? "🚨 DNS Leak Detected!" : "🛡️ Sovereign DNS Isolation OK";
-    dnsChip.className = `sov-stat-chip ${dnsLeak ? 'alert' : ''}`;
-  }
-
-  const strokeColor = connected ? (dnsLeak ? "#f59e0b" : "#10b981") : "#ef4444";
-  const strokeDash = connected ? "6,4" : "8,6";
-
-  svg.innerHTML = `
-    <defs>
-      <filter id="sovGlow">
-        <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-        <feMerge>
-          <feMergeNode in="coloredBlur"/>
-          <feMergeNode in="SourceGraphic"/>
-        </feMerge>
-      </filter>
-    </defs>
-
-    <!-- Continuous Animated Vector Paths -->
-    <path d="M 160 90 L 460 90" stroke="${strokeColor}" stroke-width="3" stroke-dasharray="${strokeDash}" style="animation:dashFlow 1.2s linear infinite;" fill="none" filter="url(#sovGlow)"/>
-    <path d="M 460 90 L 760 90" stroke="${strokeColor}" stroke-width="3" stroke-dasharray="${strokeDash}" style="animation:dashFlow 1.2s linear infinite;" fill="none" filter="url(#sovGlow)"/>
-
-    <!-- NODE 1: Local Client -->
-    <g transform="translate(160, 90)">
-      <circle r="22" fill="#0f172a" stroke="#38bdf8" stroke-width="3"/>
-      <text text-anchor="middle" y="5" fill="#38bdf8" font-size="15">💻</text>
-      <text text-anchor="middle" y="40" fill="#e2e8f0" font-weight="700" font-size="12">LOCAL CLIENT</text>
-      <text text-anchor="middle" y="54" fill="#94a3b8" font-size="10" font-family="'IBM Plex Mono', monospace">${esc(localIp)}</text>
-      <text text-anchor="middle" y="67" fill="#64748b" font-size="9">${esc(ssid)}</text>
-    </g>
-
-    <!-- NODE 2: Sovereign Gateway -->
-    <g transform="translate(460, 90)">
-      <circle r="26" fill="#0f172a" stroke="${connected ? '#10b981' : '#64748b'}" stroke-width="3" filter="url(#sovGlow)"/>
-      <text text-anchor="middle" y="6" fill="${connected ? '#10b981' : '#94a3b8'}" font-size="18">${connected ? '🛡️' : '⚠️'}</text>
-      <text text-anchor="middle" y="42" fill="#e2e8f0" font-weight="700" font-size="12">SOVEREIGN NODE</text>
-      <text text-anchor="middle" y="56" fill="#94a3b8" font-size="10" font-family="'IBM Plex Mono', monospace">${connected ? 'Tunnel Active' : 'Bypassed'}</text>
-      <text text-anchor="middle" y="69" fill="${connected ? '#4ade80' : '#f87171'}" font-size="9">${connected ? 'Post-Quantum PQC' : 'Raw ISP Transit'}</text>
-    </g>
-
-    <!-- NODE 3: Public Internet Egress -->
-    <g transform="translate(760, 90)">
-      <circle r="22" fill="#0f172a" stroke="#a855f7" stroke-width="3"/>
-      <text text-anchor="middle" y="5" fill="#a855f7" font-size="15">🌐</text>
-      <text text-anchor="middle" y="40" fill="#e2e8f0" font-weight="700" font-size="12">PUBLIC EGRESS</text>
-      <text text-anchor="middle" y="54" fill="#94a3b8" font-size="10" font-family="'IBM Plex Mono', monospace">${esc(egressIp)}</text>
-      <text text-anchor="middle" y="67" fill="#64748b" font-size="9">${esc(egressLoc)} (${esc(egressIsp)})</text>
-    </g>
-  `;
-}
-
 // 4. Interactive Q-Day Post-Quantum Mosca Calculator
-let qDayCountdownTimer = null;
-
 function initMoscaCalculator() {
   const sliderX = $("slider-data-shelf");
   const sliderY = $("slider-migration-time");
@@ -2508,9 +2012,6 @@ function initMoscaCalculator() {
   if (sliderY) sliderY.addEventListener("input", updateMoscaValues);
 
   updateMoscaValues();
-
-  if (qDayCountdownTimer) clearInterval(qDayCountdownTimer);
-  startQDayCountdown();
 }
 
 function updateMoscaValues() {
@@ -2556,272 +2057,10 @@ function updateMoscaValues() {
   }
 }
 
-function startQDayCountdown() {
-  const cutoff = new Date("2030-01-01T00:00:00Z").getTime();
 
-  function tick() {
-    const now = Date.now();
-    const diff = Math.max(0, cutoff - now);
-
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const secs = Math.floor((diff % (1000 * 60)) / 1000);
-
-    const elD = $("q-days");
-    const elH = $("q-hours");
-    const elM = $("q-mins");
-    const elS = $("q-secs");
-
-    if (elD) elD.textContent = String(days);
-    if (elH) elH.textContent = String(hours).padStart(2, '0');
-    if (elM) elM.textContent = String(mins).padStart(2, '0');
-    if (elS) elS.textContent = String(secs).padStart(2, '0');
-  }
-
-  tick();
-  qDayCountdownTimer = setInterval(tick, 1000);
-}
-
-// 5. Embedded Interactive Cyber Terminal (Multi-Vendor CLI Drawer)
-let terminalHistory = [];
-let terminalHistoryIndex = -1;
-
-function initCyberTerminal() {
-  const drawer = $("cyber-terminal-drawer");
-  const input = $("terminal-input");
-  const header = $("terminal-header-bar");
-  const clearBtn = $("btn-terminal-clear");
-  const expandBtn = $("btn-terminal-expand");
-  const closeBtn = $("btn-terminal-close");
-
-  if (header) {
-    header.addEventListener("click", (e) => {
-      if (e.target.closest(".terminal-controls")) return;
-      toggleCyberTerminal();
-    });
-  }
-
-  if (closeBtn) closeBtn.addEventListener("click", () => setTerminalState(false));
-  if (expandBtn) {
-    expandBtn.addEventListener("click", () => {
-      if (!drawer) return;
-      drawer.classList.toggle("expanded");
-      expandBtn.textContent = drawer.classList.contains("expanded") ? "⛶" : "⛶";
-    });
-  }
-
-  if (clearBtn) {
-    clearBtn.addEventListener("click", () => {
-      const hist = $("terminal-history");
-      if (hist) hist.innerHTML = "";
-      printTerminalLine("Terminal buffer cleared.", "info");
-    });
-  }
-
-  if (input) {
-    input.addEventListener("keydown", (e) => {
-      SocAudioEngine.keyClick();
-
-      if (e.key === "Enter") {
-        const cmd = input.value.trim();
-        if (cmd) {
-          executeTerminalCommand(cmd);
-          terminalHistory.push(cmd);
-          terminalHistoryIndex = terminalHistory.length;
-          input.value = "";
-        }
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        if (terminalHistory.length > 0 && terminalHistoryIndex > 0) {
-          terminalHistoryIndex--;
-          input.value = terminalHistory[terminalHistoryIndex];
-        }
-      } else if (e.key === "ArrowDown") {
-        e.preventDefault();
-        if (terminalHistoryIndex < terminalHistory.length - 1) {
-          terminalHistoryIndex++;
-          input.value = terminalHistory[terminalHistoryIndex];
-        } else {
-          terminalHistoryIndex = terminalHistory.length;
-          input.value = "";
-        }
-      } else if (e.key === "Tab") {
-        e.preventDefault();
-        handleTerminalTabComplete(input);
-      } else if (e.key === "Escape") {
-        setTerminalState(false);
-      }
-    });
-  }
-}
-
-function setTerminalState(open) {
-  const drawer = $("cyber-terminal-drawer");
-  const input = $("terminal-input");
-  if (!drawer) return;
-  drawer.classList.toggle("collapsed", !open);
-  if (open && input) {
-    setTimeout(() => input.focus(), 150);
-  }
-}
-
-function toggleCyberTerminal() {
-  const drawer = $("cyber-terminal-drawer");
-  if (!drawer) return;
-  const isCollapsed = drawer.classList.contains("collapsed");
-  setTerminalState(isCollapsed);
-}
+// Terminal removed - python CLI provides the command interface
+function toggleCyberTerminal() {}
 window.toggleCyberTerminal = toggleCyberTerminal;
-
-function printTerminalLine(text, type = "output") {
-  const hist = $("terminal-history");
-  const scroll = $("terminal-body-scroll");
-  if (!hist) return;
-
-  const div = document.createElement("div");
-  div.className = `term-line-${type}`;
-  div.textContent = text;
-  hist.appendChild(div);
-
-  if (scroll) {
-    scroll.scrollTop = scroll.scrollHeight;
-  }
-}
-
-function handleTerminalTabComplete(input) {
-  const val = input.value.trim().toLowerCase();
-  const cmds = ["help", "scan", "audit", "diff", "rogue on", "rogue off", "vpn on", "vpn off", "remediate cisco", "remediate fortinet", "remediate linux", "pqc", "dossier", "clear"];
-  const match = cmds.find(c => c.startsWith(val));
-  if (match) {
-    input.value = match;
-  }
-}
-
-function executeTerminalCommand(raw) {
-  printTerminalLine(`cipherguard@soc-node:~$ ${raw}`, "input");
-  const parts = raw.trim().split(/\s+/);
-  const cmd = parts[0].toLowerCase();
-  const arg = (parts[1] || "").toLowerCase();
-
-  switch (cmd) {
-    case "help":
-      printTerminalLine(
-        "Available Tactical SOC Commands:\n" +
-        "  scan               - Trigger live 802.11 RF wireless spectrum sweep\n" +
-        "  audit              - Execute active IPsec cryptographic assessment\n" +
-        "  diff               - Switch to Before vs. After Capture A/B auditor\n" +
-        "  rogue [on|off]     - Inject or clear simulated Evil Twin / Rogue AP threat\n" +
-        "  vpn [on|off]       - Toggle sovereign encrypted tunnel overlay\n" +
-        "  remediate [vendor] - Output hardening config for 'cisco', 'fortinet', or 'linux'\n" +
-        "  pqc                - Display Mosca's Theorem score and NIST PQC status\n" +
-        "  dossier            - Generate and export executive compliance audit dossier\n" +
-        "  clear              - Clear terminal display buffer",
-        "info"
-      );
-      break;
-
-    case "scan":
-      printTerminalLine("[+] Initiating active RF hardware sweep on interfaces...", "info");
-      switchTab("wifi");
-      loadWifiAssessment(true);
-      SocAudioEngine.radarPing(true);
-      printTerminalLine("[✔] Wi-Fi sweep complete. Telemetry updated on HUD.", "output");
-      break;
-
-    case "audit":
-      printTerminalLine("[+] Parsing IPsec headers & calculating Mosca cryptographic posture...", "info");
-      switchTab("ipsec");
-      runAnalysis();
-      SocAudioEngine.secureChime();
-      printTerminalLine("[✔] IPsec analysis complete. Compliance matrices compiled.", "output");
-      break;
-
-    case "diff":
-      printTerminalLine("[+] Switching to A/B capture diff comparison mode...", "info");
-      switchTab("ipsec");
-      switchIpsecMode("diff");
-      break;
-
-    case "rogue":
-      const rogueBtn = $("wifi-simulate-evil-twin");
-      if (rogueBtn) rogueBtn.click();
-      printTerminalLine(`[!] Rogue AP simulation ${state.simulatedRogueApActive ? 'ACTIVATED (Target locked)' : 'CLEARED'}.`, state.simulatedRogueApActive ? "error" : "output");
-      break;
-
-    case "vpn":
-      const vpnBtn = $("btn-toggle-sim-vpn");
-      if (vpnBtn) vpnBtn.click();
-      printTerminalLine(`[+] Sovereign VPN tunnel state toggled.`, "output");
-      break;
-
-    case "remediate":
-      if (arg === "cisco") {
-        printTerminalLine(
-          "Cisco ASA 5500-X / Firepower Hardening Script:\n" +
-          "  crypto ikev2 policy 10\n" +
-          "    encryption aes-gcm-256\n" +
-          "    integrity null\n" +
-          "    group 20 21\n" +
-          "    prf sha384\n" +
-          "  crypto ipsec ikev2 ipsec-proposal SECURE-PQC\n" +
-          "    protocol esp encryption aes-gcm-256\n" +
-          "  no crypto ikev1 enable",
-          "output"
-        );
-      } else if (arg === "fortinet") {
-        printTerminalLine(
-          "Fortinet FortiOS 7.x Hardening Config:\n" +
-          "  config vpn ipsec phase1-interface\n" +
-          "    edit \"SOC-TUNNEL\"\n" +
-          "      set ike-version 2\n" +
-          "      set proposal aes256gcm-prfsha384\n" +
-          "      set dhgrp 20 21\n" +
-          "    next\n" +
-          "  end",
-          "output"
-        );
-      } else if (arg === "linux") {
-        printTerminalLine(
-          "Linux strongSwan / ip xfrm Hardening Rules:\n" +
-          "  conn sovereign-tunnel\n" +
-          "    keyexchange=ikev2\n" +
-          "    ike=aes256gcm16-sha384-ecp384!\n" +
-          "    esp=aes256gcm16-ecp384!\n" +
-          "    dpdaction=restart",
-          "output"
-        );
-      } else {
-        printTerminalLine("Usage: remediate cisco | remediate fortinet | remediate linux", "error");
-      }
-      break;
-
-    case "pqc":
-      printTerminalLine(
-        "NIST Post-Quantum Readiness Matrix:\n" +
-        "  FIPS 203: ML-KEM-1024 (Kyber)      [READY - Hybrid IKEv2 Transform ID 35]\n" +
-        "  FIPS 204: ML-DSA-87 (Dilithium)     [READY - Digital Signatures]\n" +
-        "  FIPS 205: SLH-DSA (SPHINCS+)       [READY - Stateless Hash]\n" +
-        "  Mosca Theorem Status: Store Now, Decrypt Later (SNDL) mitigation in progress.",
-        "info"
-      );
-      break;
-
-    case "dossier":
-      printTerminalLine("[+] Generating printable Executive Security Audit Dossier...", "info");
-      exportSecurityAuditReport();
-      break;
-
-    case "clear":
-      const hist = $("terminal-history");
-      if (hist) hist.innerHTML = "";
-      break;
-
-    default:
-      printTerminalLine(`Unknown command: '${cmd}'. Type 'help' for tactical reference.`, "error");
-      break;
-  }
-}
 
 function renderWifiDashboard(data){
   if (!data) return;
@@ -3030,8 +2269,6 @@ function renderWifiDashboard(data){
 
   // 5. VPN Overlay Card
   renderVpnOverlay(data.vpn);
-  renderSovereignEgressMap(data.vpn, data.interface);
-  updateRadarBlips(networks, state.simulatedRogueApActive);
 
   // 6. Findings List (Combine Wi-Fi and VPN findings)
   const allFindings = [...(data.findings || []), ...((data.vpn && data.vpn.findings) || [])];
@@ -3106,10 +2343,12 @@ function renderVpnOverlay(vpn){
 
   if (vpn && vpn.egress_ip){
     egressVal.textContent = `${vpn.egress_ip}`;
+    egressVal.title = `${vpn.egress_ip}`;
     const loc = [vpn.egress_city, vpn.egress_country].filter(Boolean).join(", ");
     locationVal.textContent = `${vpn.egress_isp || "Public ISP"}${loc ? ` (${loc})` : ""}`;
   } else {
     egressVal.textContent = "Direct Egress";
+    egressVal.removeAttribute("title");
     locationVal.textContent = "Local Network Interface";
   }
 }
@@ -4147,6 +3386,205 @@ const HexDissectorEngine = (function() {
     });
   }
 
+  function renderAnatomyBar(sample) {
+    const bar = $("dissector-anatomy-bar");
+    const modCard = $("dissector-modulo-card");
+    if (!bar) return;
+
+    if (sample.segments && sample.segments.length > 0) {
+      bar.innerHTML = sample.segments.map(seg => `
+        <div class="anatomy-segment" style="background:${seg.color}22;border-color:${seg.color}66;color:${seg.color}"
+             onmouseenter="HexDissectorEngine.highlightSpan(${seg.start}, ${seg.end - 1})"
+             onmouseleave="HexDissectorEngine.clearHighlights()"
+             onclick="HexDissectorEngine.highlightSpan(${seg.start}, ${seg.end - 1}, true)"
+             title="${esc(seg.desc)}">
+          <span>${esc(seg.label)}</span>
+          <small>${esc(seg.value)}</small>
+        </div>
+      `).join("");
+      bar.style.display = "flex";
+    } else {
+      bar.style.display = "none";
+    }
+
+    if (modCard && sample.modulo_proof) {
+      const p = sample.modulo_proof;
+      modCard.className = `dissector-modulo-card ${p.valid ? '' : 'invalid'}`;
+      modCard.innerHTML = `
+        <div class="modulo-proof-title">
+          <span>${p.valid ? '✔' : '✖'}</span>
+          <span>RFC 4303 Modulo Framing Arithmetic Proof</span>
+        </div>
+        <div class="modulo-formula-tag">${esc(p.formula)} (Block Size: ${p.block_size}B)</div>
+        <div>Shannon Entropy: <strong>${p.entropy} / 8.0</strong> (${p.is_encrypted ? 'Encrypted' : 'Cleartext'})</div>
+      `;
+      modCard.style.display = "flex";
+    } else if (modCard) {
+      modCard.style.display = "none";
+    }
+  }
+
+  async function loadFlowWire(spi, framingClass) {
+    const dissectorPanel = $("hex-dissector-panel");
+    if (dissectorPanel) dissectorPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    const currentCap = state.assessment ? state.assessment.capture : ($("capture") ? $("capture").value : "backbone.pcap");
+    const slug = currentCap.replace(".", "_");
+    const cleanSpi = spi.toLowerCase().replace("0x", "");
+
+    try {
+      let data = null;
+      try {
+        const res = await api(`/api/captures/${encodeURIComponent(currentCap)}/flows/${encodeURIComponent(spi)}/wire?framing=${encodeURIComponent(framingClass || "")}`);
+        if (res.ok) data = await res.json();
+      } catch (e) {}
+
+      if (!data) {
+        // Fallback to static wire data if present
+        try {
+          const sRes = await fetch(`data/wire/${slug}_${cleanSpi}.json`);
+          if (sRes.ok) data = await sRes.json();
+        } catch (e) {}
+      }
+
+      if (data && data.samples && data.samples.length > 0) {
+        const s = data.samples[0];
+        const key = `flow_${cleanSpi}`;
+        PACKET_SAMPLES[key] = {
+          name: `ESP Wire ${spi} (${framingClass || 'RFC 4303'})`,
+          bytes: s.raw_hex.match(/.{1,2}/g).join(" "),
+          segments: s.segments,
+          modulo_proof: s.modulo_proof,
+          layers: [
+            {
+              title: `ESP Security Association (SPI: ${spi}, Frame #${s.frame})`,
+              start: 0,
+              end: s.total_bytes - 1,
+              fields: s.segments.map(seg => ({
+                label: `${seg.label}: ${seg.value} (Bytes ${seg.start}..${seg.end})`,
+                start: seg.start,
+                end: seg.end - 1
+              }))
+            }
+          ]
+        };
+
+        const sel = $("hex-packet-select");
+        if (sel) {
+          if (!sel.querySelector(`option[value="${key}"]`)) {
+            const opt = document.createElement("option");
+            opt.value = key;
+            opt.textContent = PACKET_SAMPLES[key].name;
+            sel.appendChild(opt);
+          }
+          sel.value = key;
+        }
+        render(key);
+        renderAnatomyBar(PACKET_SAMPLES[key]);
+        showToast(`Dissected ESP flow ${spi} (${s.total_bytes} bytes).`, "success");
+        return;
+      }
+    } catch(err) {
+      console.warn("Wire fetch error", err);
+    }
+
+    render("esp_wire");
+  }
+
+  function render(sampleKey) {
+    currentKey = sampleKey || currentKey;
+    const sample = PACKET_SAMPLES[currentKey] || PACKET_SAMPLES.ike_init;
+    const rawTokens = sample.bytes.trim().split(/\s+/);
+    const hexContainer = $("dissector-hex-dump");
+    const treeContainer = $("dissector-tree");
+
+    if (!hexContainer || !treeContainer) return;
+
+    renderAnatomyBar(sample);
+
+    // 1. Render Hex Rows (16 bytes per row)
+    hexContainer.innerHTML = "";
+    for (let i = 0; i < rawTokens.length; i += 16) {
+      const chunk = rawTokens.slice(i, i + 16);
+      const row = document.createElement("div");
+      row.className = "hex-row";
+
+      // Offset (hex)
+      const offsetSpan = document.createElement("span");
+      offsetSpan.className = "hex-offset";
+      offsetSpan.textContent = i.toString(16).padStart(4, "0") + ":";
+      row.appendChild(offsetSpan);
+
+      // Bytes
+      const bytesSpan = document.createElement("div");
+      bytesSpan.className = "hex-bytes";
+      let asciiStr = "";
+
+      for (let j = 0; j < chunk.length; j++) {
+        const byteIdx = i + j;
+        const b = chunk[j];
+        const byteEl = document.createElement("span");
+        byteEl.className = "hex-byte";
+        byteEl.dataset.index = String(byteIdx);
+        byteEl.textContent = b;
+
+        const val = parseInt(b, 16);
+        asciiStr += (val >= 32 && val <= 126) ? String.fromCharCode(val) : ".";
+
+        byteEl.addEventListener("mouseenter", () => highlightSpan(byteIdx, byteIdx));
+        byteEl.addEventListener("mouseleave", clearHighlights);
+        bytesSpan.appendChild(byteEl);
+      }
+      row.appendChild(bytesSpan);
+
+      // ASCII
+      const asciiSpan = document.createElement("span");
+      asciiSpan.className = "hex-ascii";
+      asciiSpan.textContent = asciiStr;
+      row.appendChild(asciiSpan);
+
+      hexContainer.appendChild(row);
+    }
+
+    // 2. Render Protocol Tree
+    treeContainer.innerHTML = "";
+    sample.layers.forEach((layer) => {
+      const node = document.createElement("div");
+      node.className = "tree-node";
+
+      const title = document.createElement("div");
+      title.className = "tree-node-title";
+      title.textContent = `▶ ${layer.title}`;
+      title.addEventListener("mouseenter", () => highlightSpan(layer.start, layer.end));
+      title.addEventListener("mouseleave", clearHighlights);
+      title.addEventListener("click", () => {
+        highlightSpan(layer.start, layer.end, true);
+      });
+      node.appendChild(title);
+
+      const fields = document.createElement("div");
+      fields.className = "tree-fields";
+
+      layer.fields.forEach((field) => {
+        const fieldEl = document.createElement("div");
+        fieldEl.className = "tree-field";
+        fieldEl.textContent = `• ${field.label}`;
+        fieldEl.dataset.start = String(field.start);
+        fieldEl.dataset.end = String(field.end);
+
+        fieldEl.addEventListener("mouseenter", () => highlightSpan(field.start, field.end));
+        fieldEl.addEventListener("mouseleave", clearHighlights);
+        fieldEl.addEventListener("click", () => {
+          highlightSpan(field.start, field.end, true);
+        });
+        fields.appendChild(fieldEl);
+      });
+
+      node.appendChild(fields);
+      treeContainer.appendChild(node);
+    });
+  }
+
   function highlightSpan(start, end, scrollToFirst) {
     const hexContainer = $("dissector-hex-dump");
     if (!hexContainer) return;
@@ -4187,8 +3625,204 @@ const HexDissectorEngine = (function() {
     render("ike_init");
   }
 
-  return { init, render };
+  return { init, render, loadFlowWire, highlightSpan, clearHighlights };
 })();
+window.HexDissectorEngine = HexDissectorEngine;
+
+
+// --- 2. LIVE WIRE PACKET SNIFFER & SSE STREAMING ENGINE ---
+const LiveSnifferEngine = (function() {
+  let eventSource = null;
+  let isSniffing = false;
+  const knownSpis = {};
+
+  async function startSniffing() {
+    const ifaceSelect = $("sniffer-iface-select");
+    const iface = ifaceSelect ? ifaceSelect.value : "All Interfaces";
+
+    try {
+      const res = await api("/api/sniff/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ interface: iface }),
+      });
+      const data = await res.json();
+      updateUIState(true);
+      connectSSE();
+      showToast("Live wire packet sniffer started.", "info");
+    } catch(err) {
+      showToast("Failed to start sniffer: " + err.message, "error");
+    }
+  }
+
+  async function stopSniffing() {
+    try {
+      await api("/api/sniff/stop", { method: "POST" });
+      updateUIState(false);
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      showToast("Live wire sniffer stopped.", "info");
+    } catch(err) {
+      showToast("Failed to stop sniffer: " + err.message, "error");
+    }
+  }
+
+  function connectSSE() {
+    if (eventSource) eventSource.close();
+    eventSource = new EventSource(resolveApiPath("/api/sniff/stream"));
+
+    eventSource.addEventListener("packet", (e) => {
+      try {
+        const pkt = JSON.parse(e.data);
+        handlePacket(pkt);
+      } catch(err) {}
+    });
+
+    eventSource.addEventListener("status", (e) => {
+      try {
+        const st = JSON.parse(e.data);
+        updateCounters(st);
+      } catch(err) {}
+    });
+
+    eventSource.addEventListener("heartbeat", (e) => {
+      try {
+        const st = JSON.parse(e.data);
+        updateCounters(st);
+      } catch(err) {}
+    });
+
+    eventSource.onerror = () => {};
+  }
+
+  function handlePacket(pkt) {
+    const feed = $("sniffer-live-feed");
+    if (!feed) return;
+
+    if (feed.querySelector(".feed-placeholder")) {
+      feed.innerHTML = "";
+    }
+
+    const row = document.createElement("div");
+    row.className = "sniffer-feed-row";
+    const protoLower = (pkt.protocol || "").toLowerCase();
+    const badgeCls = protoLower.includes("esp") ? "esp" : (protoLower.includes("ike") ? "ike" : "other");
+
+    row.innerHTML = `
+      <span class="feed-ts">${pkt.timestamp ? new Date(pkt.timestamp * 1000).toLocaleTimeString() : "--"}</span>
+      <span class="feed-badge ${badgeCls}">${esc(pkt.protocol)}</span>
+      <span class="feed-endpoints">${esc(pkt.src)} &rarr; ${esc(pkt.dst)}</span>
+      <span class="feed-spi">${pkt.spi ? esc(pkt.spi) : "—"}</span>
+      <span class="feed-len">${pkt.length}B</span>
+    `;
+
+    feed.prepend(row);
+    if (feed.children.length > 50) {
+      feed.removeChild(feed.lastChild);
+    }
+
+    if ($("sniffer-rate-pps") && pkt.rate_pps !== undefined) $("sniffer-rate-pps").innerHTML = `${pkt.rate_pps} <small>pps</small>`;
+    if ($("sniffer-rate-kbps") && pkt.rate_kbps !== undefined) $("sniffer-rate-kbps").innerHTML = `${pkt.rate_kbps} <small>kbps</small>`;
+    if ($("sniffer-total-pkts") && pkt.frame !== undefined) $("sniffer-total-pkts").textContent = String(pkt.frame);
+    if ($("sniffer-active-spis") && pkt.active_spis_count !== undefined) $("sniffer-active-spis").textContent = String(pkt.active_spis_count);
+
+    if (pkt.spi) {
+      updateActiveSaCard(pkt);
+    }
+  }
+
+  function updateActiveSaCard(pkt) {
+    const grid = $("sniffer-spis-grid");
+    if (!grid) return;
+    if (grid.querySelector(".empty")) {
+      grid.innerHTML = "";
+    }
+
+    let card = knownSpis[pkt.spi];
+    if (!card) {
+      card = document.createElement("div");
+      card.className = "discovered-sa-card";
+      card.innerHTML = `
+        <div class="sa-card-header">
+          <span>${esc(pkt.spi)}</span>
+          <span class="feed-badge esp">${esc(pkt.protocol)}</span>
+        </div>
+        <div class="sa-card-peers">${esc(pkt.src)} &rarr; ${esc(pkt.dst)}</div>
+        <div class="sa-card-pkts"><span class="sa-pkt-count">1</span> packets observed</div>
+      `;
+      grid.prepend(card);
+      knownSpis[pkt.spi] = card;
+      card._count = 1;
+    } else {
+      card._count = (card._count || 1) + 1;
+      const countSpan = card.querySelector(".sa-pkt-count");
+      if (countSpan) countSpan.textContent = String(card._count);
+    }
+  }
+
+  function updateCounters(st) {
+    if ($("sniffer-rate-pps")) $("sniffer-rate-pps").innerHTML = `${st.rate_pps || 0} <small>pps</small>`;
+    if ($("sniffer-rate-kbps")) $("sniffer-rate-kbps").innerHTML = `${st.rate_kbps || 0} <small>kbps</small>`;
+    if ($("sniffer-total-pkts")) $("sniffer-total-pkts").textContent = String(st.packets_captured || 0);
+    if ($("sniffer-active-spis")) $("sniffer-active-spis").textContent = String((st.active_spis || []).length);
+  }
+
+  function updateUIState(active) {
+    isSniffing = active;
+    const btnStart = $("btn-sniffer-start");
+    const btnStop = $("btn-sniffer-stop");
+    const btnAnalyze = $("btn-sniffer-analyze");
+    const statusVal = $("sniffer-status-val");
+
+    if (btnStart) btnStart.disabled = active;
+    if (btnStop) btnStop.disabled = !active;
+    if (btnAnalyze) btnAnalyze.disabled = !active;
+
+    if (statusVal) {
+      statusVal.innerHTML = active
+        ? '<span class="hud-dot live"></span> LIVE SNIFFING'
+        : '<span class="hud-dot idle"></span> IDLE';
+    }
+  }
+
+  async function analyzeSnapshot() {
+    const btnAnalyze = $("btn-sniffer-analyze");
+    if (btnAnalyze) {
+      btnAnalyze.disabled = true;
+      btnAnalyze.textContent = "⚡ Analyzing...";
+    }
+
+    try {
+      const res = await api("/api/sniff/analyze", { method: "POST" });
+      const data = await res.json();
+      showToast("Live capture snapshot successfully assessed!", "success");
+      switchIpsecMode("single");
+      renderAssessment(data);
+    } catch(err) {
+      showToast("Snapshot analysis failed: " + err.message, "error");
+    } finally {
+      if (btnAnalyze) {
+        btnAnalyze.disabled = false;
+        btnAnalyze.innerHTML = "<span>⚡</span> Analyze Live Snapshot";
+      }
+    }
+  }
+
+  function init() {
+    const btnStart = $("btn-sniffer-start");
+    const btnStop = $("btn-sniffer-stop");
+    const btnAnalyze = $("btn-sniffer-analyze");
+
+    if (btnStart) btnStart.addEventListener("click", startSniffing);
+    if (btnStop) btnStop.addEventListener("click", stopSniffing);
+    if (btnAnalyze) btnAnalyze.addEventListener("click", analyzeSnapshot);
+  }
+
+  return { init, startSniffing, stopSniffing, analyzeSnapshot };
+})();
+window.LiveSnifferEngine = LiveSnifferEngine;
 
 
 // --- 2. CYCLONEDX v1.6 SOVEREIGN CBOM VIEWER & EXPORTER ---
@@ -4484,201 +4118,8 @@ function escapeHtml(s) {
     .replace(/'/g, "&#039;");
 }
 
-const SocCopilotEngine = (function() {
-  function toggle() {
-    const drawer = $("copilot-drawer");
-    if (!drawer) return;
-    const isCollapsed = drawer.classList.contains("collapsed");
-    if (isCollapsed) {
-      drawer.classList.remove("collapsed");
-      const input = $("copilot-input");
-      if (input) input.focus();
-      if (typeof SocAudioEngine !== "undefined" && SocAudioEngine.play) {
-        SocAudioEngine.play("ping");
-      }
-    } else {
-      drawer.classList.add("collapsed");
-    }
-  }
-
-  function addMessage(text, isUser = false) {
-    const stream = $("copilot-chat-stream");
-    if (!stream) return;
-
-    const msg = document.createElement("div");
-    msg.className = `copilot-msg ${isUser ? "copilot-msg-user" : "copilot-msg-ai"}`;
-
-    const avatar = document.createElement("div");
-    avatar.className = "copilot-msg-avatar";
-    avatar.textContent = isUser ? "👤" : "🤖";
-    msg.appendChild(avatar);
-
-    const content = document.createElement("div");
-    content.className = "copilot-msg-content";
-
-    // Simple markdown code block support
-    if (text.includes("```")) {
-      const parts = text.split(/```/);
-      let html = "";
-      parts.forEach((part, idx) => {
-        if (idx % 2 === 1) {
-          const codeLines = part.trim().split("\n");
-          let lang = "";
-          if (codeLines[0] && /^[a-zA-Z0-9]+$/.test(codeLines[0].trim())) {
-            lang = codeLines.shift().trim();
-          }
-          html += `<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`;
-        } else {
-          const paras = part.trim().split(/\n\n+/);
-          paras.forEach(p => {
-            if (p) html += `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`;
-          });
-        }
-      });
-      content.innerHTML = html;
-    } else {
-      content.innerHTML = `<p>${escapeHtml(text).replace(/\n/g, "<br>")}</p>`;
-    }
-
-    msg.appendChild(content);
-    stream.appendChild(msg);
-    stream.scrollTop = stream.scrollHeight;
-  }
-
-  function synthesizeResponse(prompt) {
-    const q = (prompt || "").toLowerCase();
-
-    // Check live context
-    const wifiAssessment = state.wifiAssessment || {};
-    const ssid = (wifiAssessment.network && wifiAssessment.network.ssid) ? wifiAssessment.network.ssid : "Current WLAN";
-    const grade = (wifiAssessment.score && wifiAssessment.score.letter) ? wifiAssessment.score.letter : "B";
-    const scoreVal = (wifiAssessment.score && wifiAssessment.score.overall !== undefined) ? wifiAssessment.score.overall : 78;
-
-    if (q.includes("wi-fi") || q.includes("wifi") || q.includes("grade") || q.includes("score")) {
-      return `Telemetry Analysis for "${ssid}":\n` +
-             `Current Posture Grade: ${grade} (${scoreVal}/100).\n\n` +
-             `The evaluation reflects active WPA2/WPA3 parameters. If running WPA2-Personal, the network relies on 4-way handshake PSK derivations susceptible to dictionary attacks (T1110.002). Enabling 802.11w Protected Management Frames (PMF) and transitioning to WPA3-SAE (Dragonfly PAKE) elevates the posture to A+ (98/100).\n\n` +
-             `Recommended Windows CLI hardening command:\n` +
-             `\`\`\`powershell\n` +
-             `# Audit active wireless security extensions\n` +
-             `netsh wlan show interfaces\n` +
-             `netsh wlan show networks mode=bssid\n` +
-             `\`\`\``;
-    }
-
-    if (q.includes("dh group 2") || q.includes("group 2") || q.includes("sndl") || q.includes("modp-1024")) {
-      return `Cryptographic Advisory: Diffie-Hellman Group 2 (MODP-1024) Vulnerability:\n\n` +
-             `1. **Cryptanalytic Weakness**: MODP-1024 offers an effective security strength of only ~80 bits. The Number Field Sieve (NFS) algorithm allows well-funded adversaries to precompute discreet log tables (Logjam Attack).\n` +
-             `2. **Store-Now-Decrypt-Later (SNDL)**: Adversaries passively intercepting and archiving your ESP wire packets today will crack DH Group 2 private shared secrets in polynomial time once a Cryptanalytically Relevant Quantum Computer (CRQC) emerges running Shor's Algorithm (O((log N)³)).\n\n` +
-             `**Remediation**: Upgrade to Diffie-Hellman Group 20/21 (ECDH P-384) or NIST FIPS 203 ML-KEM-768 hybrid mode immediately.`;
-    }
-
-    if (q.includes("cisco") || q.includes("asa") || q.includes("hardening") || q.includes("cli")) {
-      return `Automated Remediation Script for Cisco ASA / Secure Firewall:\n\n` +
-             `\`\`\`cisco\n` +
-             `! Configure Posture-Compliant IKEv2 Proposal\n` +
-             `crypto ikev2 policy 10\n` +
-             `  encryption aes-gcm-256\n` +
-             `  integrity null\n` +
-             `  group 21 20 19\n` +
-             `  prf sha384\n` +
-             `  lifetime seconds 28800\n` +
-             `exit\n\n` +
-             `! Configure High-Assurance IPsec Proposal\n` +
-             `crypto ipsec ikev2 ipsec-proposal PQC_TRANSITION\n` +
-             `  protocol esp encryption aes-gcm-256\n` +
-             `  protocol esp integrity null\n` +
-             `exit\n` +
-             `\`\`\`\n` +
-             `This policy eliminates SHA-1 and 1024-bit MODP groups in adherence to NSA Commercial National Security Algorithm (CNSA 2.0).`;
-    }
-
-    if (q.includes("zero-decryption") || q.includes("math") || q.includes("framing") || q.includes("rfc 4303")) {
-      return `Passive Zero-Decryption Wire Analysis Mathematics (RFC 4303):\n\n` +
-             `CipherGuard verifies IPsec tunnel integrity without decrypting sensitive payload data using 3 mathematical invariants:\n\n` +
-             `1. **Block Modulo Length Residue**: For cipher block size B (e.g. 16 bytes for AES), total ESP framing length L satisfies: (L - 8) mod B == 0 (where 8 bytes = SPI + SeqNum).\n` +
-             `2. **Pad Length Constraint**: Pad Length P ∈ [0, B - 1], with standard monotone pattern: [0x01, 0x02, ..., P].\n` +
-             `3. **SPI Entropy & Sequence Monotonicity**: Verifies strictly increasing 32-bit sequence numbers to detect replays without maintaining state keys.`;
-    }
-
-    // Default intelligent assistant response
-    return `Analysis complete. Based on the sovereign cryptographic baseline:\n\n` +
-           `• Monitored Interfaces: Live Wi-Fi RF spectrum & Passive IPsec Wire Feeds.\n` +
-           `• Post-Quantum Mosca Horizon: Mosca Inequality (Y + D > X) requires post-quantum key exchange deployment within 36 months to defend classified government telemetry.\n` +
-           `• You can select packets in the **Hex Packet Dissector** below to inspect framing octets, or open the **CycloneDX CBOM** from the top bar to inspect algorithm assets.`;
-  }
-
-  function handleSend() {
-    const input = $("copilot-input");
-    if (!input) return;
-    const text = input.value.trim();
-    if (!text) return;
-
-    addMessage(text, true);
-    input.value = "";
-
-    // Simulated quick reasoning delay
-    setTimeout(() => {
-      const reply = synthesizeResponse(text);
-      addMessage(reply, false);
-      if (typeof SocAudioEngine !== "undefined" && SocAudioEngine.play) {
-        SocAudioEngine.play("ping");
-      }
-    }, 280);
-  }
-
-  function init() {
-    const toggleBtn = $("btn-copilot-toggle");
-    if (toggleBtn) toggleBtn.addEventListener("click", toggle);
-
-    const closeBtn = $("btn-copilot-close");
-    if (closeBtn) closeBtn.addEventListener("click", toggle);
-
-    const clearBtn = $("btn-copilot-clear");
-    if (clearBtn) {
-      clearBtn.addEventListener("click", () => {
-        const stream = $("copilot-chat-stream");
-        if (stream) {
-          stream.innerHTML = `
-            <div class="copilot-msg copilot-msg-ai">
-              <div class="copilot-msg-avatar">🤖</div>
-              <div class="copilot-msg-content">
-                <p><strong>Chat stream reset.</strong> How can I assist your defense evaluation today?</p>
-              </div>
-            </div>
-          `;
-        }
-      });
-    }
-
-    const sendBtn = $("btn-copilot-send");
-    if (sendBtn) sendBtn.addEventListener("click", handleSend);
-
-    const input = $("copilot-input");
-    if (input) {
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          handleSend();
-        }
-      });
-    }
-
-    // Chips
-    document.querySelectorAll(".copilot-chip").forEach((chip) => {
-      chip.addEventListener("click", () => {
-        const prompt = chip.dataset.prompt || chip.textContent;
-        const inEl = $("copilot-input");
-        if (inEl) inEl.value = prompt;
-        handleSend();
-      });
-    });
-  }
-
-  return { init, toggle, addMessage, handleSend };
-})();
-
-window.toggleSocCopilot = SocCopilotEngine.toggle;
+const SocCopilotEngine = { init() {}, toggle() {}, addMessage() {}, handleSend() {} };
+window.toggleSocCopilot = () => {};
 
 
 // --- 4. MITRE ATT&CK ENTERPRISE THREAT MATRIX HEATMAP ---
@@ -4808,155 +4249,9 @@ const MitreHeatmapEngine = (function() {
 window.renderMitreHeatmap = MitreHeatmapEngine.render;
 
 
-// --- 5. MULTI-GATEWAY ENTERPRISE FLEET SENTINEL ---
-const FleetSentinelEngine = (function() {
-  const FLEET_GATEWAYS = [
-    {
-      id: "gw-delhi-01",
-      name: "HQ Core Primary Gateway",
-      location: "New Delhi Datacenter",
-      ip: "203.0.113.10",
-      posture: "CNSA 2.0 PQC Hybrid (ML-KEM-768 + X25519)",
-      grade: "A+",
-      score: 98,
-      status: "SECURE",
-      tunnels: 8,
-      tags: ["PQC-Ready", "FIPS 140-3", "8 Tunnels Active"]
-    },
-    {
-      id: "gw-mumbai-02",
-      name: "Branch Regional Hub",
-      location: "Mumbai Financial Zone",
-      ip: "198.51.100.45",
-      posture: "IKEv2 AES-256-GCM / SHA-384 / DH-20",
-      grade: "A",
-      score: 91,
-      status: "COMPLIANT",
-      tunnels: 6,
-      tags: ["Suite-B", "RFC 4303", "6 Tunnels Active"]
-    },
-    {
-      id: "cloud-gw-blr-04",
-      name: "Sovereign Cloud Node",
-      location: "Bengaluru Aerospace Cluster",
-      ip: "192.0.2.88",
-      posture: "Post-Quantum Kyber-1024 / Dilithium-3",
-      grade: "A+",
-      score: 99,
-      status: "OPTIMAL",
-      tunnels: 5,
-      tags: ["Zero-Trust", "Post-Quantum", "5 Mesh Tunnels"]
-    },
-    {
-      id: "edge-tactical-09",
-      name: "Tactical Border Edge Node",
-      location: "Jammu Tactical Outpost",
-      ip: "10.142.3.1",
-      posture: "AES-CBC-128 / SHA1 / DH-2 (Legacy Fallback)",
-      grade: "C-",
-      score: 58,
-      status: "ATTENTION REQUIRED",
-      tunnels: 5,
-      tags: ["Legacy Fallback", "SNDL Risk", "Action Needed"]
-    }
-  ];
-
-  function renderGrid() {
-    const grid = $("fleet-matrix-grid");
-    if (!grid) return;
-
-    grid.innerHTML = "";
-    FLEET_GATEWAYS.forEach((gw) => {
-      const card = document.createElement("div");
-      card.className = "fleet-gw-card";
-      card.id = `fleet-card-${gw.id}`;
-
-      const gradeBg = (gw.score >= 90) ? "#dcfce7" : (gw.score >= 75) ? "#fef3c7" : "#fee2e2";
-      const gradeColor = (gw.score >= 90) ? "#15803d" : (gw.score >= 75) ? "#b45309" : "#b91c1c";
-
-      card.innerHTML = `
-        <div class="fleet-gw-header">
-          <div class="fleet-gw-title">${gw.name}</div>
-          <div class="fleet-gw-grade" style="background:${gradeBg}; color:${gradeColor}">${gw.grade} (${gw.score})</div>
-        </div>
-        <div class="fleet-gw-meta">
-          <span><strong>Location:</strong> ${gw.location} &bull; <code>${gw.ip}</code></span>
-          <span><strong>Posture:</strong> ${gw.posture}</span>
-          <span><strong>Status:</strong> ${gw.status} &bull; ${gw.tunnels} Active Tunnels</span>
-        </div>
-        <div class="fleet-gw-tags">
-          ${gw.tags.map(t => `<span class="fleet-gw-tag">${t}</span>`).join("")}
-        </div>
-      `;
-
-      grid.appendChild(card);
-    });
-  }
-
-  function batchRemediate() {
-    const btn = $("btn-fleet-remediate-all");
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = "⚡ Pushing CNSA 2.0 Profiles...";
-    }
-
-    setTimeout(() => {
-      // Remediate legacy tactical gateway
-      const edge = FLEET_GATEWAYS.find(g => g.id === "edge-tactical-09");
-      if (edge) {
-        edge.posture = "CNSA 2.0 Compliant (AES-256-GCM / SHA-384 / ML-KEM-768)";
-        edge.grade = "A";
-        edge.score = 94;
-        edge.status = "COMPLIANT & SECURED";
-        edge.tags = ["Remediated", "PQC-Ready", "CNSA 2.0"];
-      }
-
-      renderGrid();
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = "✔ Fleet 100% Remediated";
-      }
-
-      showToast("Fleet batch remediation deployed! All gateways upgraded to CNSA 2.0 PQC.", "success");
-      if (typeof SocAudioEngine !== "undefined" && SocAudioEngine.play) {
-        SocAudioEngine.play("ping");
-      }
-    }, 900);
-  }
-
-  function openModal() {
-    const modal = $("fleet-modal");
-    if (!modal) return;
-    modal.hidden = false;
-    modal.removeAttribute("hidden");
-    modal.style.setProperty("display", "flex", "important");
-    renderGrid();
-  }
-
-  function closeModal() {
-    const modal = $("fleet-modal");
-    if (!modal) return;
-    modal.hidden = true;
-    modal.setAttribute("hidden", "");
-    modal.style.setProperty("display", "none", "important");
-  }
-
-  function init() {
-    const btnOpen = $("btn-fleet-toggle");
-    if (btnOpen) btnOpen.addEventListener("click", openModal);
-
-    const btnClose = $("fleet-modal-close");
-    if (btnClose) btnClose.addEventListener("click", closeModal);
-
-    const btnRemediate = $("btn-fleet-remediate-all");
-    if (btnRemediate) btnRemediate.addEventListener("click", batchRemediate);
-  }
-
-  return { init, openModal, closeModal, renderGrid, batchRemediate };
-})();
-
-window.openFleetModal = FleetSentinelEngine.openModal;
-window.closeFleetModal = FleetSentinelEngine.closeModal;
+const FleetSentinelEngine = { init() {}, openModal() {}, closeModal() {}, renderGrid() {}, batchRemediate() {} };
+window.openFleetModal = () => {};
+window.closeFleetModal = () => {};
 
 async function init(){
   try { state.token = sessionStorage.getItem("cipherguard.token"); } catch (e) {}
@@ -5001,6 +4296,8 @@ async function init(){
   $("run").addEventListener("click", runAnalysis);
   const btnSingle = $("btn-ipsec-single");
   if (btnSingle) btnSingle.addEventListener("click", () => switchIpsecMode("single"));
+  const btnLive = $("btn-ipsec-live");
+  if (btnLive) btnLive.addEventListener("click", () => switchIpsecMode("live"));
   const btnDiff = $("btn-ipsec-diff");
   if (btnDiff) btnDiff.addEventListener("click", () => switchIpsecMode("diff"));
   const btnRunDiff = $("run-diff");
@@ -5206,33 +4503,6 @@ async function init(){
     if (simBox) simBox.style.display = "none";
   });
 
-  // Cookie & Local Storage Consent Banner initialization
-  const cookieBanner = $("cookie-banner");
-  const btnAcceptCookie = $("btn-cookie-accept");
-  const btnDismissCookie = $("btn-cookie-dismiss");
-  if (cookieBanner) {
-    try {
-      const consent = localStorage.getItem("cipherguard_consent");
-      if (consent) {
-        cookieBanner.classList.add("hidden");
-      }
-    } catch(e) {}
-    if (btnAcceptCookie) {
-      btnAcceptCookie.addEventListener("click", () => {
-        try { localStorage.setItem("cipherguard_consent", "accepted"); } catch(e) {}
-        cookieBanner.classList.add("hidden");
-        showToast("Preferences saved. Local storage active.", "success");
-        CipherGuardTelemetry.recordEvent("consent_accepted");
-      });
-    }
-    if (btnDismissCookie) {
-      btnDismissCookie.addEventListener("click", () => {
-        try { localStorage.setItem("cipherguard_consent", "dismissed"); } catch(e) {}
-        cookieBanner.classList.add("hidden");
-        CipherGuardTelemetry.recordEvent("consent_dismissed");
-      });
-    }
-  }
 
   // Sticky Mobile CTA Dock Action Bindings
   const mobilePrimaryCta = $("mobile-primary-cta");
@@ -5314,11 +4584,6 @@ async function init(){
       closeBackendModal();
       closeShortcutsModal();
       closeCbomModal();
-      closeFleetModal();
-      const copilotDrawer = $("copilot-drawer");
-      if (copilotDrawer && !copilotDrawer.classList.contains("collapsed")) {
-        toggleSocCopilot();
-      }
       const rogueBanner = $("wifi-evil-twin-banner");
       if (rogueBanner) rogueBanner.style.display = "none";
       if (isInput && activeEl && activeEl.blur) activeEl.blur();
@@ -5339,10 +4604,9 @@ async function init(){
       return;
     }
 
-    // 2. WI-FI VIEW & SPECTRUM SCAN: '1' or 'w' or 's' or Alt+S or Ctrl+1
-    if ((!e.ctrlKey && !e.altKey && !e.metaKey && (key === "1" || key === "w" || key === "s")) ||
-        (e.altKey && (key === "s" || key === "w")) ||
-        (e.ctrlKey && key === "1")) {
+    // 2. WI-FI VIEW & SPECTRUM SCAN: '2' or 'w' or 's' or Alt+S or Ctrl+2
+    if ((!e.ctrlKey && !e.altKey && !e.metaKey && (key === "w" || key === "s")) ||
+        (e.altKey && (key === "s" || key === "w"))) {
       e.preventDefault();
       switchTab("wifi");
       loadWifiAssessment(true);
@@ -5350,10 +4614,10 @@ async function init(){
       return;
     }
 
-    // 3. IPSEC VIEW & ASSESS: '2' or 'i' or 'a' or Alt+A or Ctrl+2
-    if ((!e.ctrlKey && !e.altKey && !e.metaKey && (key === "2" || key === "i" || key === "a")) ||
+    // 3. IPSEC VIEW & ASSESS: '1' or 'i' or 'a' or Alt+A or Ctrl+1
+    if ((!e.ctrlKey && !e.altKey && !e.metaKey && (key === "1" || key === "i" || key === "a")) ||
         (e.altKey && key === "a") ||
-        (e.ctrlKey && key === "2")) {
+        (e.ctrlKey && key === "1")) {
       e.preventDefault();
       switchTab("ipsec");
       runAnalysis();
@@ -5361,8 +4625,8 @@ async function init(){
       return;
     }
 
-    // 4. DIFF A/B COMPARATIVE MODE: '3' or 'd' or 'c' or Alt+D or Ctrl+3
-    if ((!e.ctrlKey && !e.altKey && !e.metaKey && (key === "3" || key === "d" || key === "c")) ||
+    // 4. DIFF A/B COMPARATIVE MODE: '3' or 'd' or Alt+D or Ctrl+3
+    if ((!e.ctrlKey && !e.altKey && !e.metaKey && (key === "3" || key === "d")) ||
         (e.altKey && key === "d") ||
         (e.ctrlKey && key === "3")) {
       e.preventDefault();
@@ -5396,7 +4660,7 @@ async function init(){
     // 7. TOGGLE VPN OVERLAY SIMULATION: 'v'
     if (!e.ctrlKey && !e.altKey && !e.metaKey && key === "v") {
       e.preventDefault();
-      const vpnBtn = $("btn-toggle-sim-vpn");
+      const vpnBtn = $("btn-toggle-sim-vpn") || document.querySelector(".sim-btn-vpn");
       if (vpnBtn) {
         vpnBtn.click();
         showToast("⌨️ Hotkey: Toggled Sovereign VPN Simulation", "info");
@@ -5404,31 +4668,10 @@ async function init(){
       return;
     }
 
-    // 8. TOGGLE CYBER TERMINAL DRAWER: '~' or '`'
-    if (rawKey === "~" || rawKey === "`" || code === "Backquote") {
-      e.preventDefault();
-      toggleCyberTerminal();
-      return;
-    }
-
-    // 9. TOGGLE CBOM MODAL: 'c'
+    // 8. TOGGLE CBOM MODAL: 'c'
     if (!e.ctrlKey && !e.altKey && !e.metaKey && key === "c") {
       e.preventDefault();
       openCbomModal();
-      return;
-    }
-
-    // 10. TOGGLE FLEET SENTINEL MODAL: 'f'
-    if (!e.ctrlKey && !e.altKey && !e.metaKey && key === "f") {
-      e.preventDefault();
-      openFleetModal();
-      return;
-    }
-
-    // 11. TOGGLE SOC COPILOT DRAWER: 'x'
-    if (!e.ctrlKey && !e.altKey && !e.metaKey && key === "x") {
-      e.preventDefault();
-      toggleSocCopilot();
       return;
     }
   });
@@ -5441,42 +4684,35 @@ async function init(){
     });
   }
 
-  // Detect host mode: GitHub Pages (static demo) vs live local API server
-  // Initialize Tactical Defense Engines
-  SocAudioEngine.init();
-  const audioToggleBtn = $("btn-audio-toggle");
-  if (audioToggleBtn) audioToggleBtn.addEventListener("click", () => SocAudioEngine.toggle());
-
-  initRadarScope();
+  // Initialize Core Assessment Engines
   initMoscaCalculator();
-  initCyberTerminal();
-
   HexDissectorEngine.init();
+  LiveSnifferEngine.init();
   CbomEngine.init();
-  SocCopilotEngine.init();
   MitreHeatmapEngine.render();
-  FleetSentinelEngine.init();
 
   await detectStaticMode();
 
-  // Always default to live real-time Wi-Fi connection and VPN status
-  switchTab("wifi");
-  await loadWifiAssessment(false);
+  // Primary Default: IPsec VPN Protocol Analyzer
+  switchTab("ipsec");
 
-  // Live Continuous Telemetry: Auto-poll live Wi-Fi connection and VPN status every 5 seconds
+  // Load and assess initial IPsec capture immediately
+  loadCaptures().then(() => {
+    if ($("run") && !$("run").disabled && state.assessment === null) {
+      runAnalysis();
+    }
+  });
+
+  // Background fetch live Wi-Fi telemetry for the Wi-Fi tab
+  loadWifiAssessment(false);
+
+  // Background polling for Wi-Fi tab only if active
   setInterval(() => {
     const wifiView = $("view-wifi");
     if (wifiView && wifiView.classList.contains("active")) {
       loadWifiAssessment(false, true);
     }
   }, 5000);
-
-  // Preload IPsec captures in background for seamless navigation
-  loadCaptures().then(() => {
-    if ($("run") && !$("run").disabled && state.assessment === null) {
-      runAnalysis();
-    }
-  });
 }
 
 if (document.readyState === "loading"){

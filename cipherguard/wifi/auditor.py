@@ -33,6 +33,29 @@ def _is_private_ip(ip: str) -> bool:
         return False
 
 
+def _security_rank(authentication: str, encryption: str = "") -> int:
+    """Rank a network's security posture so BSSIDs sharing an SSID can be
+    compared against each other. Higher is stronger.
+
+    Unknown/unparsed values rank as medium (2) rather than an extreme, so an
+    auth string this parser doesn't recognise produces a missed clone instead
+    of a false Evil Twin alert on every unfamiliar AP.
+    """
+    auth = (authentication or "").upper()
+    enc = (encryption or "").upper()
+    if "OPEN" in auth or "NONE" in enc:
+        return 0
+    if "WEP" in auth or "WEP" in enc:
+        return 1
+    if "TKIP" in enc or ("WPA-" in auth and "WPA2" not in auth and "WPA3" not in auth):
+        return 2
+    if "WPA3" in auth:
+        return 4
+    if "WPA2" in auth:
+        return 3
+    return 2
+
+
 class WifiAuditor:
     """Audits local wireless interfaces, connected Wi-Fi AP, and in-range networks."""
 
@@ -187,75 +210,14 @@ class WifiAuditor:
                 )
             )
 
-        # 4. Rogue AP / Evil Twin Analysis
-        # Check if another BSSID exists in range with identical SSID but differing security or signal
-        rogue_aps: list[dict] = []
-        matching_ssids = [n for n in networks if n.ssid.lower() == interface_info.ssid.lower()]
-        if len(matching_ssids) > 1:
-            diff_security = [
-                n for n in matching_ssids if n.authentication != interface_info.authentication
-            ]
-            if diff_security:
-                score -= 35
-                for rog in diff_security:
-                    rog.is_rogue = True
-                    rog.rogue_reason = f"Evil Twin Clone ({rog.authentication} vs {interface_info.authentication})"
-                    rogue_aps.append({
-                        "ssid": rog.ssid,
-                        "bssid": rog.bssid,
-                        "band": rog.band,
-                        "channel": rog.channel,
-                        "signal_percent": rog.signal_percent,
-                        "authentication": rog.authentication,
-                        "encryption": rog.encryption,
-                        "reason": f"Downgraded Security: Clone operates under {rog.authentication} while legitimate network enforces {interface_info.authentication}",
-                        "target_ssid": interface_info.ssid,
-                        "threat_level": "critical",
-                    })
-
-                findings.append(
-                    SecurityFinding(
-                        severity="critical",
-                        rule_id="WIFI-020",
-                        title="Potential Evil Twin / Rogue AP Detected",
-                        subject=f"SSID: {interface_info.ssid}",
-                        detail=f"Detected {len(matching_ssids)} access points advertising SSID '{interface_info.ssid}', with at least one utilizing downgraded security ({diff_security[0].authentication}). This is a classic indicator of an Evil Twin attack attempting to trick clients into associating with a malicious clone.",
-                        remediation="Do not connect to open clones. Verify the authentic BSSID MAC address with your network administrator.",
-                        reference="OWASP Wireless Security Guide §W04",
-                    )
-                )
-            else:
-                findings.append(
-                    SecurityFinding(
-                        severity="info",
-                        rule_id="WIFI-021",
-                        title="Multi-AP Mesh / BSS Roaming Environment",
-                        subject=f"SSID: {interface_info.ssid} ({len(matching_ssids)} APs in range)",
-                        detail=f"Detected {len(matching_ssids)} legitimate BSSIDs operating under matching security parameters ({interface_info.authentication}).",
-                        remediation="Ensure 802.11r (Fast BSS Transition) and 802.11k/v are enabled for seamless roaming.",
-                        reference="IEEE 802.11r-2008",
-                    )
-                )
-
-        # Also detect any open clones of any other protected network in range
-        protected_ssids = {n.ssid.lower(): n.authentication for n in networks if "WPA" in n.authentication.upper()}
-        for net in networks:
-            if not net.is_rogue and net.ssid and net.ssid.lower() in protected_ssids:
-                if "OPEN" in net.authentication.upper() or "NONE" in net.encryption.upper():
-                    net.is_rogue = True
-                    net.rogue_reason = f"Open Clone of Protected Network ({protected_ssids[net.ssid.lower()]})"
-                    rogue_aps.append({
-                        "ssid": net.ssid,
-                        "bssid": net.bssid,
-                        "band": net.band,
-                        "channel": net.channel,
-                        "signal_percent": net.signal_percent,
-                        "authentication": net.authentication,
-                        "encryption": net.encryption,
-                        "reason": f"Open clone of protected network ({protected_ssids[net.ssid.lower()]})",
-                        "target_ssid": net.ssid,
-                        "threat_level": "high",
-                    })
+        # 4. Rogue AP / Evil Twin Analysis, across every SSID seen in range --
+        # not only the one this host happens to be connected to. A clone of a
+        # neighbouring network is just as real a threat to whoever's near it.
+        rogue_findings, rogue_aps, rogue_score_delta = self._detect_rogue_aps(
+            interface_info, networks
+        )
+        findings.extend(rogue_findings)
+        score += rogue_score_delta
 
         # 5. DNS Security & Leak Audit
         dns_servers = (dns_info or {}).get("dns_servers", [])
@@ -542,6 +504,119 @@ class WifiAuditor:
         if "WPA2" in u_auth:
             return "B"
         return "C"
+
+    def _detect_rogue_aps(
+        self,
+        interface_info: WifiInterfaceInfo | None,
+        networks: list[WifiNetwork],
+    ) -> tuple[list[SecurityFinding], list[dict[str, Any]], int]:
+        """Flag Evil Twin / rogue clone APs for every SSID seen in range, not
+        just the one this host happens to be connected to.
+
+        Any BSSID broadcasting an SSID that also appears elsewhere in range
+        under materially weaker security is a classic Evil Twin indicator: an
+        attacker cloning a known network's name while dropping its encryption
+        to lure clients into associating with the clone instead. That is a
+        real threat to anyone on the segment whether or not it is the network
+        this particular host is connected to right now, so every SSID group is
+        checked, and `WifiNetwork.is_rogue` is set on every clone found -- the
+        dashboard already renders that flag for any entry in
+        `networks_in_range`, connected or not.
+
+        Score is only docked for a clone of the network *this host* is
+        connected to: that is an active risk to this assessment's own
+        posture. A clone of a neighbouring network is still surfaced as a
+        finding and in `rogue_aps`, just without affecting this host's score.
+        """
+        findings: list[SecurityFinding] = []
+        rogue_aps: list[dict[str, Any]] = []
+        score_delta = 0
+
+        connected_ssid = (
+            interface_info.ssid.lower() if interface_info and interface_info.ssid else ""
+        )
+
+        groups: dict[str, list[WifiNetwork]] = {}
+        for n in networks:
+            if n.ssid:
+                groups.setdefault(n.ssid.lower(), []).append(n)
+
+        for ssid_lower, group in groups.items():
+            if len(group) < 2:
+                continue
+
+            ranked = [(_security_rank(n.authentication, n.encryption), n) for n in group]
+            best = max(r for r, _ in ranked)
+            weak = [n for r, n in ranked if r < best]
+            is_current = ssid_lower == connected_ssid
+
+            if not weak:
+                # Multiple BSSIDs, identical security -- a legitimate mesh /
+                # roaming deployment, not a clone. Only worth a finding when
+                # it is the user's own network.
+                if is_current:
+                    findings.append(
+                        SecurityFinding(
+                            severity="info",
+                            rule_id="WIFI-021",
+                            title="Multi-AP Mesh / BSS Roaming Environment",
+                            subject=f"SSID: {group[0].ssid} ({len(group)} APs in range)",
+                            detail=f"Detected {len(group)} legitimate BSSIDs operating under matching security parameters ({group[0].authentication}).",
+                            remediation="Ensure 802.11r (Fast BSS Transition) and 802.11k/v are enabled for seamless roaming.",
+                            reference="IEEE 802.11r-2008",
+                        )
+                    )
+                continue
+
+            baseline_auth = next(n.authentication for r, n in ranked if r == best)
+            for rog in weak:
+                rog.is_rogue = True
+                rog.rogue_reason = f"Evil Twin Clone ({rog.authentication} vs {baseline_auth})"
+                rogue_aps.append({
+                    "ssid": rog.ssid,
+                    "bssid": rog.bssid,
+                    "band": rog.band,
+                    "channel": rog.channel,
+                    "signal_percent": rog.signal_percent,
+                    "authentication": rog.authentication,
+                    "encryption": rog.encryption,
+                    "reason": f"Downgraded security clone: operates under {rog.authentication} while the legitimate '{rog.ssid}' network enforces {baseline_auth}",
+                    "target_ssid": rog.ssid,
+                    "threat_level": "critical" if is_current else "high",
+                })
+
+            if is_current:
+                score_delta -= 35
+
+            findings.append(
+                SecurityFinding(
+                    severity="critical" if is_current else "high",
+                    rule_id="WIFI-020",
+                    title=(
+                        "Potential Evil Twin / Rogue AP Detected"
+                        if is_current
+                        else f"Nearby Evil Twin / Rogue AP Detected ({group[0].ssid})"
+                    ),
+                    subject=f"SSID: {group[0].ssid}",
+                    detail=(
+                        f"Detected {len(group)} access points advertising SSID '{group[0].ssid}', "
+                        f"with at least one utilizing downgraded security ({weak[0].authentication} vs {baseline_auth}). "
+                        + (
+                            "This is a classic indicator of an Evil Twin attack attempting to trick "
+                            "clients into associating with a malicious clone."
+                            if is_current
+                            else
+                            "This is not the network this host is connected to, but the clone is "
+                            "broadcasting in range and can trick other nearby clients into associating "
+                            "with it."
+                        )
+                    ),
+                    remediation="Do not connect to open or downgraded clones. Verify the authentic BSSID MAC address with your network administrator.",
+                    reference="OWASP Wireless Security Guide §W04",
+                )
+            )
+
+        return findings, rogue_aps, score_delta
 
     def _get_windows_network_config(self) -> dict[str, Any]:
         """Fetch IP, Gateway, and DNS server info via ipconfig /all."""

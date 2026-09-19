@@ -31,6 +31,13 @@
       "grade": "E"
     },
     {
+      "name": "live_snapshot.pcap",
+      "file": "data/live_snapshot_pcap.json",
+      "size_kb": 5.4,
+      "score": 100,
+      "grade": "A"
+    },
+    {
       "name": "transitional.pcap",
       "file": "data/transitional_pcap.json",
       "size_kb": 758.7,

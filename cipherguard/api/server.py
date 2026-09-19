@@ -13,8 +13,12 @@ from functools import lru_cache
 import hmac
 import secrets
 
+import asyncio
+import json
+import queue
+
 from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile, File, Request
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -84,12 +88,31 @@ def create_app(
 
     guard = [Depends(require_token)]
 
+    from contextlib import asynccontextmanager
     from fastapi.middleware.cors import CORSMiddleware
+
+    @asynccontextmanager
+    async def lifespan(app_instance: FastAPI):
+        import asyncio
+        async def _loop():
+            while True:
+                try:
+                    from ..wifi.wlan_native import trigger_scan
+                    trigger_scan(wait_secs=0.0)
+                except Exception:
+                    pass
+                await asyncio.sleep(45)
+        task = asyncio.create_task(_loop())
+        try:
+            yield
+        finally:
+            task.cancel()
 
     app = FastAPI(
         title="CipherGuard",
         description="Passive IPsec VPN protocol analyzer and security assessment framework",
         version="1.0.0",
+        lifespan=lifespan,
     )
 
     app.add_middleware(
@@ -135,29 +158,9 @@ def create_app(
     def index() -> FileResponse:
         return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
-    @app.get("/privacy", include_in_schema=False)
-    def privacy() -> FileResponse:
-        return FileResponse(os.path.join(STATIC_DIR, "privacy.html"))
-
-    @app.get("/terms", include_in_schema=False)
-    def terms() -> FileResponse:
-        return FileResponse(os.path.join(STATIC_DIR, "terms.html"))
-
-    @app.get("/thank-you", include_in_schema=False)
-    def thank_you() -> FileResponse:
-        return FileResponse(os.path.join(STATIC_DIR, "thank-you.html"))
-
     @app.get("/404", include_in_schema=False)
     def not_found_page() -> FileResponse:
         return FileResponse(os.path.join(STATIC_DIR, "404.html"), status_code=404)
-
-    @app.get("/robots.txt", include_in_schema=False)
-    def robots_txt() -> FileResponse:
-        return FileResponse(os.path.join(STATIC_DIR, "robots.txt"), media_type="text/plain")
-
-    @app.get("/sitemap.xml", include_in_schema=False)
-    def sitemap_xml() -> FileResponse:
-        return FileResponse(os.path.join(STATIC_DIR, "sitemap.xml"), media_type="application/xml")
 
     @app.get("/favicon.ico", include_in_schema=False)
     def favicon_ico() -> FileResponse:
@@ -220,9 +223,9 @@ def create_app(
         if not allow_upload:
             raise ImportError("uploads disabled by configuration")
         try:
-            import python_multipart  # noqa: F401
+            import python_multipart  # noqa: F401 # pyright: ignore[reportMissingImports]
         except ImportError:
-            import multipart  # noqa: F401
+            import multipart  # noqa: F401 # pyright: ignore[reportMissingImports]
 
         @app.post("/api/upload", dependencies=guard)
         async def upload(file: UploadFile = File(...)) -> dict:
@@ -434,18 +437,73 @@ def create_app(
             res["vpn"] = None
         return JSONResponse(res)
 
-    @app.on_event("startup")
-    async def _keep_wlan_cache_warm():
-        import asyncio
-        async def _loop():
-            while True:
-                try:
-                    from ..wifi.wlan_native import trigger_scan
-                    trigger_scan(wait_secs=0.0)
-                except Exception:
-                    pass
-                await asyncio.sleep(45)
-        asyncio.create_task(_loop())
+    @app.get("/api/captures/{capture}/flows/{spi}/wire", dependencies=guard)
+    def get_wire_samples(capture: str, spi: str, framing: str | None = None) -> dict:
+        path = _resolve(capture)
+        from ..dissector.wire_inspector import extract_wire_samples
+        return extract_wire_samples(path, spi, framing_class=framing)
+
+    from ..capture.live_sniffer import global_sniffer
+
+    @app.post("/api/sniff/start", dependencies=guard)
+    async def start_sniff(request: Request) -> dict:
+        data = {}
+        try:
+            data = await request.json()
+        except Exception:
+            pass
+        interface = data.get("interface")
+        force_sim = data.get("force_simulation", False)
+        return global_sniffer.start(interface=interface, force_simulation=force_sim)
+
+    @app.post("/api/sniff/stop", dependencies=guard)
+    def stop_sniff() -> dict:
+        return global_sniffer.stop()
+
+    @app.get("/api/sniff/status", dependencies=guard)
+    def sniff_status() -> dict:
+        return global_sniffer.get_status()
+
+    @app.get("/api/sniff/stream")
+    async def sniff_stream() -> StreamingResponse:
+        q = global_sniffer.subscribe()
+
+        async def event_generator():
+            try:
+                status = global_sniffer.get_status()
+                yield f"event: status\ndata: {json.dumps(status)}\n\n"
+
+                while True:
+                    try:
+                        event = q.get_nowait()
+                        yield f"event: packet\ndata: {json.dumps(event)}\n\n"
+                    except queue.Empty:
+                        await asyncio.sleep(0.15)
+                        status = global_sniffer.get_status()
+                        yield f"event: heartbeat\ndata: {json.dumps(status)}\n\n"
+            finally:
+                global_sniffer.unsubscribe(q)
+
+        return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+    @app.post("/api/sniff/analyze", dependencies=guard)
+    def analyze_sniff_snapshot() -> dict:
+        snapshot_name = "live_snapshot.pcap"
+        snapshot_path = os.path.join(capture_dir, snapshot_name)
+        global_sniffer.snapshot_to_pcap(snapshot_path)
+
+        a = analyze(snapshot_path, model_dir=model_dir, min_esp_packets=1)
+        payload = a.to_dict()
+        payload["throughput"] = throughput_estimate(a)
+        payload["platforms"] = [
+            {"id": p, "name": PLATFORM_NAMES[p]} for p in detect_platforms(a)
+        ]
+        from ..intel.pqc import roadmap as pqc_roadmap
+        payload["roadmap"] = pqc_roadmap(a)
+        return payload
+
+
+
 
     @app.get("/api/model", dependencies=guard)
     def model_info() -> dict:

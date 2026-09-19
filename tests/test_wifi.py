@@ -138,3 +138,95 @@ SSID 1 : Campus-Mesh
     WifiAuditor._bss_cache.clear()
 
 
+def _net(ssid, bssid, auth, enc="CCMP", signal=70, connected=False):
+    return WifiNetwork(
+        ssid=ssid,
+        bssid=bssid,
+        signal_percent=signal,
+        rssi_dbm=-100 + signal // 2,
+        channel=6,
+        band="2.4 GHz",
+        radio_type="802.11n",
+        authentication=auth,
+        encryption=enc,
+        connected=connected,
+    )
+
+
+def test_evil_twin_detected_for_connected_network():
+    """The network the host is actually on gets a critical finding and a
+    score penalty when a weaker clone of it is in range."""
+    auditor = WifiAuditor()
+    iface = WifiInterfaceInfo(
+        name="Wi-Fi", description="", mac_address="", state="connected",
+        ssid="Office-WiFi", bssid="AA:AA:AA:AA:AA:01", band="5 GHz", channel=36,
+        radio_type="802.11ac", authentication="WPA2-Personal", cipher="CCMP",
+        signal_percent=90, rssi_dbm=-40,
+    )
+    networks = [
+        _net("Office-WiFi", "AA:AA:AA:AA:AA:01", "WPA2-Personal", connected=True),
+        _net("Office-WiFi", "BB:BB:BB:BB:BB:02", "Open", enc="None", signal=85),
+    ]
+    findings, rogue_aps, score_delta = auditor._detect_rogue_aps(iface, networks)
+    assert score_delta == -35
+    assert any(f.rule_id == "WIFI-020" and f.severity == "critical" for f in findings)
+    assert len(rogue_aps) == 1
+    assert rogue_aps[0]["bssid"] == "BB:BB:BB:BB:BB:02"
+    assert rogue_aps[0]["threat_level"] == "critical"
+    clone = next(n for n in networks if n.bssid == "BB:BB:BB:BB:BB:02")
+    assert clone.is_rogue is True
+
+
+def test_evil_twin_detected_for_network_host_is_not_connected_to():
+    """A clone of a *different* SSID nearby -- one this host never joined --
+    is still flagged, since it is seen for every network in range, not only
+    the one the host happens to be on."""
+    auditor = WifiAuditor()
+    iface = WifiInterfaceInfo(
+        name="Wi-Fi", description="", mac_address="", state="connected",
+        ssid="My-Home-Network", bssid="CC:CC:CC:CC:CC:01", band="5 GHz", channel=36,
+        radio_type="802.11ac", authentication="WPA3-Personal", cipher="CCMP",
+        signal_percent=90, rssi_dbm=-40,
+    )
+    networks = [
+        _net("My-Home-Network", "CC:CC:CC:CC:CC:01", "WPA3-Personal", connected=True),
+        _net("Neighbor-Cafe", "DD:DD:DD:DD:DD:01", "WPA2-Personal", signal=60),
+        _net("Neighbor-Cafe", "EE:EE:EE:EE:EE:02", "Open", enc="None", signal=55),
+    ]
+    findings, rogue_aps, score_delta = auditor._detect_rogue_aps(iface, networks)
+    # Not the host's own network, so no score penalty ...
+    assert score_delta == 0
+    # ... but it is still surfaced as a finding and a flagged network.
+    nearby = [f for f in findings if f.rule_id == "WIFI-020" and "Neighbor-Cafe" in f.subject]
+    assert len(nearby) == 1
+    assert nearby[0].severity == "high"
+    assert any(r["ssid"] == "Neighbor-Cafe" and r["threat_level"] == "high" for r in rogue_aps)
+    clone = next(n for n in networks if n.bssid == "EE:EE:EE:EE:EE:02")
+    assert clone.is_rogue is True
+    legit = next(n for n in networks if n.bssid == "DD:DD:DD:DD:DD:01")
+    assert legit.is_rogue is False
+
+
+def test_matching_security_across_bssids_is_not_flagged_as_rogue():
+    """Multiple BSSIDs of the same SSID with identical security is a normal
+    mesh/roaming deployment, not an Evil Twin."""
+    auditor = WifiAuditor()
+    iface = WifiInterfaceInfo(
+        name="Wi-Fi", description="", mac_address="", state="connected",
+        ssid="Campus-Mesh", bssid="11:11:11:11:11:01", band="5 GHz", channel=36,
+        radio_type="802.11ax", authentication="WPA2-Personal", cipher="CCMP",
+        signal_percent=90, rssi_dbm=-40,
+    )
+    networks = [
+        _net("Campus-Mesh", "11:11:11:11:11:01", "WPA2-Personal", connected=True),
+        _net("Campus-Mesh", "11:11:11:11:11:02", "WPA2-Personal", signal=80),
+        _net("Campus-Mesh", "11:11:11:11:11:03", "WPA2-Personal", signal=70),
+    ]
+    findings, rogue_aps, score_delta = auditor._detect_rogue_aps(iface, networks)
+    assert score_delta == 0
+    assert not rogue_aps
+    assert not any(f.rule_id == "WIFI-020" for f in findings)
+    assert any(f.rule_id == "WIFI-021" for f in findings)
+    assert all(not n.is_rogue for n in networks)
+
+

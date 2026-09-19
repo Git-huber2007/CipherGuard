@@ -104,6 +104,23 @@ def export(
         with open(os.path.join(data_dir, f"{slug}.json"), "w", encoding="utf-8") as fh:
             json.dump(payload, fh)
 
+        # Pre-extract wire framing inspection samples for all ESP flows
+        try:
+            from ..dissector.wire_inspector import extract_wire_samples
+            wire_dir = os.path.join(data_dir, "wire")
+            os.makedirs(wire_dir, exist_ok=True)
+            for flow in assessment.flows:
+                try:
+                    cls_name, _, _ = flow.framing()
+                    w_sample = extract_wire_samples(path, flow.spi, framing_class=cls_name)
+                    w_slug = f"{slug}_{flow.spi:08x}.json"
+                    with open(os.path.join(wire_dir, w_slug), "w", encoding="utf-8") as fh:
+                        json.dump(w_sample, fh)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
         entries.append({
             "name": name,
             "file": f"data/{slug}.json",
