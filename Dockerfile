@@ -19,4 +19,4 @@ ENV PORT=8000
 EXPOSE 8000
 
 # Run production dashboard server
-CMD ["python", "-m", "cipherguard.cli", "serve", "--host", "0.0.0.0", "--port", "8000", "--insecure-bind"]
+CMD ["python", "-m", "cipherguard.cli", "serve", "--host", "0.0.0.0", "--insecure-bind"]

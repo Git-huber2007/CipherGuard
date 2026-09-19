@@ -902,7 +902,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("serve", help="run the assessment dashboard")
     p.add_argument("--host", default="127.0.0.1")
-    p.add_argument("--port", type=int, default=8000)
+    p.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8000)))
     p.add_argument("--captures", default="samples", help="directory of capture files")
     p.add_argument("--db", default="cipherguard-baseline.db", help="baseline store path")
     p.add_argument("--no-upload", action="store_true", help="disable the upload endpoint")

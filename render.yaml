@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: cipherguard-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && pip install -e .
+    startCommand: python -m cipherguard.cli serve --host 0.0.0.0 --insecure-bind
+    envVars:
+      - key: PORT
+        value: 8000
