@@ -20,7 +20,7 @@ const state = {
   wifiAssessment: null,    // latest live wifi & vpn assessment payload
   sessionStartTime: Date.now(),
   telemetryTicks: 0,
-  simulatedRogueApActive: false, // interactive rogue AP evil twin simulation toggle (OFF by default)
+  simulatedRogueApActive: false, // interactive rogue AP evil twin simulation toggle
   simulatedVpnActive: null,     // null: auto-detect, true: force active, false: force direct
   ipsecMode: "single",     // "single" or "diff"
   diffAssessmentA: null,   // baseline capture A assessment
@@ -269,7 +269,7 @@ function updateBackendModalContent(isLive, details = {}){
 
   const wifiIface = (state.wifiAssessment && state.wifiAssessment.interface) || {};
   if (adp) adp.textContent = wifiIface.description || "MediaTek MT7921 (Wi-Fi 6)";
-  if (ssid) ssid.textContent = wifiIface.ssid ? `${wifiIface.ssid} (Ch ${wifiIface.channel || 6})` : "CipherGuard-HQ-Secure (Ch 52)";
+  if (ssid) ssid.textContent = wifiIface.ssid ? `${wifiIface.ssid} (Ch ${wifiIface.channel || 6})` : "White Devil (Ch 6)";
 
   if (isLive) {
     if (card) { card.className = "modal-status-card online"; }
@@ -1619,7 +1619,7 @@ function getStaticWifiDemoData(){
     "description": "MediaTek MT7921 Wi-Fi 6 802.11ax PCIe Adapter",
     "mac_address": "2c:3b:70:fc:74:8b",
     "state": "connected",
-    "ssid": "CipherGuard-HQ-Secure",
+    "ssid": "White Devil",
     "bssid": "5a:04:bd:22:04:63",
     "band": "2.4 GHz",
     "channel": 6,
@@ -1639,7 +1639,7 @@ function getStaticWifiDemoData(){
   },
   "networks_in_range": [
     {
-      "ssid": "CipherGuard-HQ-Secure",
+      "ssid": "White Devil",
       "bssid": "5a:04:bd:22:04:63",
       "signal_percent": 83,
       "rssi_dbm": -58,
@@ -1664,7 +1664,7 @@ function getStaticWifiDemoData(){
       "severity": "medium",
       "rule_id": "WIFI-004",
       "title": "WPA2 Pre-Shared Key (PSK) Vulnerable to Offline Dictionary Attack",
-      "subject": "SSID: CipherGuard-HQ-Secure (WPA2-Personal)",
+      "subject": "SSID: White Devil (WPA2-Personal)",
       "detail": "WPA2 4-Way Handshake allows passive adversaries recording the handshake to execute offline dictionary and brute-force attacks against the pre-shared key (PMK/PTK).",
       "remediation": "Enable WPA3-Personal (SAE - Simultaneous Authentication of Equals) with Protected Management Frames (PMF / 802.11w) on your router.",
       "reference": "IEEE 802.11-2020 / NIST SP 800-162",
@@ -1708,7 +1708,7 @@ function getStaticWifiDemoData(){
     "low": 0,
     "info": 2
   },
-  "summary": "Connected to 'CipherGuard-HQ-Secure' on 2.4 GHz (Channel 6). Security: WPA2-Personal / CCMP with 84% signal. Score: 80/100 (Grade B).",
+  "summary": "Connected to 'White Devil' on 2.4 GHz (Channel 6). Security: WPA2-Personal / CCMP with 84% signal. Score: 80/100 (Grade B).",
   "dns_posture": {
     "dns_servers": [
       "10.2.0.1",
@@ -2075,30 +2075,17 @@ function renderWifiDashboard(data){
 
   let networks = (data.networks_in_range || []).map(n => Object.assign({}, n));
   let rogueList = (data.rogue_aps || []).map(r => Object.assign({}, r));
-  let findings = (data.findings || []).map(f => Object.assign({}, f));
-  let score = data.score ?? 0;
-  let grade = data.grade || "—";
-  let summary = data.summary || "Wireless posture assessed.";
 
   // If user requested simulated Evil Twin AP attack, inject realistic clone AP into live view
-  if (!state.simulatedRogueApActive) {
-    networks = networks.filter(n => !n.is_rogue && n.bssid !== "58:61:63:de:ad:01");
-    rogueList = rogueList.filter(r => r.bssid !== "58:61:63:de:ad:01");
-    findings = findings.filter(f => !f.detail || !f.detail.includes("58:61:63:de:ad:01"));
-    if (score === 45 && grade === "F") {
-      score = 80;
-      grade = "B";
-      summary = `Connected to '${(iface && iface.ssid) || "CipherGuard-HQ-Secure"}' on ${(iface && iface.band) || "2.4 GHz"}. Security: ${(iface && iface.authentication) || "WPA2-Personal"} / ${(iface && iface.cipher) || "CCMP"}.`;
-    }
-  } else {
-    const activeSsid = (iface && iface.ssid) ? iface.ssid : "CipherGuard-HQ-Secure";
+  if (state.simulatedRogueApActive) {
+    const activeSsid = (iface && iface.ssid) ? iface.ssid : "Svyasa-Student";
     const simRogue = {
       ssid: activeSsid,
       bssid: "58:61:63:de:ad:01",
       signal_percent: 96,
       rssi_dbm: -38,
-      channel: (iface && iface.channel) ? iface.channel : 6,
-      band: (iface && iface.band) ? iface.band : "2.4 GHz",
+      channel: (iface && iface.channel) ? iface.channel : 44,
+      band: (iface && iface.band) ? iface.band : "5 GHz",
       radio_type: "802.11ax",
       authentication: "Open",
       encryption: "None",
@@ -2120,9 +2107,6 @@ function renderWifiDashboard(data){
         reason: simRogue.rogue_reason
       });
     }
-    score = Math.min(score, 45);
-    grade = "F";
-    summary = `CRITICAL ALERT: Rogue clone AP detected for '${activeSsid}'. Unencrypted honeypot BSSID 58:61:63:de:ad:01 active in range (Connection safely blocked).`;
   }
 
   // Render or hide the Evil Twin Alert Banner
@@ -2133,7 +2117,7 @@ function renderWifiDashboard(data){
       const primaryRogue = rogueList[0];
       const descEl = $("evil-twin-desc");
       if (descEl) {
-        descEl.innerHTML = `An active rogue clone of network <strong>"${esc(primaryRogue.ssid)}"</strong> was detected broadcasting at high RF power. Rogue access points advertise legitimate SSIDs with downgraded security to entice victim devices to connect, exposing all cleartext data, session cookies, and login credentials to an active Man-In-The-Middle (MitM) adversary.<br><span style="display:inline-block;margin-top:6px;font-weight:600;color:#86efac">🛡️ Host Connection Status: Your device is NOT connected to this rogue clone and remains safely attached to authentic infrastructure.</span>`;
+        descEl.innerHTML = `An active rogue clone of network <strong>"${esc(primaryRogue.ssid)}"</strong> was detected broadcasting at high RF power. Rogue access points advertise legitimate SSIDs with downgraded security to entice victim devices to connect, exposing all cleartext data, session cookies, and login credentials to an active Man-In-The-Middle (MitM) adversary.`;
       }
       const pillsEl = $("evil-twin-pills");
       if (pillsEl) {
@@ -2143,7 +2127,6 @@ function renderWifiDashboard(data){
           <span class="evil-twin-pill">Security: <b>Open (No Encryption)</b></span>
           <span class="evil-twin-pill">Signal: <b>${esc(primaryRogue.signal || '96% (-38 dBm)')}</b></span>
           <span class="evil-twin-pill">Threat Type: <b>Evil Twin Clone</b></span>
-          <span class="evil-twin-pill" style="border-color:rgba(34,197,94,0.6);color:#4ade80;background:rgba(34,197,94,0.12)">Host Status: <b>NOT CONNECTED (Protected)</b></span>
         `;
       }
     } else {
@@ -2153,21 +2136,17 @@ function renderWifiDashboard(data){
 
   // Update simulation toggle button state
   const simBtn = $("wifi-simulate-evil-twin");
-  const simRogueChip = $("sim-rogue-chip");
   if (simBtn) {
-    simBtn.classList.toggle("active", state.simulatedRogueApActive);
-    if (simRogueChip) {
-      simRogueChip.textContent = state.simulatedRogueApActive ? "ACTIVE" : "OFF";
-    }
-    if (state.simulatedRogueApActive) {
-      simBtn.textContent = "🚨 Remove Evil Twin Sim";
-      simBtn.style.background = "rgba(239,68,68,0.3)";
-      simBtn.style.borderColor = "#ef4444";
-    } else {
-      simBtn.textContent = "🚨 Simulate Evil Twin AP";
-      simBtn.style.background = "rgba(239,68,68,0.14)";
-      simBtn.style.borderColor = "rgba(239,68,68,0.35)";
-    }
+    simBtn.setAttribute("aria-pressed", state.simulatedRogueApActive ? "true" : "false");
+    simBtn.classList.toggle("active", !!state.simulatedRogueApActive);
+    const chip = $("sim-rogue-chip");
+    if (chip) chip.textContent = state.simulatedRogueApActive ? "ACTIVE" : "OFF";
+    const icon = simBtn.querySelector(".sim-btn-icon");
+    if (icon) icon.textContent = state.simulatedRogueApActive ? "🚨" : "🧪";
+    const text = simBtn.querySelector(".sim-btn-text");
+    if (text) text.textContent = state.simulatedRogueApActive ? "Stop Rogue AP Sim" : "Simulate Rogue AP Attack";
+    simBtn.style.background = "";
+    simBtn.style.borderColor = "";
   }
 
   // If user requested simulated VPN toggle, apply manual override
@@ -2177,26 +2156,29 @@ function renderWifiDashboard(data){
 
   // Update VPN toggle button state
   const toggleVpnBtn = $("btn-toggle-sim-vpn");
+  const toggleVpnCardBtn = $("btn-toggle-sim-vpn-card");
+  const isVpnOn = !!(data.vpn && data.vpn.connected);
   if (toggleVpnBtn) {
-    const isVpnOn = !!(data.vpn && data.vpn.connected);
     if (isVpnOn) {
-      toggleVpnBtn.innerHTML = "🔓 Disconnect VPN (Sim)";
+      toggleVpnBtn.innerHTML = '<span class="sim-btn-icon">🔓</span> <span class="sim-btn-text">Disconnect VPN (Sim)</span>';
       toggleVpnBtn.title = "Click to simulate disabling VPN (Direct ISP mode)";
-      toggleVpnBtn.style.color = "var(--ok)";
-      toggleVpnBtn.style.borderColor = "var(--ok)";
-      toggleVpnBtn.style.background = "rgba(34,197,94,0.12)";
     } else {
-      toggleVpnBtn.innerHTML = "🔒 Connect ProtonVPN (Sim)";
+      toggleVpnBtn.innerHTML = '<span class="sim-btn-icon">🛡️</span> <span class="sim-btn-text">Toggle Encrypted VPN</span>';
       toggleVpnBtn.title = "Click to simulate connecting ProtonVPN (Encrypted WireGuard Tunnel)";
-      toggleVpnBtn.style.color = "inherit";
-      toggleVpnBtn.style.borderColor = "var(--rule)";
-      toggleVpnBtn.style.background = "transparent";
     }
+    toggleVpnBtn.classList.toggle("active", isVpnOn);
+    toggleVpnBtn.style.color = "";
+    toggleVpnBtn.style.borderColor = "";
+    toggleVpnBtn.style.background = "";
+  }
+  if (toggleVpnCardBtn) {
+    toggleVpnCardBtn.setAttribute("aria-pressed", isVpnOn ? "true" : "false");
+    toggleVpnCardBtn.innerHTML = isVpnOn ? "🔓 Disconnect VPN (Sim)" : "🔒 Toggle VPN State";
   }
 
   // 1. Hero Card
   if (iface && iface.state && iface.state.toLowerCase() === "connected"){
-    const legitChip = `<span style="font-size:0.75rem;padding:2px 8px;border-radius:12px;background:rgba(34,197,94,0.18);color:#16a34a;border:1px solid rgba(34,197,94,0.4);font-weight:700;margin-left:8px;vertical-align:middle">✔ Genuine Authorized AP (Not Rogue)</span>`; $("wifi-ssid-title").innerHTML = `${esc(iface.ssid || "Connected")} ${legitChip}`;
+    $("wifi-ssid-title").textContent = iface.ssid || "Connected (Hidden SSID)";
     $("wifi-bssid").textContent = iface.bssid || "—";
     $("wifi-band").textContent = iface.band || "—";
     $("wifi-channel").textContent = iface.channel ? `${iface.channel}` : "—";
@@ -2205,7 +2187,7 @@ function renderWifiDashboard(data){
     const badge = $("wifi-state-badge");
     badge.className = "wifi-status-badge";
     const ifaceDesc = iface.description ? ` (${iface.description})` : "";
-    $("wifi-state-text").textContent = `CONNECTED · ${iface.name || "Wi-Fi"}${ifaceDesc} · AUTHENTIC AP (AIRSPACE SAFE)`;
+    $("wifi-state-text").textContent = `CONNECTED · ${iface.name || "Wi-Fi"}${ifaceDesc}`;
   } else {
     $("wifi-ssid-title").textContent = "No Wi-Fi Connected";
     $("wifi-bssid").textContent = "—";
@@ -2219,20 +2201,19 @@ function renderWifiDashboard(data){
   }
 
   // 2. Score & Dial
-  const numScore = Number(score);
+  const score = data.score ?? 0;
   const circ = 2 * Math.PI * 49;
-  const colour = numScore >= 80 ? "var(--ok)" : numScore >= 60 ? "var(--med)" : "var(--crit)";
+  const colour = score >= 80 ? "var(--ok)" : score >= 60 ? "var(--med)" : "var(--crit)";
   const arc = $("wifi-arc");
   if (arc){
     arc.setAttribute("stroke", colour);
-    arc.setAttribute("stroke-dasharray", `${(numScore / 100 * circ).toFixed(1)} ${circ.toFixed(1)}`);
+    arc.setAttribute("stroke-dasharray", `${(score / 100 * circ).toFixed(1)} ${circ.toFixed(1)}`);
   }
-  $("wifi-dialnum").textContent = numScore;
-  $("wifi-grade").textContent = `Grade ${grade || "—"}`;
-  $("wifi-gradesub").textContent = summary;
+  $("wifi-dialnum").textContent = score;
+  $("wifi-grade").textContent = `Grade ${data.grade || "—"}`;
+  $("wifi-gradesub").textContent = data.summary || "Wireless posture assessed.";
 
-  const counts = Object.assign({}, data.counts || {});
-  counts.critical = findings.filter(f => f.severity === "critical").length;
+  const counts = data.counts || {};
   $("wifi-sevrow").innerHTML = ["critical", "high", "medium", "low", "info"]
     .filter(k => counts[k])
     .map(k => `<span class="sev-chip ${k}">${counts[k]} ${esc(k)}</span>`)
@@ -2329,7 +2310,7 @@ function renderVpnOverlay(vpn){
     badge.className = "domain-tag inf";
 
     indicator.className = "vpn-status-badge vpn-status-active";
-    statusText.textContent = `TUNNEL ACTIVE · ${vpn.vpn_type}`;
+    statusText.textContent = `Tunnel Active · ${vpn.vpn_type}`;
 
     protoVal.textContent = vpn.vpn_type;
     adapterVal.textContent = vpn.adapter_name || "Virtual Tunnel Adapter";
@@ -2338,7 +2319,7 @@ function renderVpnOverlay(vpn){
     routeSub.textContent = vpn.is_default_route ? "Default route (0.0.0.0/0) routed via tunnel" : "Default route remains on local Wi-Fi";
 
     if (vpn.dns_leak_detected){
-      leakVal.innerHTML = `<span style="color:var(--crit);font-weight:700">🚨 DNS LEAK</span>`;
+      leakVal.innerHTML = `<span style="color:var(--crit);font-weight:700">🚨 DNS Leak Detected</span>`;
       leakSub.textContent = `Leaking to ${vpn.dns_leak_details}`;
     } else if (vpn.dns_servers && vpn.dns_servers.length){
       leakVal.innerHTML = `<span style="color:var(--ok);font-weight:700">✅ Protected</span>`;
@@ -2352,7 +2333,7 @@ function renderVpnOverlay(vpn){
     badge.className = "domain-tag obs";
 
     indicator.className = "vpn-status-badge vpn-status-inactive";
-    statusText.textContent = "NO VPN TUNNEL (DIRECT ISP)";
+    statusText.textContent = "No VPN Tunnel (Direct ISP)";
 
     protoVal.textContent = "Direct (None)";
     adapterVal.textContent = "Physical Wi-Fi link";
@@ -2571,7 +2552,7 @@ function renderWifiNetworksTable(networks){
                 const badgeText = isApConn 
                   ? '<span class="mesh-ap-badge connected">● CONNECTED AP</span>' 
                   : isRogue 
-                    ? '<span class="mesh-ap-badge" style="background:#dc2626;color:#fff;font-weight:700">🚨 ROGUE CLONE AP (NOT CONNECTED)</span>'
+                    ? '<span class="mesh-ap-badge" style="background:#dc2626;color:#fff;font-weight:700">🚨 ROGUE CLONE AP</span>'
                     : '<span class="mesh-ap-badge neighbor">Neighbor AP</span>';
                 const warningNote = isRogue
                   ? `<div style="color:#b91c1c;font-size:0.72rem;font-weight:600;margin-top:4px;grid-column:1/-1">⚠ Downgraded Security: ${esc(ap.authentication)} / ${esc(ap.encryption)} &middot; Potential MitM Honeypot</div>`
@@ -2638,7 +2619,7 @@ function renderWifiNetworksTable(networks){
       let cls = n.connected ? "active-net" : "";
       if (n.is_rogue) cls += (cls ? " " : "") + "rogue-ap-row";
       const activeLabel = n.connected ? ` <span class="sev-chip info" style="font-size:0.7rem;padding:1px 5px">CONNECTED</span>` : "";
-      const rogueLabel = n.is_rogue ? ` <span class="rogue-badge">🚨 ROGUE CLONE (NOT CONNECTED)</span>` : "";
+      const rogueLabel = n.is_rogue ? ` <span class="rogue-badge">🚨 ROGUE CLONE AP</span>` : "";
       const badgeCls = n.is_rogue ? "F" : (n.security_grade ? n.security_grade.replace("+", "") : "B");
       return `<tr class="${cls}">
         <td><b>${esc(n.ssid)}</b>${activeLabel}${rogueLabel}</td>
@@ -4368,11 +4349,6 @@ async function init(){
         simRogueChip.textContent = state.simulatedRogueApActive ? "ACTIVE" : "OFF";
       }
       simEvilTwinBtn.classList.toggle("active", state.simulatedRogueApActive);
-      api("/api/wifi/simulate-rogue", {
-        method: "POST",
-        body: JSON.stringify({ active: state.simulatedRogueApActive }),
-        silent: true
-      }).catch(() => {});
       if (state.wifiAssessment) {
         renderWifiDashboard(state.wifiAssessment);
       }
@@ -4382,25 +4358,30 @@ async function init(){
     });
   }
 
-  // VPN Simulation Toggle Button listener
+  // VPN Simulation Toggle Button listeners (both bar and card)
   const btnToggleVpn = $("btn-toggle-sim-vpn");
-  const simVpnChip = $("sim-vpn-chip");
+  const btnToggleVpnCard = $("btn-toggle-sim-vpn-card");
+  const handleVpnToggle = () => {
+    const currentActive = !!(state.wifiAssessment && state.wifiAssessment.vpn && state.wifiAssessment.vpn.connected);
+    if (state.simulatedVpnActive === null) {
+      state.simulatedVpnActive = !currentActive;
+    } else {
+      state.simulatedVpnActive = !state.simulatedVpnActive;
+    }
+    const simVpnChip = $("sim-vpn-chip");
+    if (simVpnChip) {
+      simVpnChip.textContent = state.simulatedVpnActive ? "SECURE" : "DIRECT";
+    }
+    if (btnToggleVpn) btnToggleVpn.classList.toggle("active", !!state.simulatedVpnActive);
+    if (state.wifiAssessment) {
+      renderWifiDashboard(state.wifiAssessment);
+    }
+  };
   if (btnToggleVpn) {
-    btnToggleVpn.addEventListener("click", () => {
-      const currentActive = !!(state.wifiAssessment && state.wifiAssessment.vpn && state.wifiAssessment.vpn.connected);
-      if (state.simulatedVpnActive === null) {
-        state.simulatedVpnActive = !currentActive;
-      } else {
-        state.simulatedVpnActive = !state.simulatedVpnActive;
-      }
-      if (simVpnChip) {
-        simVpnChip.textContent = state.simulatedVpnActive ? "SECURE" : "DIRECT";
-      }
-      btnToggleVpn.classList.toggle("active", !!state.simulatedVpnActive);
-      if (state.wifiAssessment) {
-        renderWifiDashboard(state.wifiAssessment);
-      }
-    });
+    btnToggleVpn.addEventListener("click", handleVpnToggle);
+  }
+  if (btnToggleVpnCard) {
+    btnToggleVpnCard.addEventListener("click", handleVpnToggle);
   }
 
   // RF Spectrum Band Switcher Controls

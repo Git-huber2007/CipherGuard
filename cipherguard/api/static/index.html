@@ -15,7 +15,7 @@
 <meta property="og:url" content="/">
 <meta property="og:title" content="CipherGuard — AI-Powered Protocol &amp; Live Wi-Fi Security Analyzer">
 <meta property="og:description" content="Passive IPsec protocol analyzer and live 802.11 wireless security assessment framework. Inspect wire framing and RF spectrum with zero payload retention.">
-<meta property="og:image" content="img/og-image.png">
+<meta property="og:image" content="/static/img/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="CipherGuard AI-Powered Protocol &amp; Wi-Fi Security Dashboard Overview">
@@ -24,14 +24,14 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="CipherGuard — AI-Powered Protocol &amp; Live Wi-Fi Security Analyzer">
 <meta name="twitter:description" content="Passive IPsec protocol analyzer and live 802.11 wireless security assessment framework. Deep cryptographic inspection and rogue AP detection.">
-<meta name="twitter:image" content="img/og-image.png">
+<meta name="twitter:image" content="/static/img/og-image.png">
 <meta name="twitter:image:alt" content="CipherGuard Platform Dashboard Preview">
 
 <!-- Favicon & PWA App Icons -->
-<link rel="icon" type="image/svg+xml" href="img/favicon.svg">
-<link rel="alternate icon" href="favicon.ico">
-<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
-<link rel="manifest" href="site.webmanifest">
+<link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
+<link rel="alternate icon" href="/static/favicon.ico">
+<link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
+<link rel="manifest" href="/static/site.webmanifest">
 <meta name="theme-color" content="#1b6e8c">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -50,7 +50,7 @@
 <header class="masthead">
   <div class="masthead-in">
     <div class="brand">
-      <img src="img/favicon.svg" alt="CipherGuard Cyber Shield Emblem" width="28" height="28" style="vertical-align:middle">
+      <img src="/static/img/favicon.svg" alt="CipherGuard Cyber Shield Emblem" width="28" height="28" style="vertical-align:middle">
       <h1>CipherGuard</h1>
       <span class="ps">SIH26160 &middot; NTRO</span>
       <button type="button" id="backend-status-pill" class="backend-status-pill online" title="Real-time backend & telemetry status · Click to configure bridge" aria-haspopup="dialog">
@@ -95,11 +95,9 @@
         <button id="ipsec-export-report" class="action-btn secondary" style="padding:6px 12px;background:rgba(56,189,248,0.12);color:var(--accent);border:1px solid rgba(56,189,248,0.3);font-size:0.75rem;cursor:pointer" aria-label="Export IPsec security dossier">📥 Export Dossier</button>
       </div>
       <div id="wifi-controls" class="tab-controls-group" style="display:none;">
-        <!-- Prominent CTA Above the Fold for Wi-Fi -->
-        <button id="wifi-refresh-btn" class="hero-cta-btn">
-          <span class="cta-icon">⚡</span> Analyze Live Wi-Fi <span class="cta-badge">Alt + S</span>
+        <button id="wifi-refresh-btn" class="btn btn-ghost" title="Re-scan Wi-Fi networks (Alt + S)">
+          <span class="cta-icon">🔄</span> Refresh Scan <span class="cta-badge">Alt + S</span>
         </button>
-        <button id="wifi-header-export-btn" class="action-btn secondary" style="padding:6px 12px;background:rgba(56,189,248,0.12);color:var(--accent);border:1px solid rgba(56,189,248,0.3);font-size:0.75rem;cursor:pointer" aria-label="Export Wi-Fi security dossier">📥 Export Dossier</button>
       </div>
     </div>
   </div>
@@ -132,8 +130,8 @@
         </div>
       </div>
       <div class="sim-bar-buttons">
-        <button type="button" id="wifi-simulate-evil-twin" class="sim-btn sim-btn-rogue" title="Simulate an active Evil Twin / Rogue AP attack broadcasting spoofed BSSID">
-          <span class="sim-btn-icon">🚨</span>
+        <button type="button" id="wifi-simulate-evil-twin" class="sim-btn sim-btn-rogue" aria-pressed="false" title="Simulate an active Evil Twin / Rogue AP attack broadcasting spoofed BSSID">
+          <span class="sim-btn-icon">🧪</span>
           <span class="sim-btn-text">Simulate Rogue AP Attack</span>
           <span class="sim-status-chip" id="sim-rogue-chip">OFF</span>
         </button>
@@ -197,8 +195,8 @@
       </div>
       <div class="wifi-hero-actions">
         <div class="wifi-hero-btns">
-          <button id="wifi-scan-now" class="action-btn">Scan All Networks</button>
-          <button id="wifi-export-report" class="action-btn" style="background:rgba(56,189,248,0.14);color:var(--accent);border:1px solid rgba(56,189,248,0.35);font-weight:600">📥 Export Audit Dossier</button>
+          <button id="wifi-scan-now" class="btn btn-primary" title="Scan all nearby wireless networks">⚡ Scan All Networks</button>
+          <button id="wifi-export-report" class="btn btn-secondary" title="Export comprehensive Wi-Fi security audit dossier">📥 Export Audit Dossier</button>
         </div>
         <div class="wifi-time-sub" id="wifi-last-scan">Last scanned: just now</div>
       </div>
@@ -277,7 +275,7 @@
           <div class="sub">Encrypted overlay status, route redirection, and DNS leak inspection.</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button id="btn-toggle-sim-vpn-card" type="button" class="ghost-mini" style="font-size:0.75rem;padding:4px 9px;border:1px solid var(--rule);border-radius:4px;cursor:pointer" title="Toggle VPN simulation between Encrypted Tunnel and Direct ISP">
+          <button id="btn-toggle-sim-vpn-card" type="button" class="btn btn-secondary btn-sm" aria-pressed="false" title="Toggle VPN simulation between Encrypted Tunnel and Direct ISP">
             🔒 Toggle VPN State
           </button>
           <div id="vpn-status-indicator" class="vpn-status-badge vpn-status-inactive">
