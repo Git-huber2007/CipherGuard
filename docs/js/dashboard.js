@@ -2864,6 +2864,9 @@ function renderRfSpectrum(networks) {
     return (a.rssi_dbm || -80) - (b.rssi_dbm || -80);
   });
 
+  // Collision detection tracking for AP labels (Heuristic #9)
+  const placedLabels = [];
+
   // Render AP bell curves
   sorted.forEach((n) => {
     const ch = parseInt(n.channel, 10);
@@ -2911,12 +2914,30 @@ function renderRfSpectrum(networks) {
       status: n.is_rogue ? "🚨 ROGUE AP / EVIL TWIN" : (n.connected ? "✔ CURRENTLY ASSOCIATED" : "Neighbor AP")
     }).replace(/"/g, "&quot;");
 
+    // Dynamic collision avoidance for text labels
+    let yLabel = yPeak - 8;
+    let collisionCount = 0;
+    for (const prev of placedLabels) {
+      if (Math.abs(prev.x - xc) < 56 && Math.abs(prev.y - yLabel) < 14) {
+        collisionCount++;
+        yLabel = Math.max(marginTop + 14, prev.y - 14);
+      }
+    }
+    placedLabels.push({ x: xc, y: yLabel });
+
+    // Staggered leader line
+    let leaderLine = "";
+    if (collisionCount > 0) {
+      leaderLine = `<line x1="${xc.toFixed(1)}" y1="${(yLabel + 3).toFixed(1)}" x2="${xc.toFixed(1)}" y2="${yPeak.toFixed(1)}" stroke="${strokeColor}" stroke-dasharray="1 2" stroke-width="1" opacity="0.6"/>`;
+    }
+
     svgContent += `
       <g class="spectrum-curve-group">
         <path d="${pathD}" fill="url(#${gradId})" stroke="${strokeColor}" stroke-width="${strokeWidth}"
               class="curve-path ${pulseClass}" data-spec="${tooltipData}"/>
+        ${leaderLine}
         <circle cx="${xc.toFixed(1)}" cy="${yPeak.toFixed(1)}" r="${n.is_rogue || n.connected ? '4' : '2.5'}" fill="${strokeColor}"/>
-        <text x="${xc.toFixed(1)}" y="${(yPeak - 6).toFixed(1)}" fill="${strokeColor}" font-size="10" font-weight="${n.is_rogue || n.connected ? '700' : '500'}" text-anchor="middle">
+        <text x="${xc.toFixed(1)}" y="${yLabel.toFixed(1)}" fill="${strokeColor}" font-size="10" font-weight="${n.is_rogue || n.connected ? '700' : '500'}" text-anchor="middle">
           ${esc(n.ssid ? n.ssid.slice(0, 14) : 'AP')} (${rssi})
         </text>
       </g>
