@@ -4294,8 +4294,6 @@ async function init(){
   // Export Dossier action buttons
   const exportBtn1 = $("wifi-export-report");
   if (exportBtn1) exportBtn1.addEventListener("click", exportSecurityAuditReport);
-  const exportBtn2 = $("wifi-header-export-btn");
-  if (exportBtn2) exportBtn2.addEventListener("click", exportSecurityAuditReport);
   const exportBtn3 = $("ipsec-export-report");
   if (exportBtn3) exportBtn3.addEventListener("click", exportSecurityAuditReport);
 

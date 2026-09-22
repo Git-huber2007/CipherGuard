@@ -3238,7 +3238,7 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
     min-height: 44px;
     font-size: 0.88rem;
   }
-  #ipsec-single-controls button, #run, #wifi-refresh-btn, #wifi-header-export-btn, #ipsec-export-report {
+  #ipsec-single-controls button, #run, #wifi-refresh-btn, #ipsec-export-report {
     width: 100%;
     min-height: 44px;
     font-size: 0.88rem;
