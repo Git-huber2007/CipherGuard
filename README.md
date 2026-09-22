@@ -60,7 +60,7 @@ flowchart TD
 
 ## SIH26160 / NTRO Problem Statement Compliance Matrix
 
-CipherGuard specifically addresses and solves every requirement outlined in **Problem Statement SIH26160** (National Technical Research Organisation - NTRO):
+CipherGuard specifically addresses and solves every requirement outlined in **Problem Statement SIH26160** (National Technical Research Organisation · NTRO):
 
 | SIH26160 / NTRO Requirement | CipherGuard Implementation | Verification / Status |
 |---|---|---|
@@ -101,9 +101,9 @@ this entire design:
 
 | What crosses the wire | Where it lives | Readable passively? |
 |---|---|---|
-| IKE SA proposal — cipher, PRF, integrity, DH group | `IKE_SA_INIT` (v2), Main/Aggressive Mode (v1) | **Yes**, cleartext |
+| IKE SA proposal: cipher, PRF, integrity, DH group | `IKE_SA_INIT` (v2), Main/Aggressive Mode (v1) | **Yes**, cleartext |
 | Peer identities, vendor IDs, notifies, lifetimes | Same messages | **Yes**, cleartext |
-| **Child/ESP SA proposal** — the algorithms actually protecting the data | Inside the encrypted `SK` payload of `IKE_AUTH` (v2), or Quick Mode (v1) | **No** |
+| **Child/ESP SA proposal**: algorithms protecting data | Inside encrypted `SK` payload of `IKE_AUTH` (v2), or Quick Mode (v1) | **No** |
 | ESP payload | Protocol 50 | **No** |
 
 So the algorithms guarding the IKE control channel are plainly visible, and the
@@ -113,8 +113,8 @@ correct on paper but is blind on the wire, and encrypted-traffic classification
 reads flow statistics while ignoring handshake structure.
 
 CipherGuard spans it. It parses what is parseable, infers what is not, and is
-scrupulous about labelling which is which — every ESP finding is marked
-`inferred` and carries a confidence, and no inferred finding is ever presented
+scrupulous about labelling which is which: every ESP finding is marked
+`inferred` and carries a confidence score, and no inferred finding is ever presented
 as an observation.
 
 ---
@@ -138,22 +138,22 @@ len mod max(b,4) == (iv + icv) mod max(b,4)
 That residue is a fixed fingerprint readable without any key. A second
 observable pins it down further: the GCD of gaps between distinct packet
 lengths recovers the padding boundary directly, which matters because the
-residue test alone is one-directional — a flow padded to 16 bytes automatically
+residue test alone is one-directional; a flow padded to 16 bytes automatically
 satisfies the 8-byte test, so AES-CBC would otherwise be indistinguishable from
 3DES. Entropy supplies the third axis, separating ESP-NULL from real ciphers.
 
 Three components consume those observables:
 
-- **Random Forest** over 88 features — modulo profiles, length statistics,
-  entropy, inter-arrival timing.
+- **Random Forest** over 88 features: modulo profiles, length statistics,
+  entropy, and inter-arrival timing.
 - **1D-CNN** over the 64-point distribution profile, treating the modulo
   histograms as a periodic signal. Implemented directly in NumPy (~6k
   parameters), so a passive sensor on an isolated segment needs no
   deep-learning runtime.
 - **A plausibility mask** applying the framing rules above as hard constraints.
   Suites failing them are zeroed regardless of what the models predict, and each
-  exclusion carries a stated reason — which is what makes a finding defensible
-  to an auditor rather than a model output to be trusted on faith.
+  exclusion carries a stated reason, which makes a finding defensible
+  to an auditor rather than an opaque model output to be trusted on faith.
 
 ### Validation against real gateways
 
@@ -165,8 +165,8 @@ generated itself, which proves only that it agrees with its own assumptions.
 python -m cipherguard.cli verify-real
 ```
 
-Five real IKE exchanges from the **Wireshark project's test suite** — produced by
-real implementations (a Windows IKE stack among them), captured off real
+Five real IKE exchanges from the **Wireshark project's test suite**, produced by
+real implementations (a Windows IKE stack among them) and captured off real
 networks. The ground truth is genuinely external: Wireshark names each file
 after the algorithm it negotiates (`ikev2-decrypt-aes256gcm16.pcap`), so the
 expected result comes from upstream maintainers rather than from anything
@@ -181,8 +181,8 @@ written here.
 | `ikev1-certs.pcap` | IKEv1 3DES/MD5/group 2, Windows, 10 vendor IDs | **18/100** |
 
 **5/5 validated.** The AEAD contrast is the sharpest check: GCM and CCM carry no
-INTEG transform, CTR must carry one — confirmed against real implementations
-rather than against our own encoder.
+INTEG transform, whereas CTR must carry one (confirmed against real implementations
+rather than against our own encoder).
 
 #### What the arithmetic alone achieves
 
@@ -196,7 +196,7 @@ corpus:
 | Wrong answers whenever it resolved | **0** |
 | Mean surviving suites | 2.9 of 9 |
 
-The arithmetic never produces a wrong answer — it either resolves a flow or
+The arithmetic never produces a wrong answer: it either resolves a flow or
 declines to. The learned models handle the residual 7% and rank within a class,
 which is a narrower job than the headline accuracy implies.
 
@@ -263,7 +263,7 @@ ablation exposes:
 **The machine learning did overfit the generator.** Off-distribution it loses a
 quarter of its accuracy, and the deterministic framing constraints are what hold
 the result up. Reporting 100% as an ML result would have been a straightforward
-misattribution — the honest claim is that a hybrid design survives distribution
+misattribution; the honest claim is that a hybrid design survives distribution
 shift specifically because half of it is arithmetic that cannot drift.
 
 That is also the engineering argument for the architecture, and it is the answer
@@ -280,7 +280,7 @@ Held out, 360 flows the model never saw, through the complete inference path:
 | Random Forest alone, no mask | 54.7% |
 | 1D-CNN alone, no mask | 50.2% |
 
-The gap between those two top numbers is not a defect to be engineered away —
+The gap between those two top numbers is not a defect to be engineered away;
 it is an information-theoretic limit, and reporting only the high number would
 misrepresent what the tool knows. **AES-GCM-128, AES-GCM-256, AES-CTR and
 ChaCha20-Poly1305 all produce byte-identical ESP framing** (IV 8, ICV 16,
@@ -308,7 +308,7 @@ closes a gap the literature survey identified.
 ### 1. Temporal baseline and downgrade detection
 
 A scanner asks "is this gateway misconfigured?" The more dangerous question is
-"did this gateway *become* misconfigured?" — and no single capture can answer it,
+"did this gateway *become* misconfigured?" No single capture can answer it,
 because a weak suite in isolation looks like it was always the policy.
 
 CipherGuard keeps a SQLite baseline of the strongest suite ever observed per peer
@@ -325,8 +325,8 @@ $ cipherguard watch samples/downgrade.pcap --db fleet.db
       now  80 bits (1024-bit MODP, AUTH_HMAC_SHA1_96, ENCR_AES_CBC-128, PRF_HMAC_SHA1)
 ```
 
-That signature — an on-path attacker stripping strong proposals, a failover onto
-a legacy standby, a botched firmware rollback — is invisible to a single capture
+That signature (an on-path attacker stripping strong proposals, a failover onto
+a legacy standby, or a botched firmware rollback) is invisible to a single capture
 *and* to configuration review, which sees intended policy rather than what the
 peers actually settled on. Exit code 3 makes it a CI/monitoring gate.
 
@@ -353,14 +353,14 @@ measured traffic:
 > processes about 1091.79 GB per key, which is **31.775x the bound**. At the
 > observed 50.55 Mbps this SA reaches the bound **91 minutes after each rekey**.
 
-Same standard, same cipher — but now it is a change request.
+Same standard, same cipher, but now framed as an actionable change request.
 
 ### 4. Harvest-now-decrypt-later exposure and PQC sequencing
 
 "Enable PQC" is not a plan. The quantum threat is *retroactive*, so exposure
 depends on traffic volume, key-exchange recoverability, and how long the data
-stays sensitive — the last of which the tool cannot observe and takes from the
-operator. Mosca's inequality then gives a deadline:
+stays sensitive (which the tool cannot observe and takes from the
+operator). Mosca's inequality then gives a deadline:
 
 ```
 $ cipherguard roadmap samples/backbone.pcap --data-class strategic
@@ -378,13 +378,13 @@ ML-KEM under RFC 9370. The exposure index is a transparent weighted product,
 documented in full so a reviewer can disagree with the weights rather than
 reverse-engineer them.
 
-### 5. CBOM export — inventory derived from traffic, not source
+### 5. CBOM export: inventory derived from traffic, not source
 
 CycloneDX 1.6 added first-class cryptographic assets because PQC mandates
 require organisations to inventory their cryptography. Every existing CBOM
-generator derives that inventory from **source code or binaries** — it tells you
-what a device is *capable of*. CipherGuard derives it from **observed traffic** —
-what a device is *actually doing*.
+generator derives that inventory from **source code or binaries** (telling you
+what a device is *capable of*). CipherGuard derives it from **observed traffic**
+(what a device is *actually doing*).
 
 Those differ constantly in practice. A gateway compiled with AES-GCM support
 that negotiates 3DES because of a stale peer policy is invisible to a
@@ -397,7 +397,7 @@ cipherguard cbom samples/backbone.pcap -o fleet-cbom.json
 ```
 
 Every asset carries provenance. Inferred assets additionally carry confidence,
-their framing signature, and the full candidate set — an inventory that cannot
+their framing signature, and the full candidate set. An inventory that cannot
 distinguish measurement from inference is misleading exactly where it matters
 most.
 
@@ -421,17 +421,15 @@ python -m cipherguard.cli serve                 # dashboard on :8000
 | `analyze <capture>` | Assess a pcap/pcapng and print a scored report |
 | `analyze … --fail-under 70` | Exit code 2 below a threshold, for CI gating |
 | `analyze … --json -o report.json` | Machine-readable output |
+| `analyze … --policy FILE` | Apply an agency policy overlay |
 | `remediate <capture> -o out/` | Synthesise gateway hardening configuration |
 | `watch <capture> --db fleet.db` | Record against baseline; exit 3 on downgrade |
 | `watch … --fleet` | Print the fleet triage queue, weakest link first |
 | `roadmap <capture> --data-class strategic` | Rank links by post-quantum exposure |
 | `cbom <capture> -o bom.json` | Export a CycloneDX 1.6 CBOM |
 | `train` | Retrain the ESP inference model |
-| `sensor <iface>` | Continuous live assessment from an interface |
-| `sensor --check` | Report capture capability and interfaces |
-| `analyze … --policy d.json` | Apply an agency policy overlay |
 | `sensor <iface>` | Continuous live capture, assessment and baselining |
-| `analyze … --policy FILE` | Apply an agency policy overlay |
+| `sensor --check` | Report capture capability and interfaces |
 | `verify-real` | Validate the dissector against real public captures |
 | `validate` | Cross-model validation and the mask/model ablation |
 | `lab` | Write reference testbed captures |
@@ -441,7 +439,7 @@ python -m cipherguard.cli serve                 # dashboard on :8000
 ### Example
 
 ```
-CipherGuard assessment - backbone.pcap
+CipherGuard assessment: backbone.pcap
   1528 packets  |  4 IKE sessions  |  4 ESP SAs  |  0.19s
 
   Posture    4/100  grade E  [#...........................]
@@ -451,7 +449,7 @@ CipherGuard assessment - backbone.pcap
     203.0.113.7 <-> 198.51.100.4   IKEv1   [cisco]
       3DES_CBC, PRF_HMAC_MD5, AUTH_HMAC_MD5, 1024-bit MODP
 
-  ESP tunnels (inferred - payload never decrypted)
+  ESP tunnels (inferred, payload never decrypted)
     203.0.113.7 -> 198.51.100.4  SPI 0xe88b7591  380 packets
       64-bit block cipher  (100% confidence)
       3DES-CBC / HMAC-MD5-96 or DES-CBC / HMAC-SHA1-96
@@ -477,7 +475,7 @@ capture (pcap/pcapng)
         │                        (stops at the SK payload, by design)
         │
         └─► dissector/esp.py     per-SA flow metadata: lengths, sequence numbers,
-                                 timing, bias-corrected entropy — never payload
+                                 timing, bias-corrected entropy (never payload)
                     │
                     ▼
             ml/features.py  →  ml/classifier.py
@@ -498,7 +496,7 @@ capture (pcap/pcapng)
 | `intel/baseline.py` | SQLite temporal baseline; downgrade and drift detection |
 | `intel/pqc.py` | Harvest-now-decrypt-later exposure; migration sequencing |
 | `export/cbom.py` | CycloneDX 1.6 cryptographic bill of materials |
-| `audit/policy.py` | The crypto baseline — edit this to retarget to another directive |
+| `audit/policy.py` | The crypto baseline (edit to retarget to another directive) |
 | `audit/engine.py` | Registered rules over sessions and flows |
 | `ml/synth.py` | Reference testbed corpus from the RFC 4303 framing model |
 | `ml/cnn.py` | NumPy 1D convolutional network |
@@ -509,10 +507,8 @@ capture (pcap/pcapng)
 | `ml/validate.py` | Transfer measurement and mask ablation |
 | `capture/live.py` | AF_PACKET live capture with in-kernel BPF filtering |
 | `capture/sensor.py` | Windowed continuous assessment |
-| `audit/policy_config.py` | External policy overlay |
+| `audit/policy_config.py` | External loadable agency policy overlays |
 | `core/audit_log.py` | JSON Lines custody trail |
-| `capture/live.py` | AF_PACKET live capture with in-kernel BPF filtering |
-| `audit/policy_config.py` | Loadable agency policy overlays |
 | `api/server.py` | FastAPI backend |
 | `api/static/index.html` | Dashboard markup |
 | `api/static/css/dashboard.css` | Dashboard styles |
@@ -549,7 +545,7 @@ ML-KEM hybrid groups (FIPS 203) as firmware allows.
 
 ## Reference testbed
 
-`cipherguard lab` writes four scenarios offline — a legacy IKEv1 Aggressive Mode
+`cipherguard lab` writes four scenarios offline: a legacy IKEv1 Aggressive Mode
 gateway, a partially modernised IKEv2 gateway, a hardened AES-GCM gateway over
 NAT-T, and a mixed backbone with all of them on one mirror port. The IKE packets
 are constructed from the RFC field layouts independently of the dissector, so a
@@ -578,31 +574,25 @@ dissection against independently constructed packets, NAT-T marker handling,
 graceful degradation on truncated frames, the framing-residue invariant across
 every catalogued suite, scoring monotonicity, and policy-table consistency.
 
-Robustness is fuzz-tested rather than assumed: 10,000 mutated IKE messages and
-4,000 random payloads, asserting the dissector never raises, never hangs and
-never accepts structureless input as a valid reading. Real-world protocol cases
-are covered explicitly — RFC 7383 fragmentation, RFC 3948 NAT keepalives (a
-single 0xFF byte, sent every 20 seconds by every peer behind NAT), and
-retransmission counting so a lossy link does not read as many negotiations.
+Robustness is fuzz-tested rather than assumed. **Robustness fuzzing**
+(`tests/test_fuzz.py`) throws 10,000 mutated packets and 4,000 random inputs at
+the dissector. The contract is absolute: `parse_message` returns a valid message
+or `None`, records difficulties in `parse_errors`, and never raises, hangs, or
+allocates without bound. Its input is chosen by an adversary (anyone who can put
+a packet on the monitored segment supplies input directly), and real captures contain
+malformed frames for benign reasons too: snaplen truncation, mid-transfer capture
+start, and hardware offload artefacts.
 
-Also covered: weakest-link scoring, the invariant that **every classical key
+Real-world protocol handling is covered explicitly: RFC 3948 NAT keepalives (a single
+0xFF byte sent every 20 seconds by peers behind NAT), RFC 7383 IKE fragmentation on
+certificate-bearing exchanges, and retransmission counting so a lossy link does not
+artificially inflate negotiation metrics.
+
+Also verified: weakest-link scoring, the fundamental invariant that **every classical key
 exchange has zero quantum strength**, Sweet32 scaling with observed volume,
-direction-independent peer identity, baseline retaining the best-ever state
-rather than the latest, Mosca sign conventions, and CBOM structural validity
-including provenance on every asset.
-
-**Robustness fuzzing** (`tests/test_fuzz.py`) throws 10,000 mutated packets and
-4,000 random inputs at the dissector. The contract is absolute: `parse_message`
-returns a message or None, records difficulties in `parse_errors`, and never
-raises, hangs, or allocates without bound. Its input is chosen by an attacker —
-anyone who can put a packet on the monitored segment supplies input to it
-directly — and real captures contain malformed packets for innocent reasons too:
-snaplen truncation, mid-transfer capture start, hardware offload artefacts.
-
-Real-world protocol handling is covered: RFC 3948 NAT keepalives (a single 0xFF
-byte, sent every 20 seconds by every peer behind NAT), RFC 7383 IKE
-fragmentation on certificate-bearing exchanges, and retransmission counting so a
-lossy path does not read as many distinct negotiations.
+direction-independent peer identity, temporal baselines retaining the best-ever cryptographic state
+rather than merely the latest, Mosca sign conventions, and CycloneDX 1.6 CBOM structural validity
+with full provenance on every asset.
 
 Four are explicit regression tests for bugs made during development:
 
@@ -620,58 +610,46 @@ Four are explicit regression tests for bugs made during development:
 
 ---
 
-## Deployment: the sensor
+## Deployment: continuous sensor mode
 
-Until recently the analyzer could only read files, which meant the "passive
-sensor" it describes did not really exist — someone still had to run tcpdump,
-move a file, and assess it by hand. Continuous assurance is not a scheduled
-batch job.
+Continuous assurance requires live, persistent monitoring rather than scheduled
+batch file inspections. The `sensor` command enables real-time monitoring:
 
 ```bash
-cipherguard sensor --check          # capability and interface report
-sudo cipherguard sensor eth0 --window 300 --evidence /var/lib/cipherguard/
+cipherguard sensor --check          # Capability and interface inspection
+sudo setcap cap_net_raw,cap_net_admin=eip $(readlink -f $(which python3))
+cipherguard sensor eth0 --window 300 --db fleet.db --audit-log /var/log/cg.jsonl
 ```
 
 ```
-Sensor on eth0
-  300s windows, continuous  ·  baseline cipherguard-baseline.db
-  Receive-only. Ctrl-C to stop.
+Sensor on eth0  ·  300s windows  ·  baseline fleet.db
+  Receive-only socket; Ctrl-C to stop
 
   [06:47:07] window 1: 18/100 E  1 SA  0 ESP  30 packets
   [06:52:07] window 2: 74/100 C  3 SA  4 ESP  184203 packets
       DOWNGRADE 198.51.100.77|203.0.113.55: 128 -> 80 bits
 ```
 
-AF_PACKET with no third-party dependency, because the sensor host is expected to
-be hardened and minimal, where installing a libpcap binding is a procurement
-question rather than a `pip` command. A hand-assembled classic-BPF program does
-the IKE/ESP filtering in the kernel — on a backbone carrying mostly non-IPsec
-traffic, filtering in userspace would mean copying and discarding every frame.
+Capture uses Linux `AF_PACKET` with a hand-assembled classic-BPF program to filter
+IKE and ESP frames in-kernel, avoiding third-party libpcap bindings and eliminating
+userspace copy overhead for non-IPsec traffic.
 
-Two properties matter more than throughput. The socket is **receive-only**: a
-monitoring device that can inject onto the segment it monitors is a liability,
-and on a defence backbone it is disqualifying. And each window builds and
-discards its own state, so memory is bounded by construction. Kernel drop
-counts are surfaced per window, because an assessment made from a capture that
-silently lost 40% of its packets is not a weaker assessment — it is a
-misleading one.
+Evidence retention is strictly bounded: `--retain 24` windows, `--max-disk-mb 4096`
+total, and `--max-window-mb 512` per window. Use `--no-evidence` to assess and discard
+frames in memory where packet retention is not authorized.
 
-Live capture needs `CAP_NET_RAW`, granted narrowly rather than by running the
-analyzer as root:
-
-```bash
-sudo setcap cap_net_raw,cap_net_admin=eip $(readlink -f $(which python3))
-```
+Two architectural guarantees are enforced:
+1. **Receive-only operation**: The capture socket cannot transmit or inject frames onto monitored segments.
+2. **Loss transparency**: Kernel packet drop counts are monitored and reported directly alongside posture scores to ensure dropped frames never silently distort an audit.
 
 ## Retargeting the policy
 
-An agency's crypto directive will differ from the NIST baseline. Editing module
-source to express that forks the tool — every upgrade becomes a merge — and
-destroys auditability, because "which policy produced this finding" stops being
-answerable from the report.
+An agency's national cryptographic directive often differs from the default NIST baseline
+(for example, mandating a 3072-bit Diffie-Hellman floor where NIST permits 2048-bit).
+CipherGuard supports version-controlled policy overlays without modifying engine source code:
 
 ```bash
-cipherguard analyze capture.pcap --policy directive.json
+cipherguard analyze capture.pcap --policy agency-directive.json
 ```
 
 ```json
@@ -685,82 +663,23 @@ cipherguard analyze capture.pcap --policy directive.json
 }
 ```
 
-The same capture scores **68 under NIST** and **24 under the stricter
-directive**, with no code change. Overlays extend the baseline by default, so
-an agency adding a prohibition keeps every NIST prohibition too; wholesale
-replacement is opt-in. Unknown keys are rejected loudly — a typo in a policy
-file must fail rather than silently leave a check disabled, because a control
-that quietly stops running is worse than one that was never configured.
+The exact same capture evaluated under different policies demonstrates strict compliance enforcement:
 
-## Deployment: continuous sensor mode
-
-Everything else in the CLI operates on a file somebody already captured by hand,
-which is a batch job rather than continuous assurance. `sensor` closes that gap:
-
-```bash
-sudo setcap cap_net_raw,cap_net_admin=eip $(readlink -f $(which python3))
-cipherguard sensor eth1 --window 300 --db fleet.db --audit-log /var/log/cg.jsonl
-```
-
-```
-Sensor on eth1  ·  300s windows  ·  output captures/
-  receive-only socket; Ctrl-C to stop
-
-  [20260909T072059] 84210 pkts  score 18/100 (E)  3C 2H  7 SA
-  [20260909T072559] 91004 pkts  score 18/100 (E)  3C 2H  7 SA
-  [20260909T073059] 88771 pkts  score 12/100 (E)  4C 2H  7 SA
-    DOWNGRADE 198.51.100.77|203.0.113.55: 128 -> 80 bits
-```
-
-Capture is AF_PACKET with a hand-assembled classic-BPF filter, no libpcap
-binding — the sensor host is expected to be hardened and minimal, where adding a
-native dependency is a procurement question rather than a `pip` command. Kernel
-filtering matters on a backbone carrying mostly non-IPsec traffic: userspace
-would otherwise copy and discard every frame.
-
-Evidence retention is bounded by default: `--retain 24` windows, `--max-disk-mb
-4096` total, and `--max-window-mb 512` on any single window. All three matter.
-A duration bound alone still lets one 300-second window reach 7.5 GB on a
-200 Mbps link before it returns, and a file-count limit alone cannot bound disk
-because window size tracks link load. Use `--no-evidence` to assess and discard
-where custody rules do not require keeping the packets.
-
-Two properties are enforced rather than documented. The socket is **receive
-only** — a monitoring device that can inject onto the segment it monitors is
-disqualifying on a defence backbone. And kernel drop counts are read back and
-**reported next to the score**, because an assessment built from a capture that
-silently lost 40% of its packets is not a weaker assessment, it is a misleading
-one.
-
-## Retargeting the policy
-
-Different authorities disagree legitimately: an agency may mandate a 3072-bit
-floor where NIST accepts 2048. That belongs in a reviewable, version-controlled
-file rather than a patch carried across upgrades.
-
-```bash
-cipherguard analyze capture.pcap --policy agency-directive.json
-```
-
-The same capture, same binary:
-
-| Policy | Score | DH Group 14 |
+| Policy Baseline | Score | DH Group 14 Status |
 |---|---|---|
-| NIST SP 800-77 Rev. 1 baseline | 48/100 (D) | accepted |
-| Example agency 3072-bit directive | 28/100 (E) | **critical** |
+| NIST SP 800-77 Rev. 1 baseline | 48/100 (D) | Accepted |
+| Example agency 3072-bit directive | 28/100 (E) | **Critical finding** |
 
-Overlays **extend** the baseline rather than replacing it — an agency adding one
-prohibition must not implicitly permit everything the baseline prohibits, since
-that failure would be silent and would weaken the audit. Unknown keys are a hard
-error: a control that quietly stops running is worse than one that was never
-configured.
+Policy overlays extend the baseline by default, ensuring all standard cryptographic checks
+remain active unless explicitly reconfigured. Unknown configuration keys fail immediately
+to prevent misspellings from silently bypassing security checks.
 
 ## Operating it in production
 
 | Concern | Provision |
 |---|---|
-| API authentication | Opt-in bearer token, compared with `hmac.compare_digest` — a plain `==` returns early on the first differing byte and leaks the prefix to anyone timing responses. `/api/health` stays open so a load balancer can probe it. |
-| Custody and accountability | JSON Lines audit trail: who assessed which capture, when, and its SHA-256 — a finding is only meaningful against a known input. Findings are logged as rule ID and subject only, so the trail never becomes a second copy of the intelligence it accounts for. |
+| API authentication | Opt-in bearer token, verified with constant-time `hmac.compare_digest` (a plain `==` returns early on the first differing byte and leaks timing prefixes). `/api/health` stays open for load balancer probes. |
+| Custody and accountability | JSON Lines audit trail: records assessor identity, timestamp, and capture SHA-256 (findings are logged as rule ID and subject only, preventing duplicate intelligence leakage). |
 | Model provenance | Every model records training time, library versions, corpus and a feature-schema hash. |
 | Silent feature drift | Loading refuses if the schema hash differs. This is the failure that matters: array shapes stay compatible, the model loads, and predictions are quietly computed from columns that no longer mean what the model was fitted on. Nothing raises and the output looks plausible. |
 | Network exposure | Non-loopback binds refused unless authenticated or explicitly overridden. |
@@ -774,7 +693,7 @@ CIPHERGUARD_TOKEN=$(openssl rand -hex 32) \
 ## Security posture of the analyzer itself
 
 A tool that ingests hostile traffic is itself an attack surface, and a monitoring
-system that can be knocked over is worth attacking — blinding the auditor is a
+system that can be knocked over is worth attacking: blinding the auditor is a
 useful precursor to doing something else. Findings from an audit of this
 codebase, all fixed and covered by regression tests:
 
@@ -782,19 +701,19 @@ codebase, all fixed and covered by regression tests:
 |---|---|---|
 | Unbounded ESP flow table keyed on the attacker-chosen 32-bit SPI | 60k spoofed packets created 60k records and 68 MB. Seconds of line-rate traffic exhausts the sensor. | Capacity cap with least-active eviction, so floods of singletons are dropped before established tunnels. Eviction count is reported so the audit can say its view was incomplete. |
 | **That cap then became a CPU denial of service** | Evicting one flow per new key meant every packet of an SPI-randomised flood triggered a full 8192-entry scan — the table never fell below capacity so the scan never stopped. Throughput collapsed **158,000 → 909 pkt/s (175x)**. The memory bound held perfectly while the sensor stopped keeping up with the link: the same attack, moved from RAM to CPU. | Batched `heapq.nsmallest` eviction of the weakest 10%, amortising the scan. Measured back to **178,000 pkt/s**. Guarded by a wall-clock regression test. |
-| `joblib.load` on an unsigned pickle | Write access to `models/` was code execution inside the analyzer, often the most privileged process on the sensor. The feature-hash check did not help — it reads `meta.json` from the same directory. | SHA-256 manifest verified **before** the unpickle. Not a signature and does not claim to be; it detects tampering by anything that cannot also rewrite the manifest, and gives operators a hash to pin. |
-| One spoofed packet could write a fleet baseline | `negotiated()` fell back to the first *offered* proposal, so an unanswered `IKE_SA_INIT` — which anyone on a mirrored segment can send — permanently set a peer pair's reference point. Set it high and real downgrades never fire; set it low across many pairs and the alert flood trains operators to ignore exit code 3. | Baselines record only responder-confirmed proposals, promote after repeat observation, and rate-limit new peer keys. |
+| `joblib.load` on an unsigned pickle | Write access to `models/` was code execution inside the analyzer, often the most privileged process on the sensor. The feature-hash check did not help because it reads `meta.json` from the same directory. | SHA-256 manifest verified **before** the unpickle. Not a signature and does not claim to be; it detects tampering by anything that cannot also rewrite the manifest, and gives operators a hash to pin. |
+| One spoofed packet could write a fleet baseline | `negotiated()` fell back to the first *offered* proposal, so an unanswered `IKE_SA_INIT` (which anyone on a mirrored segment can send) permanently set a peer pair's reference point. Set it high and real downgrades never fire; set it low across many pairs and the alert flood trains operators to ignore exit code 3. | Baselines record only responder-confirmed proposals, promote after repeat observation, and rate-limit new peer keys. |
 | Capture readers trusted in-file length fields | A 140-byte file declaring a 3 GB packet is a 20-million-fold memory amplification. | Every length validated against a snaplen ceiling *and* the bytes actually remaining in the file. |
 | Baseline DB path accepted as an API query parameter | The store opens the path as SQLite and creates parent directories: unauthenticated arbitrary-directory creation and file probing. | Path is fixed at application construction; the endpoint takes no parameters. |
 | Capture filename interpolated into generated router config | A name containing a newline ends the comment, and the remainder becomes a live configuration directive an operator pastes into a gateway. | All untrusted text flattened and length-bounded before it enters generated config. |
 | Upload endpoint unbounded, overwriting, path-rewriting | Disk exhaustion; silent destruction of evidence a prior assessment relied on. | 512 MB cap with partial-file cleanup, 409 on existing names, explicit rejection of path-bearing names rather than silent `basename()` rewriting. |
-| Dashboard unauthenticated on any bind address | Publishes a map of which national links are cryptographically weak — exactly the targeting information an attacker wants. | Non-loopback binds refused unless explicitly overridden. |
+| Dashboard unauthenticated on any bind address | Publishes a map of which national links are cryptographically weak: exactly the targeting information an attacker wants. | Non-loopback binds refused unless explicitly overridden. |
 
 Authentication and audit logging are implemented (`require_token` with
 `hmac.compare_digest` on every route except `/api/health` and `/static`, plus
 `core/audit_log.py`). Both are opt-in, and the loopback-only default is what
 makes that safe by construction rather than by documentation. What is still
-missing is TLS termination and per-user identity — the API is designed to sit
+missing is TLS termination and per-user identity; the API is designed to sit
 behind an authenticating reverse proxy for those.
 
 ## Limitations
@@ -830,7 +749,7 @@ than none.
 
 Mirroring production traffic carries custody, retention and privacy
 obligations. CipherGuard is built to minimise that exposure: it retains flow
-metadata only — lengths, sequence numbers, timings, entropy statistics — and
+metadata only (lengths, sequence numbers, timings, entropy statistics) and
 never writes payload bytes to disk or logs. It is passive throughout; there is
 no code path that transmits to a gateway or applies generated configuration.
 Deploy on mirror ports under the same authorisation that governs any other
