@@ -597,7 +597,7 @@ function renderFindings(a){
             ? `<span class="domain-tag inf inline">inferred</span>` : ``}
           <div class="fsub">${esc(f.rule_id)} · ${esc(f.subject)}</div>
         </span>
-        <span class="chev">+</span>
+        <span class="chev" aria-hidden="true">&#9662;</span>
       </div>
       <div class="fbody">
         <p>${esc(f.detail)}</p>
@@ -610,7 +610,7 @@ function renderFindings(a){
     const toggle = () => {
       const open = h.parentElement.classList.toggle("open");
       h.setAttribute("aria-expanded", open ? "true" : "false");
-      h.querySelector(".chev").textContent = open ? "\u2212" : "+";
+      h.querySelector(".chev").innerHTML = open ? "&#9652;" : "&#9662;";
     };
     h.addEventListener("click", toggle);
     h.addEventListener("keydown", e => {
@@ -2158,22 +2158,27 @@ function renderWifiDashboard(data){
   const toggleVpnBtn = $("btn-toggle-sim-vpn");
   const toggleVpnCardBtn = $("btn-toggle-sim-vpn-card");
   const isVpnOn = !!(data.vpn && data.vpn.connected);
+  const vpnBtnMarkup = isVpnOn
+    ? '<span class="sim-btn-icon">🔓</span> <span class="sim-btn-text">Disconnect VPN (Sim)</span> <span class="sim-status-chip" id="sim-vpn-chip" style="background:#15803d;color:#fff">ACTIVE</span>'
+    : '<span class="sim-btn-icon">🛡️</span> <span class="sim-btn-text">Toggle Encrypted VPN Tunnel</span> <span class="sim-status-chip" id="sim-vpn-chip">DIRECT ISP</span>';
+  const vpnBtnTitle = isVpnOn
+    ? "Click to simulate disabling VPN (Direct ISP mode)"
+    : "Click to simulate connecting encrypted VPN tunnel";
+
   if (toggleVpnBtn) {
-    if (isVpnOn) {
-      toggleVpnBtn.innerHTML = '<span class="sim-btn-icon">🔓</span> <span class="sim-btn-text">Disconnect VPN (Sim)</span>';
-      toggleVpnBtn.title = "Click to simulate disabling VPN (Direct ISP mode)";
-    } else {
-      toggleVpnBtn.innerHTML = '<span class="sim-btn-icon">🛡️</span> <span class="sim-btn-text">Toggle Encrypted VPN</span>';
-      toggleVpnBtn.title = "Click to simulate connecting ProtonVPN (Encrypted WireGuard Tunnel)";
-    }
+    toggleVpnBtn.innerHTML = vpnBtnMarkup;
+    toggleVpnBtn.title = vpnBtnTitle;
     toggleVpnBtn.classList.toggle("active", isVpnOn);
+    toggleVpnBtn.setAttribute("aria-pressed", isVpnOn ? "true" : "false");
     toggleVpnBtn.style.color = "";
     toggleVpnBtn.style.borderColor = "";
     toggleVpnBtn.style.background = "";
   }
   if (toggleVpnCardBtn) {
+    toggleVpnCardBtn.innerHTML = vpnBtnMarkup.replace('id="sim-vpn-chip"', 'id="sim-vpn-card-chip"');
+    toggleVpnCardBtn.title = vpnBtnTitle;
+    toggleVpnCardBtn.classList.toggle("active", isVpnOn);
     toggleVpnCardBtn.setAttribute("aria-pressed", isVpnOn ? "true" : "false");
-    toggleVpnCardBtn.innerHTML = isVpnOn ? "🔓 Disconnect VPN (Sim)" : "🔒 Toggle VPN State";
   }
 
   // 1. Hero Card
@@ -2373,7 +2378,7 @@ function renderWifiFindings(findings){
           <span class="ftitle">${esc(f.title)}</span>
           <div class="fsub">${esc(f.rule_id)} &middot; ${esc(f.subject)}</div>
         </span>
-        <span class="chev">+</span>
+        <span class="chev" aria-hidden="true">&#9662;</span>
       </div>
       <div class="fbody">
         <p>${esc(f.detail)}</p>
@@ -2386,7 +2391,7 @@ function renderWifiFindings(findings){
     const toggle = () => {
       const open = h.parentElement.classList.toggle("open");
       h.setAttribute("aria-expanded", open ? "true" : "false");
-      h.querySelector(".chev").textContent = open ? "\u2212" : "+";
+      h.querySelector(".chev").innerHTML = open ? "&#9652;" : "&#9662;";
     };
     h.addEventListener("click", toggle);
     h.addEventListener("keydown", e => {
@@ -2450,12 +2455,12 @@ function renderWifiNetworksTable(networks){
   if (state.wifiGroupMode) {
     if (theadRow) {
       theadRow.innerHTML = `
-        <th>SSID / Network</th>
-        <th>Access Points (BSSID)</th>
-        <th>Security / Auth</th>
-        <th>Band &amp; Channels</th>
-        <th>Signal</th>
-        <th>Security Grade</th>
+        <th scope="col">SSID / Network</th>
+        <th scope="col">Access Points (BSSID)</th>
+        <th scope="col">Security / Auth</th>
+        <th scope="col">Band &amp; Channels</th>
+        <th scope="col">Signal</th>
+        <th scope="col">Security Grade</th>
       `;
     }
 
@@ -2502,13 +2507,12 @@ function renderWifiNetworksTable(networks){
 
       let apCell = "";
       if (isConnected && connectedNet) {
-        apCell = `<div class="mesh-cell-summary"><code>${esc(connectedNet.bssid)}</code> <span class="active-ap-pill">● Active AP</span></div>`;
-        if (apCount > 1) {
-          apCell += `<button type="button" class="btn-ap-subtoggle" data-group="${gIdx}" aria-expanded="false"><span class="subtoggle-icon">▼</span> View all ${apCount} mesh APs</button>`;
-        }
+        const subtoggleBtn = apCount > 1 
+          ? ` <button type="button" class="btn-ap-subtoggle" data-group="${gIdx}" aria-expanded="false"><span class="subtoggle-icon">▼</span> View all ${apCount} mesh APs</button>` 
+          : "";
+        apCell = `<div class="mesh-cell-summary"><code>${esc(connectedNet.bssid)}</code> <span class="active-ap-pill">● Active AP</span>${subtoggleBtn}</div>`;
       } else if (apCount > 1) {
-        apCell = `<div class="mesh-cell-summary"><code>${esc(bestNet.bssid)}</code> <span class="best-signal-pill">(Best signal)</span></div>
-                  <button type="button" class="btn-ap-subtoggle" data-group="${gIdx}" aria-expanded="false"><span class="subtoggle-icon">▼</span> View all ${apCount} mesh APs</button>`;
+        apCell = `<div class="mesh-cell-summary"><code>${esc(bestNet.bssid)}</code> <span class="best-signal-pill">(Best signal)</span> <button type="button" class="btn-ap-subtoggle" data-group="${gIdx}" aria-expanded="false"><span class="subtoggle-icon">▼</span> View all ${apCount} mesh APs</button></div>`;
       } else {
         apCell = `<code>${esc(items[0].bssid)}</code>`;
       }
@@ -2606,12 +2610,12 @@ function renderWifiNetworksTable(networks){
     // Flat list of all BSSIDs
     if (theadRow) {
       theadRow.innerHTML = `
-        <th>SSID</th>
-        <th>BSSID (MAC)</th>
-        <th>Security / Auth</th>
-        <th>Band / Channel</th>
-        <th>Signal</th>
-        <th>Security Grade</th>
+        <th scope="col">SSID</th>
+        <th scope="col">BSSID (MAC)</th>
+        <th scope="col">Security / Auth</th>
+        <th scope="col">Band / Channel</th>
+        <th scope="col">Signal</th>
+        <th scope="col">Security Grade</th>
       `;
     }
 
@@ -2914,21 +2918,39 @@ function renderRfSpectrum(networks) {
       status: n.is_rogue ? "🚨 ROGUE AP / EVIL TWIN" : (n.connected ? "✔ CURRENTLY ASSOCIATED" : "Neighbor AP")
     }).replace(/"/g, "&quot;");
 
-    // Dynamic collision avoidance for text labels
+    // Robust collision avoidance across congested channels (Heuristic #8)
     let yLabel = yPeak - 8;
+    let xLabel = xc;
     let collisionCount = 0;
-    for (const prev of placedLabels) {
-      if (Math.abs(prev.x - xc) < 56 && Math.abs(prev.y - yLabel) < 14) {
-        collisionCount++;
-        yLabel = Math.max(marginTop + 14, prev.y - 14);
+    let hasCollision = true;
+    let safetyLimit = 0;
+
+    while (hasCollision && safetyLimit < 12) {
+      hasCollision = false;
+      safetyLimit++;
+      for (const prev of placedLabels) {
+        const dx = Math.abs(prev.x - xLabel);
+        const dy = Math.abs(prev.y - yLabel);
+        if (dx < 75 && dy < 14) {
+          hasCollision = true;
+          collisionCount++;
+          if (yLabel - 15 >= marginTop + 12) {
+            yLabel -= 15;
+          } else {
+            const xShift = (collisionCount % 2 === 1) ? -42 : 42;
+            xLabel = Math.max(marginLeft + 40, Math.min(marginLeft + plotW - 40, xc + xShift));
+            yLabel = Math.max(marginTop + 12, yPeak - 8 - ((collisionCount % 4) * 14));
+          }
+          break;
+        }
       }
     }
-    placedLabels.push({ x: xc, y: yLabel });
+    placedLabels.push({ x: xLabel, y: yLabel });
 
-    // Staggered leader line
+    // Staggered leader line (callout) connecting displaced text to curve peak
     let leaderLine = "";
-    if (collisionCount > 0) {
-      leaderLine = `<line x1="${xc.toFixed(1)}" y1="${(yLabel + 3).toFixed(1)}" x2="${xc.toFixed(1)}" y2="${yPeak.toFixed(1)}" stroke="${strokeColor}" stroke-dasharray="1 2" stroke-width="1" opacity="0.6"/>`;
+    if (collisionCount > 0 || Math.abs(xLabel - xc) > 5) {
+      leaderLine = `<line x1="${xLabel.toFixed(1)}" y1="${(yLabel + 3).toFixed(1)}" x2="${xc.toFixed(1)}" y2="${yPeak.toFixed(1)}" stroke="${strokeColor}" stroke-dasharray="2 2" stroke-width="1.2" opacity="0.75"/>`;
     }
 
     svgContent += `
@@ -2937,7 +2959,7 @@ function renderRfSpectrum(networks) {
               class="curve-path ${pulseClass}" data-spec="${tooltipData}"/>
         ${leaderLine}
         <circle cx="${xc.toFixed(1)}" cy="${yPeak.toFixed(1)}" r="${n.is_rogue || n.connected ? '4' : '2.5'}" fill="${strokeColor}"/>
-        <text x="${xc.toFixed(1)}" y="${yLabel.toFixed(1)}" fill="${strokeColor}" font-size="10" font-weight="${n.is_rogue || n.connected ? '700' : '500'}" text-anchor="middle">
+        <text x="${xLabel.toFixed(1)}" y="${yLabel.toFixed(1)}" fill="${strokeColor}" font-size="10" font-weight="${n.is_rogue || n.connected ? '700' : '500'}" text-anchor="middle">
           ${esc(n.ssid ? n.ssid.slice(0, 14) : 'AP')} (${rssi})
         </text>
       </g>
@@ -4304,13 +4326,17 @@ async function init(){
     btnGroup.addEventListener("click", () => {
       state.wifiGroupMode = true;
       btnGroup.classList.add("active");
+      btnGroup.setAttribute("aria-pressed", "true");
       btnAll.classList.remove("active");
+      btnAll.setAttribute("aria-pressed", "false");
       renderWifiNetworksTable();
     });
     btnAll.addEventListener("click", () => {
       state.wifiGroupMode = false;
       btnAll.classList.add("active");
+      btnAll.setAttribute("aria-pressed", "true");
       btnGroup.classList.remove("active");
+      btnGroup.setAttribute("aria-pressed", "false");
       renderWifiNetworksTable();
     });
   }
@@ -4410,13 +4436,17 @@ async function init(){
     btnSpec24.addEventListener("click", () => {
       state.spectrumBand = "2.4";
       btnSpec24.classList.add("active");
+      btnSpec24.setAttribute("aria-pressed", "true");
       btnSpec5.classList.remove("active");
+      btnSpec5.setAttribute("aria-pressed", "false");
       renderRfSpectrum(state.currentWifiNetworks);
     });
     btnSpec5.addEventListener("click", () => {
       state.spectrumBand = "5";
       btnSpec5.classList.add("active");
+      btnSpec5.setAttribute("aria-pressed", "true");
       btnSpec24.classList.remove("active");
+      btnSpec24.setAttribute("aria-pressed", "false");
       renderRfSpectrum(state.currentWifiNetworks);
     });
   }

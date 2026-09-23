@@ -5939,3 +5939,257 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   color: #ffffff;
 }
 
+
+/* ==========================================================================
+   Usability Heuristics Harmonization (15-Issue Resolution Suite)
+   ========================================================================== */
+
+/* 1. Unified Typographic Scale (Heuristic #1)
+   Restricts active font-size declarations across the page to 7 harmonious steps. */
+:root {
+  --text-xs: 0.75rem;     /* 12px - minimum readable threshold for micro-meta/tags */
+  --text-sm: 0.8125rem;   /* 13px - badges, table cells, secondary UI labels */
+  --text-base: 0.9375rem; /* 15px - primary body text, card content, table rows */
+  --text-md: 1.0625rem;   /* 17px - subheadings, card titles */
+  --text-lg: 1.25rem;     /* 20px - section headers */
+  --text-xl: 1.5rem;      /* 24px - hero headers */
+  --text-2xl: 2rem;       /* 32px - major score indicators */
+
+  /* 2. Consolidated Text Colors (Heuristic #2)
+     Restricts typography colors to 8 standard semantic variables. */
+  --text-primary: #14212b;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-brand: #1b6e8c;
+  --text-success: #15803d;
+  --text-warning: #854d0e;
+  --text-danger: #b91c1c;
+  --text-inverse: #ffffff;
+
+  /* 3. Consolidated Corner Radii (Heuristic #3)
+     Restricts all borders to 4 predictable geometric tokens. */
+  --radius-sm: 4px;       /* Chips, tags, small inputs */
+  --radius-md: 6px;       /* Standard buttons, table rows, cards */
+  --radius-lg: 10px;      /* Large panels, hero banners, modal dialogs */
+  --radius-full: 9999px;  /* Pills, circle badges, status dots */
+}
+
+/* 4. Unified Button System (Heuristic #4)
+   Standardizes buttons into 4 coherent variants with unified sizing & transitions. */
+button, .btn, .sim-btn, .action-btn, .btn-toggle, .spectrum-band-btn, .btn-ap-subtoggle {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.4;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+/* 5. Minimum Body Text Size (Heuristic #5)
+   Elevates status pill and body copy to 13px (0.8125rem >= 12px min threshold). */
+#backend-status-label,
+.backend-status-pill {
+  font-size: var(--text-sm) !important;
+  line-height: 1.4;
+}
+
+/* 6. Severity Level Badge Styling (Heuristic #6)
+   Transforms plain-text severity labels into high-contrast, color-coded security badges. */
+.sev-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  min-width: 76px;
+  text-align: center;
+  box-sizing: border-box;
+}
+.sev-mark.critical {
+  background: #fee2e2 !important;
+  color: #991b1b !important;
+  border: 1px solid #f87171 !important;
+}
+.sev-mark.high {
+  background: #ffedd5 !important;
+  color: #9a3412 !important;
+  border: 1px solid #fb923c !important;
+}
+.sev-mark.medium {
+  background: #fef9c3 !important;
+  color: #854d0e !important;
+  border: 1px solid #facc15 !important;
+}
+.sev-mark.low {
+  background: #e0f2fe !important;
+  color: #0369a1 !important;
+  border: 1px solid #7dd3fc !important;
+}
+.sev-mark.info {
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+/* 7. Persistent Table Header Formatting (Heuristic #7) */
+.data-table thead th,
+.data-table th[scope="col"] {
+  background: var(--sunk);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 10px 14px;
+  border-bottom: 2px solid var(--rule);
+  white-space: nowrap;
+}
+
+/* 8. Spectrum Chart Leader Line & Callouts (Heuristic #8) */
+.spectrum-svg text {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+
+/* 9. Spectrum Legend Breathing Room (Heuristic #9)
+   Provides comfortable horizontal and vertical spacing for legend elements. */
+.spectrum-legend {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 22px !important;
+  margin-top: 14px !important;
+  padding: 12px 14px 4px 14px !important;
+  border-top: 1px solid #1e293b !important;
+  font-size: var(--text-sm) !important;
+  color: #94a3b8 !important;
+}
+.spectrum-legend > span {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+.spec-swatch {
+  width: 12px !important;
+  height: 12px !important;
+  border-radius: var(--radius-sm) !important;
+  flex-shrink: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* 10. Standardized VPN Controls (Heuristic #10) */
+#btn-toggle-sim-vpn-card,
+#btn-toggle-sim-vpn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+}
+
+/* 11. Evaluator Threat Simulator Secondary Card (Heuristic #11)
+   Restyles the simulator bar to fit cleanly as a secondary tooling panel. */
+.simulation-panel {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+}
+.simulation-control-bar {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+/* 12. Chevron Affordance on Expandable Finding Items (Heuristic #12) */
+.fhead {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.fhead:hover {
+  background: var(--sunk);
+  border-color: var(--observed);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+.fhead .chev {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  font-weight: 700;
+  background: var(--sunk);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  margin-left: auto;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+.finding.open .fhead .chev {
+  background: var(--observed);
+  border-color: var(--observed);
+  color: #ffffff;
+}
+
+/* 13. Mesh AP Row Height Alignment (Heuristic #13)
+   Keeps the "View all APs" button on the same horizontal plane as the BSSID. */
+.mesh-cell-summary {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+  margin-bottom: 0 !important;
+}
+.btn-ap-subtoggle {
+  margin-top: 0 !important;
+  padding: 3px 8px !important;
+  font-size: var(--text-xs) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+/* 14. Group by Network View Toggle Active State (Heuristic #14)
+   Provides high-contrast, unambiguous active/selected styling. */
+.wifi-view-toggle-group .btn-toggle.active {
+  background: var(--observed) !important;
+  color: #ffffff !important;
+  border-color: var(--observed) !important;
+  font-weight: 700 !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(27, 110, 140, 0.35) !important;
+}
+
+/* 15. Frequency Band Switcher Active State (Heuristic #15)
+   Provides high-contrast, solid active state for 2.4 GHz vs 5 GHz buttons. */
+.spectrum-band-btn.active {
+  background: var(--observed) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(27, 110, 140, 0.3) !important;
+}

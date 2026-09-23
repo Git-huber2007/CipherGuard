@@ -120,32 +120,6 @@
   <!-- ==================== VIEW 1: LIVE WI-FI POSTURE ==================== -->
   <main id="view-wifi" class="tab-content">
 
-    <!-- Evaluator & Jury Threat Simulation Control Bar -->
-    <div class="simulation-control-bar" role="region" aria-label="Interactive Threat Simulator">
-      <div class="sim-bar-label">
-        <span class="sim-flask-icon">🧪</span>
-        <div class="sim-label-text">
-          <span class="sim-label-title">Evaluator Threat Simulator</span>
-          <span class="sim-label-desc">Inject active RF and routing attack vectors in real-time</span>
-        </div>
-      </div>
-      <div class="sim-bar-buttons">
-        <button type="button" id="wifi-simulate-evil-twin" class="sim-btn sim-btn-rogue" aria-pressed="false" title="Simulate an active Evil Twin / Rogue AP attack broadcasting spoofed BSSID">
-          <span class="sim-btn-icon">🧪</span>
-          <span class="sim-btn-text">Simulate Rogue AP Attack</span>
-          <span class="sim-status-chip" id="sim-rogue-chip">OFF</span>
-        </button>
-        <button type="button" id="btn-toggle-sim-vpn" class="sim-btn sim-btn-vpn" title="Toggle VPN tunnel state to audit DNS leaks and egress protection">
-          <span class="sim-btn-icon">🛡️</span>
-          <span class="sim-btn-text">Toggle Encrypted VPN Tunnel</span>
-          <span class="sim-status-chip" id="sim-vpn-chip">AUTO</span>
-        </button>
-        <button type="button" id="wifi-scan-now-sim" class="sim-btn sim-btn-scan" title="Force fresh physical wireless hardware scan">
-          <span class="sim-btn-icon">🔄</span>
-          <span class="sim-btn-text">Force RF Re-scan</span>
-        </button>
-      </div>
-    </div>
 
     <!-- Evil Twin / Rogue AP Alert Banner -->
     <div id="wifi-evil-twin-banner" class="evil-twin-alert-banner" style="display:none;" role="alert">
@@ -275,8 +249,10 @@
           <div class="sub">Encrypted overlay status, route redirection, and DNS leak inspection.</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button id="btn-toggle-sim-vpn-card" type="button" class="btn btn-secondary btn-sm" aria-pressed="false" title="Toggle VPN simulation between Encrypted Tunnel and Direct ISP">
-            🔒 Toggle VPN State
+          <button id="btn-toggle-sim-vpn-card" type="button" class="btn btn-secondary btn-sm sim-btn-vpn" aria-pressed="false" title="Toggle encrypted VPN tunnel to audit DNS leaks and egress protection">
+            <span class="sim-btn-icon">🛡️</span>
+            <span class="sim-btn-text">Toggle Encrypted VPN Tunnel</span>
+            <span class="sim-status-chip" id="sim-vpn-card-chip">AUTO</span>
           </button>
           <div id="vpn-status-indicator" class="vpn-status-badge vpn-status-inactive">
             <span class="vpn-dot"></span> <span id="vpn-status-text">No VPN Active</span>
@@ -324,6 +300,35 @@
       <div id="wifi-findings"><div class="empty">Running wireless security audit...</div></div>
     </section>
 
+    <!-- Evaluator Threat Simulation Control Panel (Secondary Tooling) -->
+    <section class="panel simulation-panel" style="margin-bottom:18px">
+      <div class="simulation-control-bar" role="region" aria-label="Interactive Threat Simulator">
+        <div class="sim-bar-label">
+          <span class="sim-flask-icon">🧪</span>
+          <div class="sim-label-text">
+            <span class="sim-label-title">Evaluator Threat Simulator</span>
+            <span class="sim-label-desc">Inject active RF and routing attack vectors in real-time</span>
+          </div>
+        </div>
+        <div class="sim-bar-buttons">
+          <button type="button" id="wifi-simulate-evil-twin" class="sim-btn sim-btn-rogue" aria-pressed="false" title="Simulate an active Evil Twin / Rogue AP attack broadcasting spoofed BSSID">
+            <span class="sim-btn-icon">🧪</span>
+            <span class="sim-btn-text">Simulate Rogue AP Attack</span>
+            <span class="sim-status-chip" id="sim-rogue-chip">OFF</span>
+          </button>
+          <button type="button" id="btn-toggle-sim-vpn" class="sim-btn sim-btn-vpn" title="Toggle VPN tunnel state to audit DNS leaks and egress protection">
+            <span class="sim-btn-icon">🛡️</span>
+            <span class="sim-btn-text">Toggle Encrypted VPN Tunnel</span>
+            <span class="sim-status-chip" id="sim-vpn-chip">AUTO</span>
+          </button>
+          <button type="button" id="wifi-scan-now-sim" class="sim-btn sim-btn-scan" title="Force fresh physical wireless hardware scan">
+            <span class="sim-btn-icon">🔄</span>
+            <span class="sim-btn-text">Force RF Re-scan</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
     <!-- In-Range Access Points Table -->
     <section class="panel" style="margin-bottom:18px">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:10px">
@@ -332,10 +337,10 @@
           <div class="sub" id="wifi-networks-subtitle">Nearby access points discovered across 2.4 GHz, 5 GHz, and 6 GHz spectrum.</div>
         </div>
         <div class="wifi-view-toggle-group">
-          <button type="button" class="btn-toggle active" id="btn-wifi-group" title="Group multiple access points of the same network together">
+          <button type="button" class="btn-toggle active" id="btn-wifi-group" aria-pressed="true" title="Group multiple access points of the same network together">
             🏢 Group by Network (SSID)
           </button>
-          <button type="button" class="btn-toggle" id="btn-wifi-all" title="Show every physical access point BSSID individually">
+          <button type="button" class="btn-toggle" id="btn-wifi-all" aria-pressed="false" title="Show every physical access point BSSID individually">
             📡 Show All APs (BSSIDs)
           </button>
         </div>
@@ -344,12 +349,12 @@
         <table class="data-table" id="wifi-networks-table">
           <thead>
             <tr id="wifi-networks-thead-row">
-              <th>SSID / Network</th>
-              <th>Access Points (BSSID)</th>
-              <th>Security / Auth</th>
-              <th>Band &amp; Channels</th>
-              <th>Signal</th>
-              <th>Security Grade</th>
+              <th scope="col">SSID / Network</th>
+              <th scope="col">Access Points (BSSID)</th>
+              <th scope="col">Security / Auth</th>
+              <th scope="col">Band &amp; Channels</th>
+              <th scope="col">Signal</th>
+              <th scope="col">Security Grade</th>
             </tr>
           </thead>
           <tbody id="wifi-networks-tbody">
@@ -367,8 +372,8 @@
           <div class="sub">Dynamic channel allocation, non-overlapping boundary analysis (802.11b/g/n/ac/ax), and automated co-channel interference (CCI) advisory.</div>
         </div>
         <div class="spectrum-band-toggle">
-          <button id="btn-spectrum-24" class="spectrum-band-btn active" type="button">2.4 GHz ISM Band</button>
-          <button id="btn-spectrum-5" class="spectrum-band-btn" type="button">5 GHz UNII Band</button>
+          <button id="btn-spectrum-24" class="spectrum-band-btn active" type="button" aria-pressed="true">2.4 GHz ISM Band</button>
+          <button id="btn-spectrum-5" class="spectrum-band-btn" type="button" aria-pressed="false">5 GHz UNII Band</button>
         </div>
       </div>
 
