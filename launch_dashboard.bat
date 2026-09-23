@@ -3,8 +3,12 @@ setlocal enabledelayedexpansion
 title CipherGuard - Dual-Layer Wireless and VPN Security Platform
 cls
 
-:: Ensure we are running from the directory where this script is located
-cd /d "%~dp0"
+REM Ensure we are running from the project directory containing cipherguard
+if exist "%~dp0cipherguard\cipherguard\cli.py" (
+    cd /d "%~dp0cipherguard"
+) else (
+    cd /d "%~dp0"
+)
 
 echo ======================================================================
 echo   CIPHERGUARD - DUAL-LAYER SECURITY PLATFORM (Wi-Fi + IPsec/VPN)
@@ -14,45 +18,81 @@ echo.
 
 set "PY_EXE="
 
-:: 1. Check virtual environments (user profile venv and local project venv)
+REM -------------------------------------------------------------------------
+REM Step 1: Detect a Python interpreter that has dependencies installed
+REM -------------------------------------------------------------------------
+
+REM 1. Active virtual environment in shell
+if defined VIRTUAL_ENV if exist "%VIRTUAL_ENV%\Scripts\python.exe" (
+    "%VIRTUAL_ENV%\Scripts\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%VIRTUAL_ENV%\Scripts\python.exe"
+)
+if defined PY_EXE goto :python_ready
+
+REM 2. Project-local virtual environments (.venv or venv)
+if exist "%CD%\.venv\Scripts\python.exe" (
+    "%CD%\.venv\Scripts\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%CD%\.venv\Scripts\python.exe"
+)
+if defined PY_EXE goto :python_ready
+
+if exist "%CD%\venv\Scripts\python.exe" (
+    "%CD%\venv\Scripts\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%CD%\venv\Scripts\python.exe"
+)
+if defined PY_EXE goto :python_ready
+
+if exist "%~dp0.venv\Scripts\python.exe" (
+    "%~dp0.venv\Scripts\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%~dp0.venv\Scripts\python.exe"
+)
+if defined PY_EXE goto :python_ready
+
+if exist "%~dp0venv\Scripts\python.exe" (
+    "%~dp0venv\Scripts\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%~dp0venv\Scripts\python.exe"
+)
+if defined PY_EXE goto :python_ready
+
+REM 3. Python on system PATH
+python -c "import numpy" >nul 2>nul && set "PY_EXE=python"
+if defined PY_EXE goto :python_ready
+
+REM 4. Windows py launcher
+py -3 -c "import numpy" >nul 2>nul && set "PY_EXE=py -3"
+if defined PY_EXE goto :python_ready
+
+REM 5. Standard installed Python distributions
+if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
+    "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+)
+if defined PY_EXE goto :python_ready
+
+if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
+    "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+)
+if defined PY_EXE goto :python_ready
+
+if exist "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" (
+    "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
+)
+if defined PY_EXE goto :python_ready
+
+REM 6. User profile venv (only if numpy is verified installed)
 if exist "%USERPROFILE%\venv\Scripts\python.exe" (
-    set "PY_EXE=%USERPROFILE%\venv\Scripts\python.exe"
+    "%USERPROFILE%\venv\Scripts\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%USERPROFILE%\venv\Scripts\python.exe"
 )
-if not defined PY_EXE if exist "%~dp0venv\Scripts\python.exe" (
-    set "PY_EXE=%~dp0venv\Scripts\python.exe"
-)
-if not defined PY_EXE if exist "%~dp0..\venv\Scripts\python.exe" (
-    set "PY_EXE=%~dp0..\venv\Scripts\python.exe"
-)
+if defined PY_EXE goto :python_ready
 
-:: 2. Check installed Python distributions (3.12, 3.11, 3.10)
-if not defined PY_EXE if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
-    set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
-)
-if not defined PY_EXE if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
-    set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
-)
-if not defined PY_EXE if exist "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" (
-    set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
-)
+REM -------------------------------------------------------------------------
+REM Step 2: Fallback - locate any Python and install missing dependencies
+REM -------------------------------------------------------------------------
+if defined VIRTUAL_ENV if exist "%VIRTUAL_ENV%\Scripts\python.exe" set "PY_EXE=%VIRTUAL_ENV%\Scripts\python.exe"
+if not defined PY_EXE if exist "%CD%\.venv\Scripts\python.exe" set "PY_EXE=%CD%\.venv\Scripts\python.exe"
+if not defined PY_EXE if exist "%CD%\venv\Scripts\python.exe" set "PY_EXE=%CD%\venv\Scripts\python.exe"
+if not defined PY_EXE if exist "%~dp0.venv\Scripts\python.exe" set "PY_EXE=%~dp0.venv\Scripts\python.exe"
+if not defined PY_EXE if exist "%~dp0venv\Scripts\python.exe" set "PY_EXE=%~dp0venv\Scripts\python.exe"
+if not defined PY_EXE where python >nul 2>nul && set "PY_EXE=python"
+if not defined PY_EXE where py >nul 2>nul && set "PY_EXE=py -3"
+if not defined PY_EXE if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+if not defined PY_EXE if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+if not defined PY_EXE if exist "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
 
-:: 3. Check py launcher
-if not defined PY_EXE (
-    where py >nul 2>nul
-    if !errorlevel! equ 0 (
-        set "PY_EXE=py -3"
-    )
-)
-
-:: 4. Check python on PATH
-if not defined PY_EXE (
-    where python >nul 2>nul
-    if !errorlevel! equ 0 (
-        set "PY_EXE=python"
-    )
-)
-
-:: 5. Verify python is available
 if not defined PY_EXE (
     echo [ERROR] Python 3.10+ was not found on your system.
     echo Please install Python from https://www.python.org/downloads/
@@ -62,35 +102,64 @@ if not defined PY_EXE (
     exit /b 1
 )
 
+echo [*] Python interpreter found: !PY_EXE!
+echo [*] Installing required dependencies from requirements.txt...
+echo.
+!PY_EXE! -m pip install -r requirements.txt
+if !errorlevel! neq 0 (
+    echo.
+    echo [ERROR] Failed to install dependencies automatically.
+    echo Please run: !PY_EXE! -m pip install -r requirements.txt
+    pause
+    exit /b 1
+)
+
+:python_ready
+
 echo [*] Project Directory: %CD%
 echo [*] Python Interpreter: !PY_EXE!
 
-:: Ensure PYTHONPATH includes current project directory for seamless module resolution
+REM Ensure PYTHONPATH includes current project directory for seamless module resolution
 set "PYTHONPATH=%CD%;!PYTHONPATH!"
 
-:: 6. Pre-scan and synchronize live physical Wi-Fi & VPN telemetry
+REM -------------------------------------------------------------------------
+REM Step 3: Pre-scan and synchronize live physical Wi-Fi and VPN telemetry
+REM -------------------------------------------------------------------------
 if exist "scripts\sync_live_wifi.py" (
-    echo [*] Auditing local wireless RF spectrum & hardware telemetry...
+    echo [*] Auditing local wireless RF spectrum and hardware telemetry...
     !PY_EXE! scripts\sync_live_wifi.py
     echo.
 )
 
+REM -------------------------------------------------------------------------
+REM Step 4: Detect dynamic LAN IP for multi-device access
+REM -------------------------------------------------------------------------
+set "LAN_IP="
+for /f "tokens=4" %%a in ('route print 0.0.0.0 2^>nul ^| findstr "\<0.0.0.0\>"') do (
+    if not defined LAN_IP if not "%%a"=="0.0.0.0" set "LAN_IP=%%a"
+)
+
 echo [*] Launching CipherGuard Multi-Device Security Dashboard...
 echo [*] Local Workstation URL: http://127.0.0.1:8000/
-echo [*] Multi-Device LAN URL:   http://192.168.1.35:8000/  (Open on phones / tablets / other PCs)
+if defined LAN_IP (
+    echo [*] Multi-Device LAN URL:   http://!LAN_IP!:8000/  [Open on phones / tablets / other PCs]
+) else (
+    echo [*] Multi-Device LAN URL:   http://0.0.0.0:8000/  [Check local IP for LAN access]
+)
 echo [*] Opening your default web browser...
 echo [*] (Keep this window open. Press Ctrl+C anytime to stop the server.)
 echo ======================================================================
 echo.
 
-:: Open browser in background
+REM Open browser in background
 start "" "http://127.0.0.1:8000/"
 
-:: Start dashboard server bound to 0.0.0.0 with insecure-bind for multi-device LAN access
+REM Start dashboard server bound to 0.0.0.0 with insecure-bind for multi-device LAN access
 !PY_EXE! -m cipherguard.cli serve --host 0.0.0.0 --port 8000 --insecure-bind
 
-if !errorlevel! neq 0 (
+REM If server exited abnormally (not from Ctrl+C / SIGINT 130 or STATUS_CONTROL_C_EXIT)
+if !errorlevel! neq 0 if !errorlevel! neq 130 if !errorlevel! neq -1073741510 (
     echo.
-    echo [!] Server exited with an error code.
+    echo [ERROR] Server exited with error code: !errorlevel!
     pause
 )
