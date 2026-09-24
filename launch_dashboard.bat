@@ -181,8 +181,15 @@ if exist "scripts\sync_live_wifi.py" (
 )
 
 REM -------------------------------------------------------------------------
-REM Step 4: Detect dynamic LAN IP for multi-device access
+REM Step 4: Ensure port 8000 is available and detect dynamic LAN IP
 REM -------------------------------------------------------------------------
+for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr /c:":8000 " ^| findstr "LISTENING"') do (
+    if not "%%p"=="0" if not "%%p"=="4" (
+        echo [*] Clearing lingering server instance on port 8000 ^(PID %%p^)...
+        taskkill /F /PID %%p >nul 2>nul
+    )
+)
+
 set "LAN_IP="
 for /f "tokens=4" %%a in ('route print 0.0.0.0 2^>nul ^| findstr "\<0.0.0.0\>"') do (
     if not defined LAN_IP if not "%%a"=="0.0.0.0" set "LAN_IP=%%a"
