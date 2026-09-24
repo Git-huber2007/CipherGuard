@@ -11,6 +11,11 @@ shippable to a SIEM without a parser. What it deliberately does not contain is
 any part of the traffic itself. Findings are recorded by rule ID and subject, not
 by detail text, so the audit trail cannot become a second copy of the
 intelligence it is meant to account for.
+
+The file is rotated by size (`audit.jsonl` -> `audit.jsonl.1` ... `.N`), because
+a sensor appends to it for as long as it runs. Rotation and appends happen under
+one inter-process lock, so the sensor, the dashboard and an analyst's CLI run
+can share a log without interleaving partial lines or losing one to a rename.
 """
 
 from __future__ import annotations
@@ -19,22 +24,57 @@ import json
 import os
 import socket
 import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Generator
 
 _lock = threading.Lock()
 
 DEFAULT_LOG = "cipherguard-audit.jsonl"
+DEFAULT_MAX_BYTES = 16 << 20
+DEFAULT_BACKUPS = 5
+
+
+def retention_ceiling(max_bytes: int, backups: int, largest_record: int = 64 << 10) -> int:
+    """The most disk the log and its rotated generations can occupy.
+
+    The active file rotates before a write would take it past `max_bytes`, so
+    each generation stays within it — except that a record larger than the
+    limit is still written whole, alone in its generation, rather than split or
+    dropped. Records are bounded (findings are IDs, not text); 64 KiB is a
+    generous default for the largest.
+    """
+    if not max_bytes:
+        return 0
+    return (backups + 1) * max(max_bytes, largest_record)
 
 
 class AuditLog:
-    def __init__(self, path: str | None = DEFAULT_LOG, actor: str = "cli"):
+    def __init__(
+        self,
+        path: str | None = DEFAULT_LOG,
+        actor: str = "cli",
+        max_bytes: int = DEFAULT_MAX_BYTES,
+        backups: int = DEFAULT_BACKUPS,
+    ):
+        """`max_bytes=0` or `backups=0` disables rotation (the file then grows
+        without bound, as it did before rotation existed)."""
         self.path = path
         self.actor = actor
         self.host = socket.gethostname()
+        self.max_bytes = max_bytes
+        self.backups = backups
+
+    def generations(self) -> list[str]:
+        """The active file and every rotated generation that exists, newest first."""
+        if not self.path:
+            return []
+        names = [self.path] + [f"{self.path}.{i}" for i in range(1, self.backups + 1)]
+        return [n for n in names if os.path.exists(n)]
 
     def _write(self, record: dict[str, Any]) -> None:
-        if not self.path:
+        path = self.path
+        if not path:
             return
         record = {
             "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -43,12 +83,45 @@ class AuditLog:
             "pid": os.getpid(),
             **record,
         }
-        line = json.dumps(record, separators=(",", ":"), sort_keys=True)
+        data = (json.dumps(record, separators=(",", ":"), sort_keys=True) + "\n").encode()
         # Append under a lock and with a single write call: concurrent analysts
         # on one sensor must not interleave partial lines and corrupt the trail.
-        with _lock:
-            with open(self.path, "a", encoding="utf-8") as fh:
-                fh.write(line + "\n")
+        # The thread lock alone is not enough once rotation exists — a rename
+        # by one process between another's size check and its append would
+        # send that append to a generation about to be discarded — so both
+        # steps happen under a file lock every writer on the host honours.
+        with _lock, _interprocess_lock(path + ".lock"):
+            if self.max_bytes and self.backups:
+                self._rotate_if_needed(path, len(data))
+            with open(path, "ab") as fh:
+                fh.write(data)
+
+    def _rotate_if_needed(self, path: str, incoming: int) -> None:
+        """Shift generations up by one and start a fresh active file.
+
+        Each step is an `os.replace`, which is atomic, and the oldest
+        generation is only ever discarded by being overwritten. The record
+        about to be written always lands in the fresh active file, so the most
+        recent assessment is never in a generation rotation can delete.
+
+        If a rename fails (on Windows, a reader holding a generation open),
+        the write goes to the active file un-rotated. The file overshoots its
+        limit until the next write retries; no line is lost.
+        """
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            return
+        if size == 0 or size + incoming <= self.max_bytes:
+            return
+        try:
+            for i in range(self.backups - 1, 0, -1):
+                src = f"{path}.{i}"
+                if os.path.exists(src):
+                    os.replace(src, f"{path}.{i + 1}")
+            os.replace(path, f"{path}.1")
+        except OSError:
+            pass
 
     def assessment(self, assessment, capture_path: str, source: str = "cli") -> None:
         """Record that an assessment happened, without recording its content."""
@@ -84,6 +157,43 @@ class AuditLog:
 
     def denied(self, reason: str, detail: str = "") -> None:
         self._write({"event": "denied", "reason": reason, "detail": detail[:200]})
+
+
+@contextmanager
+def _interprocess_lock(path: str) -> Generator[None, None, None]:
+    """Exclusive advisory lock on a sidecar file, held for one append.
+
+    The OS releases it when the holder exits, however it exits, so a writer
+    killed mid-append cannot leave the log permanently locked.
+    """
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            # LK_LOCK retries for about ten seconds and then raises; waiting
+            # longer is correct, since the alternative is an unserialised write.
+            while True:
+                try:
+                    msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+                    break
+                except OSError:
+                    continue
+            try:
+                yield
+            finally:
+                os.lseek(fd, 0, os.SEEK_SET)
+                msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
 
 
 def _digest(path: str) -> str | None:

@@ -12,3 +12,4 @@ python-multipart>=0.0.9   # optional: capture upload endpoint only
 
 # Tests
 pytest>=7.4
+psutil>=5.9   # soak test RSS/descriptor sampling; Linux can fall back to /proc

@@ -1,0 +1,108 @@
+# CipherGuard passive IPsec sensor, run unattended under systemd.
+#
+# Install:
+#   sudo useradd --system --home-dir /var/lib/cipherguard --shell /usr/sbin/nologin cipherguard
+#   sudo python3 -m venv /opt/cipherguard && sudo /opt/cipherguard/bin/pip install /path/to/cipherguard
+#   sudo install -d -o cipherguard -g cipherguard -m 0750 /var/lib/cipherguard/models
+#   sudo cp models/{rf.joblib,cnn.npz,meta.json,MANIFEST.sha256} /var/lib/cipherguard/models/
+#   sudo install -m 0644 deploy/cipherguard-sensor.service /etc/systemd/system/
+#   echo 'CG_INTERFACE=eth1' | sudo tee /etc/cipherguard/sensor.env
+#   sudo systemctl daemon-reload && sudo systemctl enable --now cipherguard-sensor
+#
+# Health, with the same storage flags as ExecStart so it checks this deployment:
+#   sudo -u cipherguard /opt/cipherguard/bin/cipherguard --models /var/lib/cipherguard/models \
+#     healthcheck --out /var/lib/cipherguard/captures --db /var/lib/cipherguard/baseline.db \
+#     --audit-log /var/log/cipherguard/audit.jsonl
+#
+# Do NOT also `setcap` the Python binary. The capabilities below are granted to
+# this service only; file capabilities on python3 would grant them to every
+# Python program on the host.
+
+[Unit]
+Description=CipherGuard passive IPsec sensor
+Documentation=https://github.com/Git-huber2007/CipherGuard
+After=network-online.target
+Wants=network-online.target
+# Five failures in ten minutes stops the restart loop. A model that fails its
+# manifest check fails identically on every start, and restarting it forever
+# only fills the journal.
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=cipherguard
+Group=cipherguard
+EnvironmentFile=/etc/cipherguard/sensor.env
+ExecStart=/opt/cipherguard/bin/cipherguard --models /var/lib/cipherguard/models \
+    sensor ${CG_INTERFACE} \
+    --window 300 \
+    --out /var/lib/cipherguard/captures \
+    --db /var/lib/cipherguard/baseline.db \
+    --retain 24 --max-disk-mb 4096 --max-window-mb 512 \
+    --retain-observations 500 --retain-days 90 \
+    --audit-log /var/log/cipherguard/audit.jsonl \
+    --audit-max-mb 16 --audit-backups 5
+# SIGTERM ends the current window cleanly; a window can take up to --window
+# seconds plus analysis, so allow that before SIGKILL.
+KillSignal=SIGTERM
+TimeoutStopSec=420
+Restart=on-failure
+RestartSec=10s
+# Exit 2 (score below --fail-under) and 3 (downgrade seen) are verdicts, not
+# crashes, and only occur with --windows; do not restart on them.
+RestartPreventExitStatus=2 3
+
+# -- privileges --------------------------------------------------------------
+# AF_PACKET needs CAP_NET_RAW. CAP_NET_ADMIN is for promiscuous mode and
+# receive-buffer sizing on the mirror port. Nothing else.
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+NoNewPrivileges=yes
+
+# -- filesystem --------------------------------------------------------------
+# The whole filesystem is read-only except the two trees the sensor writes.
+# StateDirectory/LogsDirectory create them owned by the service user.
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cipherguard /var/log/cipherguard
+StateDirectory=cipherguard
+StateDirectoryMode=0750
+LogsDirectory=cipherguard
+LogsDirectoryMode=0750
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+UMask=0077
+
+# -- kernel and process surface ----------------------------------------------
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RemoveIPC=yes
+# The sensor opens AF_PACKET for capture and nothing else; AF_UNIX is for
+# libc/journald, AF_NETLINK for interface-index lookup. No AF_INET: it never
+# connects anywhere.
+RestrictAddressFamilies=AF_PACKET AF_UNIX AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# MemoryDenyWriteExecute is left off: ctypes (used to attach the BPF filter)
+# can need writable-executable trampolines from libffi on some distributions.
+
+# -- resource backstops ------------------------------------------------------
+# Well above the steady state measured by scripts/soak.py; these catch a leak
+# the soak did not, rather than shape normal operation.
+MemoryMax=2G
+TasksMax=64
+LimitNOFILE=1024
+
+[Install]
+WantedBy=multi-user.target

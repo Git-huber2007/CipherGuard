@@ -20,7 +20,7 @@ Repository = "https://github.com/Git-huber2007/CipherGuard"
 
 [project.optional-dependencies]
 api = ["fastapi>=0.110", "uvicorn>=0.27", "pydantic>=2.0", "python-multipart>=0.0.9"]
-dev = ["pytest>=7.4"]
+dev = ["pytest>=7.4", "psutil>=5.9"]
 
 [project.scripts]
 cipherguard = "cipherguard.cli:main"
@@ -33,7 +33,10 @@ include = ["cipherguard*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["no_model: test does not need the session-trained inference model"]
+markers = [
+    "no_model: test does not need the session-trained inference model",
+    "soak: long-running resource-bound test (deselect with -m 'not soak')",
+]
 
 [tool.pyright]
 extraPaths = [

@@ -13,6 +13,7 @@ from .audit.policy import framing_class_of
 from .audit.policy_config import PolicyError
 from .ml.classifier import ModelSchemaError
 from .core.models import Assessment, Severity
+from .intel.baseline import DEFAULT_RETAIN_DAYS, DEFAULT_RETAIN_PER_PEER
 from .pipeline import analyze, throughput_estimate
 from .remediation.synth import PLATFORM_NAMES, detect_platforms, synthesize
 
@@ -396,7 +397,9 @@ def cmd_label_check(args: argparse.Namespace) -> int:
     return 0 if result["passed"] else 1
 
 
-def _prune_evidence(directory: str, keep: int, max_bytes: int) -> tuple[int, int]:
+def _prune_evidence(
+    directory: str, keep: int, max_bytes: int, protect: str | None = None
+) -> tuple[int, int]:
     """Enforce the evidence retention policy, oldest first.
 
     A sensor is a long-running process writing one capture per window. Without a
@@ -408,6 +411,12 @@ def _prune_evidence(directory: str, keep: int, max_bytes: int) -> tuple[int, int
     Both ceilings apply: a count keeps the recent history predictable, and a
     byte cap is what actually protects the disk, because window size varies with
     link load and a count alone cannot bound it.
+
+    `protect` is the capture behind the most recent assessment, and is never
+    removed. Without it a single window larger than `max_bytes` deleted itself
+    the moment it had been assessed, so the latest finding had no evidence.
+    The ceiling is then exceeded by that one window, which `--max-window-mb`
+    bounds.
     """
     try:
         files = sorted(
@@ -418,23 +427,29 @@ def _prune_evidence(directory: str, keep: int, max_bytes: int) -> tuple[int, int
     except OSError:
         return 0, 0
 
+    guarded = os.path.normcase(os.path.abspath(protect)) if protect else None
+
+    def drop_oldest() -> bool:
+        for i, f in enumerate(files):
+            if os.path.normcase(os.path.abspath(f)) == guarded:
+                continue
+            try:
+                os.remove(f)
+            except OSError:
+                return False
+            files.pop(i)
+            return True
+        return False
+
     removed = 0
-    while len(files) > keep:
-        try:
-            os.remove(files.pop(0))
-            removed += 1
-        except OSError:
-            break
+    while len(files) > keep and drop_oldest():
+        removed += 1
 
     def total() -> int:
         return sum(os.path.getsize(f) for f in files if os.path.exists(f))
 
-    while files and max_bytes and total() > max_bytes:
-        try:
-            os.remove(files.pop(0))
-            removed += 1
-        except OSError:
-            break
+    while files and max_bytes and total() > max_bytes and drop_oldest():
+        removed += 1
 
     return removed, total()
 
@@ -450,6 +465,7 @@ def cmd_sensor(args: argparse.Namespace) -> int:
 
     from .capture.live import CaptureUnavailable, LiveCapture, available
     from .core.audit_log import AuditLog
+    from .core.health import write_sensor_state
     from .intel.baseline import BaselineStore
 
     ok, why = available()
@@ -458,7 +474,8 @@ def cmd_sensor(args: argparse.Namespace) -> int:
         return 1
 
     os.makedirs(args.out, exist_ok=True)
-    log = AuditLog(args.audit_log or None, actor="sensor")
+    log = AuditLog(args.audit_log or None, actor="sensor",
+                   max_bytes=args.audit_max_mb * (1 << 20), backups=args.audit_backups)
     running = {"go": True}
 
     def stop(_sig, _frm):
@@ -495,6 +512,9 @@ def cmd_sensor(args: argparse.Namespace) -> int:
         if stats["packets"] == 0:
             print(f"  [{stamp}] no IPsec traffic observed")
             os.path.exists(pcap_path) and os.remove(pcap_path)
+            # A quiet link is a completed window, not a stalled sensor.
+            write_sensor_state(args.out, window=window, window_seconds=args.window,
+                               packets=0, evidence=None)
             continue
 
         # A capture that silently lost packets yields a misleading assessment,
@@ -511,7 +531,8 @@ def cmd_sensor(args: argparse.Namespace) -> int:
 
         drifts = []
         if args.db:
-            with BaselineStore(args.db) as store:
+            with BaselineStore(args.db, retain_per_peer=args.retain_observations,
+                               retain_days=args.retain_days) as store:
                 drifts = store.record(assessment)
 
         # Evidence handling. The assessment is already complete at this point,
@@ -522,8 +543,15 @@ def cmd_sensor(args: argparse.Namespace) -> int:
             retained = 0
         else:
             _removed, retained = _prune_evidence(
-                args.out, args.retain, args.max_disk_mb * (1 << 20)
+                args.out, args.retain, args.max_disk_mb * (1 << 20), protect=pcap_path
             )
+
+        write_sensor_state(
+            args.out, window=window, window_seconds=args.window,
+            packets=stats["packets"], score=assessment.score(),
+            grade=assessment.grade(),
+            evidence=None if args.no_evidence else os.path.basename(pcap_path),
+        )
 
         counts = assessment.counts()
         disk_note = f"  {retained / (1 << 20):.0f}MB kept" if retained else ""
@@ -542,6 +570,39 @@ def cmd_sensor(args: argparse.Namespace) -> int:
             exit_code = max(exit_code, 2)
 
     return exit_code
+
+
+def cmd_healthcheck(args: argparse.Namespace) -> int:
+    """Exit 0 / 1 / 2 for a healthy / degraded / failed sensor deployment."""
+    from .core import health
+
+    checks = health.run_checks(
+        model_dir=args.models,
+        baseline_db=args.db or None,
+        evidence_dir=args.out,
+        max_disk_bytes=args.max_disk_mb * (1 << 20),
+        max_window_bytes=args.max_window_mb * (1 << 20),
+        no_evidence=args.no_evidence,
+        audit_log=args.audit_log or None,
+        audit_max_bytes=args.audit_max_mb * (1 << 20),
+        audit_backups=args.audit_backups,
+        stale_after=args.stale_after,
+    )
+    status = health.overall(checks)
+
+    if args.json:
+        print(json.dumps({"status": health.STATUS_NAMES[status], "exit_code": status,
+                          "checks": [c.to_dict() for c in checks]}, indent=2))
+        return status
+
+    tags = {health.OK: _c("32", " ok "), health.DEGRADED: _c("33", "WARN"),
+            health.FAILED: _c("1;31", "FAIL")}
+    print()
+    print(_c("1", "CipherGuard sensor healthcheck"))
+    for c in checks:
+        print(f"  [{tags[c.status]}] {c.name:<12} {c.detail}")
+    print(f"\n  {health.STATUS_NAMES[status]} (exit {status})\n")
+    return status
 
 
 def cmd_verify_real(args: argparse.Namespace) -> int:
@@ -980,6 +1041,27 @@ def cmd_remediate(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _add_sensor_storage_args(p: argparse.ArgumentParser) -> None:
+    """Where a sensor writes and how much it may keep.
+
+    Shared by `sensor` and `healthcheck` so that a healthcheck given the same
+    flags as the sensor checks the sensor's actual configuration.
+    """
+    p.add_argument("--out", default="captures", help="directory for window captures")
+    p.add_argument("--db", default="cipherguard-baseline.db", help="baseline store")
+    p.add_argument("--max-window-mb", type=int, default=512,
+                   help="byte ceiling for a single window capture")
+    p.add_argument("--max-disk-mb", type=int, default=4096,
+                   help="total disk ceiling for retained captures")
+    p.add_argument("--no-evidence", action="store_true",
+                   help="discard each capture once assessed")
+    p.add_argument("--audit-log", default="cipherguard-audit.jsonl")
+    p.add_argument("--audit-max-mb", type=int, default=16,
+                   help="rotate the audit log at this size (0: never rotate)")
+    p.add_argument("--audit-backups", type=int, default=5,
+                   help="rotated audit log generations to keep")
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="cipherguard",
@@ -1051,20 +1133,25 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("interface", help="interface to monitor (a mirror/tap port)")
     p.add_argument("--window", type=int, default=60, help="seconds per capture window")
     p.add_argument("--windows", type=int, help="stop after N windows (default: forever)")
-    p.add_argument("--out", default="captures", help="directory for window captures")
-    p.add_argument("--db", default="cipherguard-baseline.db", help="baseline store")
     p.add_argument("--snaplen", type=int, default=2048)
-    p.add_argument("--max-window-mb", type=int, default=512,
-                   help="byte ceiling for a single window capture")
     p.add_argument("--retain", type=int, default=24,
                    help="window captures to keep as evidence")
-    p.add_argument("--max-disk-mb", type=int, default=4096,
-                   help="total disk ceiling for retained captures")
-    p.add_argument("--no-evidence", action="store_true",
-                   help="discard each capture once assessed")
+    p.add_argument("--retain-observations", type=int, default=DEFAULT_RETAIN_PER_PEER,
+                   help="baseline observations kept per link (0: no count ceiling)")
+    p.add_argument("--retain-days", type=float, default=DEFAULT_RETAIN_DAYS,
+                   help="drop baseline observations older than this (0: no age ceiling)")
     p.add_argument("--fail-under", type=int, metavar="N")
-    p.add_argument("--audit-log", default="cipherguard-audit.jsonl")
+    _add_sensor_storage_args(p)
     p.set_defaults(func=cmd_sensor)
+
+    p = sub.add_parser("healthcheck",
+                       help="check a sensor deployment; exit 0/1/2 healthy/degraded/failed")
+    _add_sensor_storage_args(p)
+    p.add_argument("--stale-after", type=float, metavar="SECONDS",
+                   help="last-window age that counts as degraded (default: two "
+                        "windows plus 120s; failed at three times this)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_healthcheck)
 
     p = sub.add_parser("verify-real",
                        help="validate the dissector against real public captures")

@@ -595,7 +595,8 @@ python -m cipherguard.cli analyze docker/captures/weak.pcap
 ## Tests
 
 ```bash
-python -m pytest tests/ -q     # 151 passed (140 + 7 skipped without real captures)
+python -m pytest tests/ -q                 # 274 passed, 14 skipped without real captures
+python -m pytest tests/ -q -m "not soak"   # skip the ~90 s of soak tests
 ```
 
 Coverage includes pcap round-trips, IPv4 checksum validity, IKEv1/IKEv2
@@ -659,6 +660,10 @@ Sensor on eth0  ·  300s windows  ·  baseline fleet.db
       DOWNGRADE 198.51.100.77|203.0.113.55: 128 -> 80 bits
 ```
 
+`setcap` on the interpreter is fine for trying the sensor out, but it grants raw
+sockets to every Python program on the host. For a standing deployment use the
+systemd unit below, which grants the capabilities to this one service only.
+
 Capture uses Linux `AF_PACKET` with a hand-assembled classic-BPF program to filter
 IKE and ESP frames in-kernel, avoiding third-party libpcap bindings and eliminating
 userspace copy overhead for non-IPsec traffic.
@@ -670,6 +675,131 @@ frames in memory where packet retention is not authorized.
 Two architectural guarantees are enforced:
 1. **Receive-only operation**: The capture socket cannot transmit or inject frames onto monitored segments.
 2. **Loss transparency**: Kernel packet drop counts are monitored and reported directly alongside posture scores to ensure dropped frames never silently distort an audit.
+
+### Running unattended
+
+A sensor is meant to run for weeks with nobody watching it. That requires two
+things: everything it writes has to be bounded, and something outside it has to
+be able to tell whether it is still working.
+
+**Everything that grows per window is bounded.** Each ceiling also protects the
+evidence behind the most recent assessment:
+
+| Grows every window | Bound (sensor flags, defaults) | Never deleted |
+|---|---|---|
+| Window captures | `--retain 24` files, `--max-disk-mb 4096` | The capture behind the most recent assessment, even if that one window exceeds the byte cap. Before this change, a single oversize window deleted itself right after it was assessed. |
+| Baseline observations | `--retain-observations 500` per link, `--retain-days 90` | The row that established each link's current baseline (the evidence behind "was N bits" in a downgrade alert). Also each baselined link's latest row, so a link that has gone quiet stays in the fleet view, and every row of the most recent assessment, even across a clock step. |
+| Audit log | `--audit-max-mb 16`, `--audit-backups 5` (`audit.jsonl.1` … `.5`) | The most recent record. Rotation runs before the write, so the record that triggers it lands in the fresh file. |
+
+Peers that never earned a baseline (withheld by the new-peer rate limit, which
+is what spoofed addresses look like) get no protection and age out completely.
+Existing baseline databases are migrated when opened.
+
+Audit appends and rotation run under an OS file lock (`audit.jsonl.lock`), so
+the sensor, the dashboard and an analyst's CLI can share one log. Each rotation
+step is an atomic `os.replace`. The regression test runs four processes
+appending through about 20 rotations and requires every line intact and present
+exactly once. During development the same harness was run with the lock
+removed: six writers produced 498 of 1,800 lines plus two torn ones, and five of
+the writers crashed on Windows sharing violations.
+
+**Health is checkable from outside.**
+
+```bash
+cipherguard --models /var/lib/cipherguard/models healthcheck \
+  --out /var/lib/cipherguard/captures --db /var/lib/cipherguard/baseline.db \
+  --audit-log /var/log/cipherguard/audit.jsonl
+echo $?        # 0 healthy · 1 degraded · 2 failed   (--json for machines)
+```
+
+| Check | Failed (exit 2) | Degraded (exit 1) |
+|---|---|---|
+| `model` | Files don't match `MANIFEST.sha256`, the manifest is missing, or the feature schema changed. The sensor would die at load time on every window. | No model installed (ESP inference disabled) |
+| `baseline_db` | The store exists but can't be written (probed with a rolled-back write), or isn't a database | Locked for more than 5 s |
+| `disk` | Free space is less than the part of the retention ceiling not yet used (evidence cap + one in-flight window + every audit generation) | Less than 20% margin over that, or audit rotation disabled |
+| `last_window` | The last completed window is older than three times the stale threshold | Older than the stale threshold (two windows + 120 s by default, or `--stale-after`), no window recorded yet, or a timestamp in the future |
+
+The sensor records every completed window, including quiet ones with no IPsec
+traffic, in `<out>/.sensor-state.json`. It writes that file atomically, so a
+live process that has stopped completing windows shows up as stale. The
+healthcheck never unpickles the model and never creates the database. Pass it
+the same storage flags as the sensor so it checks the real configuration.
+
+**systemd.** [deploy/cipherguard-sensor.service](deploy/cipherguard-sensor.service)
+runs the sensor as a dedicated `cipherguard` system user. Its settings:
+
+- Capabilities: `CAP_NET_RAW` and `CAP_NET_ADMIN` only, as both the ambient and
+  the bounding set, with `NoNewPrivileges`.
+- Filesystem: `ProtectSystem=strict`, with writes allowed only under
+  `ReadWritePaths=/var/lib/cipherguard /var/log/cipherguard`.
+- Sandboxing: `ProtectHome`, `PrivateTmp`, `PrivateDevices`, and the kernel
+  protections. Address families are limited to `AF_PACKET AF_UNIX AF_NETLINK`,
+  because the sensor never opens an IP socket.
+- Restarts: `Restart=on-failure`, capped at five starts in ten minutes, so a
+  model that fails its manifest check doesn't loop forever.
+- Backstop: `MemoryMax=2G`.
+
+A test parses `ExecStart` with the real CLI parser and checks that every path
+the sensor writes is inside `ReadWritePaths`. The unit has **not** been started
+under systemd or checked with `systemd-analyze verify`, because this project was
+developed on Windows. Treat the first start on a Linux sensor as its first real
+test.
+
+#### Soak test
+
+[scripts/soak.py](scripts/soak.py) replays captures through the same per-window
+steps as `cipherguard sensor`: stage the window, analyze (reloading and
+re-verifying the model each time, as the sensor does), audit log, baseline
+store, evidence pruning, state file. It samples RSS, open descriptors, baseline
+DB size and rows, audit log size across generations, and retained evidence. It
+exits 1 if any of these exceeds its stated bound, or if retention ever removes
+the most recent assessment's capture or audit record. It does **not** exercise
+live `AF_PACKET` capture.
+
+```bash
+python scripts/soak.py --duration 3600 --json-out soak.json
+```
+
+CI runs two soak tests:
+
+- A 60-second variant, which requires that observation pruning, evidence
+  pruning and log rotation all actually ran. A bound that is never reached
+  proves nothing.
+- A 20-second run with an injected 4 MB-per-window leak, which must fail on RSS
+  and on nothing else. This checks that the detector detects.
+
+**What has actually been measured: one 30-minute run.** No longer soak has been
+run, so the claim is "flat for 30 minutes of accelerated windows", not "stable
+for weeks".
+
+| | |
+|---|---|
+| Command | `python scripts/soak.py --duration 1800 --sample-every 10 --warmup 60` (default bounds) |
+| Host | Windows 11 laptop, Python 3.11.9. Not Linux, not under systemd |
+| Input | The six captures in `samples/`, cycled |
+| Wall time | 1,822 s. About 90 s of that was the laptop in Modern Standby (13:39:18–13:41:08 in the system event log), when the process made no progress. Roughly 29 minutes of actual running. |
+| Windows processed | 7,882 (4.3 per second, each a full analyze with model reload) |
+| Samples | 175, of which 169 were after the 60 s warm-up |
+
+| Metric | After warm-up | Bound | Result |
+|---|---|---|---|
+| RSS | 167.0 – 178.2 MB; peak 0.5 MB above the warm-up peak; ended at 174.8 MB | +48 MB | pass |
+| Open handles (Windows) | 689 – 698; never above the warm-up peak of 705 | +16 | pass |
+| Baseline DB | 84 rows, 57,344 bytes, identical in every sample from t=30 s to the end | rows ≤ peers × (20 + 1) = 84; 4 MB | pass |
+| Audit log, all generations | 47 – 63 KB across 4 files | 65,536 bytes | pass |
+| Retained evidence | 5 files, ≤ 3.2 MB | 5 files; 4 MB + one window | pass |
+| Latest-assessment evidence and audit record | present after every one of 7,882 windows | — | 0 violations |
+
+In that run, retention was working the whole time rather than sitting idle
+below its limits: 10,427 observation rows pruned, 7,877 window captures pruned,
+and 394 audit log rotations. The per-window rate is far above a real sensor's
+(one window per 60–300 s), so 7,882 windows is roughly 5½ days of 60-second
+windows or 27 days of 300-second windows. But it compresses only the per-window
+work. It says nothing about wall-clock effects such as the 90-day age ceiling,
+long-lived kernel sockets, or real traffic. The retention settings were
+deliberately small (20 rows per link, 16 KiB log files) so that steady state
+was reached within seconds. The production defaults are larger but use the
+same code paths.
 
 ## Retargeting the policy
 
@@ -713,6 +843,7 @@ to prevent misspellings from silently bypassing security checks.
 | Silent feature drift | Loading refuses if the schema hash differs. This is the failure that matters: array shapes stay compatible, the model loads, and predictions are quietly computed from columns that no longer mean what the model was fitted on. Nothing raises and the output looks plausible. |
 | Network exposure | Non-loopback binds refused unless authenticated or explicitly overridden. |
 | Resource bounds | Flow-table capacity limits, capture length validation, upload ceilings. |
+| Unattended operation | Observation retention, audit log rotation, evidence retention that never removes the latest assessment's capture, `cipherguard healthcheck` (exit 0/1/2), a sandboxed systemd unit, and a soak test. See [Running unattended](#running-unattended). |
 
 ```bash
 CIPHERGUARD_TOKEN=$(openssl rand -hex 32) \
