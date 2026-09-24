@@ -4,8 +4,14 @@ title CipherGuard - Dual-Layer Wireless and VPN Security Platform
 cls
 
 REM Ensure we are running from the project directory containing cipherguard
-if exist "%~dp0cipherguard\cipherguard\cli.py" (
+if exist "%~dp0cipherguard\cli.py" (
+    cd /d "%~dp0"
+) else if exist "%~dp0cipherguard\cipherguard\cli.py" (
     cd /d "%~dp0cipherguard"
+) else if exist "%~dp0final\cipherguard\cipherguard\cli.py" (
+    cd /d "%~dp0final\cipherguard"
+) else if exist "%~dp0..\cipherguard\cli.py" (
+    cd /d "%~dp0.."
 ) else (
     cd /d "%~dp0"
 )
@@ -57,7 +63,13 @@ REM 4. Windows py launcher
 py -3 -c "import numpy" >nul 2>nul && set "PY_EXE=py -3"
 if defined PY_EXE goto :python_ready
 
-REM 5. Standard installed Python distributions
+REM 5. WindowsApps / Microsoft Store Python
+if exist "%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe" (
+    "%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe"
+)
+if defined PY_EXE goto :python_ready
+
+REM 6. Standard installed Python distributions in LocalAppData
 if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
     "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
 )
@@ -73,7 +85,33 @@ if exist "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" (
 )
 if defined PY_EXE goto :python_ready
 
-REM 6. User profile venv (only if numpy is verified installed)
+REM 7. Program Files / System-wide Python distributions
+if exist "%ProgramFiles%\Python312\python.exe" (
+    "%ProgramFiles%\Python312\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%ProgramFiles%\Python312\python.exe"
+)
+if defined PY_EXE goto :python_ready
+
+if exist "%ProgramFiles%\Python311\python.exe" (
+    "%ProgramFiles%\Python311\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%ProgramFiles%\Python311\python.exe"
+)
+if defined PY_EXE goto :python_ready
+
+if exist "%ProgramFiles%\Python310\python.exe" (
+    "%ProgramFiles%\Python310\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%ProgramFiles%\Python310\python.exe"
+)
+if defined PY_EXE goto :python_ready
+
+if exist "C:\Python312\python.exe" (
+    "C:\Python312\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=C:\Python312\python.exe"
+)
+if defined PY_EXE goto :python_ready
+
+if exist "C:\Python311\python.exe" (
+    "C:\Python311\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=C:\Python311\python.exe"
+)
+if defined PY_EXE goto :python_ready
+
+REM 8. User profile venv (only if numpy is verified installed)
 if exist "%USERPROFILE%\venv\Scripts\python.exe" (
     "%USERPROFILE%\venv\Scripts\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%USERPROFILE%\venv\Scripts\python.exe"
 )
@@ -89,9 +127,14 @@ if not defined PY_EXE if exist "%~dp0.venv\Scripts\python.exe" set "PY_EXE=%~dp0
 if not defined PY_EXE if exist "%~dp0venv\Scripts\python.exe" set "PY_EXE=%~dp0venv\Scripts\python.exe"
 if not defined PY_EXE where python >nul 2>nul && set "PY_EXE=python"
 if not defined PY_EXE where py >nul 2>nul && set "PY_EXE=py -3"
+if not defined PY_EXE if exist "%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe" set "PY_EXE=%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe"
 if not defined PY_EXE if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
 if not defined PY_EXE if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
 if not defined PY_EXE if exist "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
+if not defined PY_EXE if exist "%ProgramFiles%\Python312\python.exe" set "PY_EXE=%ProgramFiles%\Python312\python.exe"
+if not defined PY_EXE if exist "%ProgramFiles%\Python311\python.exe" set "PY_EXE=%ProgramFiles%\Python311\python.exe"
+if not defined PY_EXE if exist "C:\Python312\python.exe" set "PY_EXE=C:\Python312\python.exe"
+if not defined PY_EXE if exist "C:\Python311\python.exe" set "PY_EXE=C:\Python311\python.exe"
 
 if not defined PY_EXE (
     echo [ERROR] Python 3.10+ was not found on your system.
@@ -123,8 +166,14 @@ REM Ensure PYTHONPATH includes current project directory for seamless module res
 set "PYTHONPATH=%CD%;!PYTHONPATH!"
 
 REM -------------------------------------------------------------------------
-REM Step 3: Pre-scan and synchronize live physical Wi-Fi and VPN telemetry
+REM Step 3: Verify trained ML models and synchronize live telemetry
 REM -------------------------------------------------------------------------
+if not exist "models\cnn.npz" (
+    echo [*] Pre-trained models not found in models/. Generating baseline model...
+    !PY_EXE! -m cipherguard.cli train --samples 30 --epochs 20
+    echo.
+)
+
 if exist "scripts\sync_live_wifi.py" (
     echo [*] Auditing local wireless RF spectrum and hardware telemetry...
     !PY_EXE! scripts\sync_live_wifi.py
@@ -155,7 +204,7 @@ REM Open browser in background
 start "" "http://127.0.0.1:8000/"
 
 REM Start dashboard server bound to 0.0.0.0 with insecure-bind for multi-device LAN access
-!PY_EXE! -m cipherguard.cli serve --host 0.0.0.0 --port 8000 --insecure-bind
+!PY_EXE! -m cipherguard.cli serve --host 0.0.0.0 --port 8000 --insecure-bind %*
 
 REM If server exited abnormally (not from Ctrl+C / SIGINT 130 or STATUS_CONTROL_C_EXIT)
 if !errorlevel! neq 0 if !errorlevel! neq 130 if !errorlevel! neq -1073741510 (

@@ -404,15 +404,15 @@
 
     <!-- IPsec Single Capture Analysis Mode -->
     <div id="ipsec-single-view">
-      <section class="ribbon-block">
+      <section class="ribbon-block" aria-labelledby="ribbon-title">
         <p class="ribbon-lede">
-          A passive sensor on a mirror port sees every byte of an IPsec deployment and
-          can read almost none of it. <strong>Everything left of the boundary is parsed
-          directly</strong> from cleartext headers. <strong>Everything right of it is
-          encrypted</strong> &mdash; including the ESP cipher suite itself, which is
-          negotiated inside IKE_AUTH and never appears in the clear. That side is
-          inferred from packet framing, never decrypted.
+          <strong>Left of the key boundary is parsed</strong> from cleartext.
+          <strong>Right of it is encrypted</strong>: inferred from framing, never decrypted.
         </p>
+        <div class="ribbon-head">
+          <h2 id="ribbon-title" class="ribbon-title">One link on the wire</h2>
+          <div class="ribbon-link" id="ribbon-link" aria-live="polite">No capture assessed yet.</div>
+        </div>
         <div class="ribbon" id="ribbon"></div>
         <div class="ribbon-legend">
           <span><i class="swatch obs"></i> Parsed from the wire</span>
@@ -444,8 +444,20 @@
             </div>
           </div>
           <div class="statgrid" id="stats" style="margin-top:18px"></div>
+          <p class="stat-note" id="stat-note" hidden></p>
         </section>
       </div>
+
+      <section class="panel links-panel" id="links-panel" aria-labelledby="links-title" style="margin-bottom:18px">
+        <h2 id="links-title">Links</h2>
+        <div class="sub" id="links-sub">One entry per gateway pair, worst first. Select one to see its handshake, tunnel and findings together.</div>
+        <div class="links-layout">
+          <ul class="link-list" id="link-list" aria-label="Gateway links, worst first"></ul>
+          <div class="link-detail" id="link-detail" tabindex="-1" aria-live="polite">
+            <div class="empty">No links yet.</div>
+          </div>
+        </div>
+      </section>
 
       <div class="grid cols-2" style="margin-bottom:18px">
         <section class="panel">
@@ -462,7 +474,13 @@
       </div>
 
       <section class="panel" style="margin-bottom:18px">
-        <h2>Findings</h2>
+        <div class="findings-head">
+          <h2>Findings</h2>
+          <div class="seg" role="group" aria-label="Group findings">
+            <button type="button" class="seg-btn" id="fview-rule" data-fview="rule" aria-pressed="true">By rule</button>
+            <button type="button" class="seg-btn" id="fview-link" data-fview="link" aria-pressed="false">By link</button>
+          </div>
+        </div>
         <div class="sub" id="findsub">Select a finding to see the evidence and the fix.</div>
         <div id="findings"><div class="empty">No findings yet.</div></div>
       </section>
@@ -1099,6 +1117,23 @@
         <pre class="cbom-json-view"><code id="cbom-json-code">Loading Cryptographic Bill of Materials...</code></pre>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ESP inference evidence: the RFC 4303 working behind one tunnel's attribution -->
+<div id="evidence-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true"
+     aria-labelledby="evidence-modal-title" aria-describedby="evidence-modal-subtitle">
+  <div class="evidence-card" role="document">
+    <div class="evidence-head">
+      <div>
+        <div class="evidence-kicker">Arithmetic from RFC 4303 framing &middot; no learned model</div>
+        <h2 id="evidence-modal-title">How this tunnel was attributed</h2>
+        <div id="evidence-modal-subtitle" class="evidence-sub"></div>
+      </div>
+      <button type="button" id="evidence-modal-close" class="modal-close-btn"
+              aria-label="Close explanation (Escape)">&times;</button>
+    </div>
+    <div id="evidence-body" class="evidence-body"></div>
   </div>
 </div>
 

@@ -227,6 +227,35 @@ scored 24/100 before the fix and 18/100 after.
 Neither was findable without external traffic. That is the argument for this
 section existing.
 
+### Validating ESP inference against real captures with sidecar labels
+
+The ESP suite is negotiated inside encrypted `IKE_AUTH`, so nothing on the wire
+can label an ESP flow without endpoint configuration. CipherGuard supports
+user-supplied sidecar labels in `<capture>.label.json`:
+
+```json
+{
+  "source": "swanctl --list-sas on the responder",
+  "flows": [
+    {"spi": "0xc3a1f00d", "suite": "AES-GCM-256 (ICV 16)"},
+    {"peers": ["203.0.113.10", "198.51.100.20"], "suite": "AES-CBC-128 / HMAC-SHA1-96"}
+  ]
+}
+```
+
+Validate labelled captures at framing-class level:
+```bash
+cipherguard label-check path/to/capture.pcap
+```
+
+Or run `cipherguard verify-real`, which reports IKE and ESP validation separately.
+
+To include labelled real captures in training with **leave-one-capture-out** evaluation:
+```bash
+cipherguard train --include-real samples/real/
+```
+Provenance is stored in `models/meta.json` with exact counts of real vs synthetic flows.
+
 ### Cross-model validation: breaking the circularity
 
 Same-model held-out accuracy has a problem worth naming rather than glossing:
@@ -730,18 +759,22 @@ than none.
   **115,000 packets/sec** for the full pipeline and **235,000 packets/sec** for
   the reader alone. That is the portable pure-Python path; the DPDK/C++
   ingestion path described in the proposal is a separate component and is not in
-  this repository, so no line-rate claim is made.
+  this repository, so no line-rate claim is made. Rates depend on the host:
+  reproduce them with `cipherguard bench`, which generates a 200,000-packet
+  capture and reports the median of interleaved runs, model load excluded. The
+  dashboard shows no packets/sec figure for captures under 10,000 packets,
+  because a rate measured over a few milliseconds is noise.
 - **Live capture is Linux-only** and needs `CAP_NET_RAW`. It degrades with an
   explanation rather than a traceback elsewhere.
-- **The IKE dissector is now validated against five real captures**, but the
-  **ESP inference model has still never seen a real tunnel.** The public corpus
-  contains IKE handshakes, not sustained ESP traffic, so framing inference
-  remains validated only across generators.
-- **The shipped model has never seen traffic from a real gateway.** Cross-model
-  validation against an independent generator substantially raises confidence
-  that it keys on protocol structure rather than generator artefacts, and it is
-  not the same thing as field validation. Run the Docker testbed and retrain
-  before operational use. This remains the single largest gap in the project.
+- **The IKE dissector is validated against five real captures**, and the
+  **ESP inference model can now be validated against real tunnels using sidecar labels**
+  (`cipherguard label-check` and `verify-real`). The public Wireshark corpus
+  contains IKE handshakes without sustained ESP; endpoint ground truth supplied via
+  `<capture>.label.json` closes that gap.
+- **The default shipped model is trained synthetically for reproducible baseline accuracy.**
+  When real tunnels are available, retrain with `cipherguard train --include-real <dir>`
+  to evaluate with leave-one-capture-out validation and record exact corpus provenance
+  in `meta.json`.
 - **Vendor fingerprinting is best-effort.** Many gateways suppress vendor IDs;
   remediation then defaults to strongSwan syntax.
 

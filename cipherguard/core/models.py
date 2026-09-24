@@ -237,10 +237,22 @@ class EspFlow:
     predicted_suite: str | None = None
     confidence: float = 0.0
     ranked: list[tuple[str, float]] = field(default_factory=list)
+    exclusions: list[tuple[str, str]] = field(default_factory=list)  # (suite, reason)
+    inference_notes: list[dict[str, Any]] = field(default_factory=list)
+    framing_trace: dict[str, Any] | None = None  # core.framing.evaluate() output
 
     @property
     def key(self) -> str:
         return f"{self.src}->{self.dst}:0x{self.spi:08x}"
+
+    def framing_arithmetic(self) -> dict[str, Any]:
+        """The RFC 4303 working for this flow: persisted by the classifier when
+        one ran, otherwise computed here, since the arithmetic needs no model."""
+        if self.framing_trace is None:
+            from .framing import evaluate
+
+            self.framing_trace = evaluate(self)
+        return self.framing_trace
 
     @property
     def duration(self) -> float:
@@ -277,6 +289,10 @@ class EspFlow:
 
     def to_dict(self) -> dict[str, Any]:
         cls_name, members, mass = self.framing()
+        trace = self.framing_arithmetic()
+        exclusions = self.exclusions or [
+            (r["suite"], r["reason"]) for r in trace["suites"] if r["eliminated_by"]
+        ]
         return {
             "key": self.key,
             "spi": f"0x{self.spi:08x}",
@@ -296,6 +312,20 @@ class EspFlow:
             "framing_confidence": round(mass, 4),
             "ambiguous": len(members) > 1,
             "ranked": [(n, round(p, 4)) for n, p in self.ranked[:3]],
+            # The deterministic evidence, in a form a reviewer can recompute.
+            "exclusions": [{"suite": s, "reason": r} for s, r in exclusions],
+            "inference_notes": self.inference_notes or trace["notes"],
+            "residues": trace["residues"],
+            "length_granularity": trace["granularity"],
+            "granularity_usable": trace["granularity_usable"],
+            "distinct_lengths": trace["distinct_lengths"],
+            "mean_entropy": trace["mean_entropy"],
+            "framing_arithmetic": {
+                k: trace[k] for k in (
+                    "method", "lengths_observed", "entropy_samples", "constraints",
+                    "suites", "survivors", "classes", "fallback",
+                )
+            },
         }
 
 
@@ -370,6 +400,8 @@ class Assessment:
         return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
     def to_dict(self) -> dict[str, Any]:
+        from .grouping import review_index
+
         return {
             "capture": self.capture,
             "started": self.started,
@@ -381,4 +413,7 @@ class Assessment:
             "sessions": [s.to_dict() for s in self.sessions],
             "flows": [f.to_dict() for f in self.flows],
             "findings": [f.to_dict() for f in self.findings],
+            # finding_groups, links, unlinked_findings: indexes into the lists
+            # above, so the grouping is computed once, here, for every client
+            **review_index(self),
         }

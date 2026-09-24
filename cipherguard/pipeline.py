@@ -31,7 +31,7 @@ def analyze(
     if not os.path.exists(capture):
         raise FileNotFoundError(capture)
 
-    started = time.time()
+    started = time.perf_counter()
     messages: list[IkeMessage] = []
     tracker = EspTracker()
 
@@ -61,14 +61,23 @@ def analyze(
     flows = tracker.results(min_packets=min_esp_packets)
     _attribute_volume(sessions, flows)
 
+    # Model loading is timed apart from packet processing. It is a fixed cost
+    # (unpickling a forest, reading CNN weights, hashing both against the
+    # manifest) that dominates any small capture: on the demo captures it was
+    # most of the wall time, so dividing packets by total time reported a rate
+    # some 25x below the pipeline's real steady state.
     model_loaded = False
     model_metrics: dict = {}
+    model_load_seconds = 0.0
     if SuiteClassifier.is_trained(model_dir):
+        load_started = time.perf_counter()
         model = SuiteClassifier.load(model_dir)
+        model_load_seconds = time.perf_counter() - load_started
         model.annotate(flows)
         model_loaded = True
         model_metrics = model.metrics
 
+    elapsed = time.perf_counter() - started
     assessment = Assessment(
         capture=os.path.basename(capture),
         started=datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -83,7 +92,11 @@ def analyze(
             "esp_flows_tracked": len(tracker.all_flows()),
             "esp_flows_assessed": len(flows),
             "capture_seconds": round((last_ts or 0) - (first_ts or 0), 3),
-            "analysis_seconds": round(time.time() - started, 3),
+            "analysis_seconds": round(elapsed, 3),
+            "model_load_seconds": round(model_load_seconds, 3),
+            # everything except the model load: reading, dissection, flow
+            # tracking and inference. This is what throughput is measured on.
+            "processing_seconds": round(max(elapsed - model_load_seconds, 0.0), 4),
             "model_loaded": model_loaded,
             "model_metrics": model_metrics,
             "parse_errors": sum(len(m.parse_errors) for m in messages),
@@ -115,18 +128,39 @@ def _attribute_volume(sessions, flows) -> None:
         sess.observed_seconds = duration
 
 
+MIN_PACKETS_FOR_RATE = 10_000
+
+
 def throughput_estimate(assessment: Assessment) -> dict:
-    """Sustained analysis rate, reported honestly as packets per second measured
-    on this host rather than as a claimed line rate."""
+    """Packet-processing rate on this host, or an honest refusal to state one.
+
+    The rate is packets over processing time, which excludes the fixed cost of
+    loading the model. Below MIN_PACKETS_FOR_RATE packets no rate is given at
+    all: on a capture of a few thousand packets the run is over in
+    milliseconds, dominated by interpreter warm-up and cache effects, and any
+    packets/sec figure derived from it is noise that contradicts the measured
+    steady state. A misleading number is worse than no number, so the caller
+    gets the timings and the reason instead.
+    """
     stats = assessment.stats
-    elapsed = max(stats.get("analysis_seconds", 0), 1e-6)
-    pps = stats.get("packets_read", 0) / elapsed
+    packets = stats.get("packets_read", 0)
+    processing = stats.get("processing_seconds", stats.get("analysis_seconds", 0))
+    measurable = packets >= MIN_PACKETS_FOR_RATE and processing > 0
     return {
-        "packets_per_second": round(pps, 1),
+        "measurable": measurable,
+        "packets_per_second": round(packets / processing, 1) if measurable else None,
+        "packets_read": packets,
+        "min_packets_for_rate": MIN_PACKETS_FOR_RATE,
+        "processing_seconds": processing,
+        "model_load_seconds": stats.get("model_load_seconds", 0.0),
         "analysis_seconds": stats.get("analysis_seconds"),
         "note": (
-            "Measured single-threaded in the pure-Python reference reader. The "
-            "C++/DPDK ingestion path is a separate component; this figure is the "
-            "portable path's real rate, not a line-rate claim."
+            "Measured single-threaded in the pure-Python reference reader, "
+            "excluding model load. The C++/DPDK ingestion path is a separate "
+            "component; this is the portable path's real rate, not a line-rate claim."
+            if measurable else
+            f"Capture too small to measure throughput: {packets:,} packets, fewer "
+            f"than the {MIN_PACKETS_FOR_RATE:,} needed for a stable rate. Run "
+            "`cipherguard bench` for a reproducible figure."
         ),
     }

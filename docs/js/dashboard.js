@@ -26,7 +26,9 @@ const state = {
   diffAssessmentA: null,   // baseline capture A assessment
   diffAssessmentB: null,   // hardened capture B assessment
   spectrumBand: "2.4",     // "2.4" or "5"
-  complianceFilter: "all"  // "all", "nist", "mitre", "cnsa"
+  complianceFilter: "all", // "all", "nist", "mitre", "cnsa"
+  selectedLink: null,      // link id ("a~b") shown in the ribbon and link panel
+  findingsView: "rule"     // "rule" (grouped) or "link"
 };
 
 /* ---------------------------------------------------------------- helpers */
@@ -36,7 +38,6 @@ function esc(s){
     c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 
-function shortSpi(h){ return h ? h.slice(0, 8) + "..." : "\u2014"; }
 
 function pickIkeProposal(s){
   // Prefer the responder's selection: that is what was actually agreed, as
@@ -444,29 +445,49 @@ const DEFAULT_RIBBON = [
   {d:"inf", n:"ESP ciphertext",   v:"suite inferred from framing"}
 ];
 
-function renderRibbonTo(targetId, a){
+/* Links come from the server (Assessment.to_dict()["links"]), worst first.
+   These helpers only look them up; no grouping or ordering happens here. */
+function worstLink(a){ return (a && a.links && a.links[0]) || null; }
+function linkById(a, id){
+  return (id && a && (a.links || []).find(l => l.id === id)) || null;
+}
+function linkLabel(l){ return `${l.peers[0]} ↔ ${l.peers[1]}`; }
+
+/* The ribbon describes ONE link: the selected one, or the worst in the
+   capture. Payloads from before links existed fall back to the first
+   session and flow. Nothing is truncated: SPIs and vendor IDs wrap. */
+function renderRibbonTo(targetId, a, link){
   const el = $(targetId);
   if (!el) return;
   const parts = DEFAULT_RIBBON.map(f => Object.assign({}, f));
   if (a){
-    const s = a.sessions && a.sessions[0];
+    link = link || worstLink(a);
+    const s = link ? a.sessions[link.sessions[0]] : (a.sessions || [])[0];
+    const f = link ? a.flows[link.flows[0]] : (a.flows || [])[0];
+    if (link) parts[0].v = linkLabel(link);
     if (s){
       const prop = pickIkeProposal(s);
-      parts[2].v = `${s.version} · ${shortSpi(s.initiator_spi)}`;
+      parts[2].v = `${s.version} · initiator SPI ${s.initiator_spi}`;
       if (prop) parts[3].v = prop.transforms.map(pretty).join(" · ");
       const vid = (s.vendor_ids || [])[0];
-      if (vid) parts[4].v = vid.length > 34 ? vid.slice(0, 34) + "…" : vid;
+      if (vid) parts[4].v = vid;
+    } else if (link){
+      parts[2].v = parts[3].v = parts[4].v = "no IKE observed on this link";
     }
-    const f = a.flows && a.flows[0];
     if (f){
-      parts[7].v = `SPI ${f.spi} · ${f.packets} packets`;
+      if (f.encapsulated) parts[1].v = "UDP 4500 · ESP in NAT-T";
+      parts[7].v = `SPI ${f.spi} · ${f.packets} packets`
+        + (link && link.tunnels > 1 ? ` · 1 of ${link.tunnels} tunnels` : "");
       parts[8].v = `${f.framing_class || f.predicted_suite || "unresolved"} `
         + `(${Math.round((f.framing_confidence ?? f.confidence ?? 0) * 100)}%)`;
+    } else if (link){
+      parts[7].v = parts[8].v = "no ESP observed on this link";
     }
   }
   el.innerHTML = parts.map(f =>
     f.d === "seam"
-      ? `<div class="seam" aria-hidden="true"></div>`
+      ? `<div class="seam" role="separator" aria-label="Key boundary: fields after this are encrypted">`
+        + `<span class="seam-label">key boundary</span></div>`
       : `<div class="field ${f.d}">`
       + `<div class="fname">${esc(f.n)}</div>`
       + `<div class="fval">${esc(f.v)}</div></div>`
@@ -474,7 +495,188 @@ function renderRibbonTo(targetId, a){
 }
 
 function renderRibbon(a){
-  renderRibbonTo("ribbon", a);
+  const link = linkById(a, state.selectedLink) || worstLink(a);
+  renderRibbonTo("ribbon", a, link);
+  const label = $("ribbon-link");
+  if (!label) return;
+  if (!a){ label.textContent = "No capture assessed yet."; return; }
+  if (!link){ label.textContent = "No gateway pair observed in this capture."; return; }
+  const sev = link.worst_severity;
+  label.innerHTML = `Showing <span class="mono">${esc(linkLabel(link))}</span>`
+    + (sev ? ` <span class="sev-mark ${esc(sev)}">${esc(sev)}</span>` : ` <span class="ribbon-quiet">no findings</span>`)
+    + (link === worstLink(a) && (a.links || []).length > 1
+        ? ` <span class="ribbon-quiet">worst of ${a.links.length} links</span>` : "")
+    + ((a.links || []).length > 1
+        ? ` <button type="button" class="linkish ribbon-choose">Choose another link</button>` : "");
+  const choose = label.querySelector(".ribbon-choose");
+  if (choose) choose.onclick = () => {
+    $("links-panel").scrollIntoView({behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start"});
+    const current = document.querySelector(`#link-list .link-item[aria-current="true"]`);
+    if (current) current.focus({preventScroll: true});
+  };
+}
+
+function prefersReducedMotion(){
+  return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+}
+
+/* ------------------------------------------------------------------ links */
+
+function readHash(){
+  const p = new URLSearchParams(location.hash.replace(/^#/, ""));
+  return {capture: p.get("capture"), link: p.get("link")};
+}
+
+function writeHash(capture, link){
+  const p = new URLSearchParams();
+  if (capture) p.set("capture", capture);
+  if (link) p.set("link", link);
+  // replaceState: selecting links should not fill the Back button with
+  // entries, and it does not fire hashchange, so there is no feedback loop.
+  history.replaceState(null, "", "#" + p.toString());
+}
+
+function linkMeta(l){
+  const n = l.findings.length;
+  const st = l.strength;
+  return [
+    l.worst_severity ? `worst ${l.worst_severity}` : "no findings",
+    `${n} finding${n === 1 ? "" : "s"}`,
+    `${l.tunnels} tunnel${l.tunnels === 1 ? "" : "s"}`,
+    st ? `${st.classical_bits}/${st.quantum_bits} bits` : "no IKE observed"
+  ].join(" · ");
+}
+
+function renderLinks(a){
+  const list = $("link-list"), detail = $("link-detail");
+  if (!list || !detail) return;
+  const links = a.links || [];
+  if (!links.length){
+    list.innerHTML = "";
+    detail.innerHTML = `<div class="empty">No gateway pair observed in this capture.</div>`;
+    return;
+  }
+  $("links-sub").textContent = `${links.length} gateway pair${links.length === 1 ? "" : "s"}, `
+    + "worst first. Select one to see its handshake, tunnel and findings together.";
+  list.innerHTML = links.map(l => `<li>
+      <button type="button" class="link-item" data-link="${esc(l.id)}"
+              aria-current="${l.id === state.selectedLink ? "true" : "false"}">
+        <span class="link-bar ${esc(l.worst_severity || "none")}" aria-hidden="true"></span>
+        <span class="link-main">
+          <span class="link-peers">${esc(linkLabel(l))}</span>
+          <span class="link-meta">${esc(linkMeta(l))}</span>
+        </span>
+      </button></li>`).join("");
+
+  list.onclick = (e) => {
+    const btn = e.target.closest(".link-item");
+    if (btn) selectLink(btn.dataset.link, {focusDetail: false});
+  };
+  // Arrow keys move between links; Tab still leaves the list normally.
+  list.onkeydown = (e) => {
+    const items = [...list.querySelectorAll(".link-item")];
+    const at = items.indexOf(document.activeElement);
+    if (at < 0) return;
+    const next = {ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: items.length - 1}[e.key];
+    if (next === undefined) return;
+    e.preventDefault();
+    const target = items[Math.max(0, Math.min(items.length - 1, next))];
+    target.focus();
+    selectLink(target.dataset.link);
+  };
+  detail.onclick = (e) => {
+    const ev = e.target.closest("[data-evidence]");
+    if (ev){
+      const flow = state.assessment.flows[Number(ev.dataset.evidence)];
+      if (flow) EvidencePanel.open(flow, ev);
+      return;
+    }
+    toggleDisclosure(e);
+  };
+  renderLinkDetail(a, linkById(a, state.selectedLink) || links[0]);
+}
+
+function renderLinkDetail(a, link){
+  const el = $("link-detail");
+  if (!el || !link) return;
+  const sessions = link.sessions.map(i => a.sessions[i]);
+  const flows = link.flows.map(i => ({f: a.flows[i], i}));
+  const st = link.strength;
+
+  const head = `<div class="ld-head">
+      <h3 class="ld-title mono">${esc(linkLabel(link))}</h3>
+      <div class="ld-chips">
+        ${link.worst_severity
+          ? `<span class="sev-mark ${esc(link.worst_severity)}">${esc(link.worst_severity)}</span>`
+          : `<span class="ribbon-quiet">no findings</span>`}
+        ${st ? `<span class="ld-strength">${st.classical_bits}-bit classical · `
+             + `${st.quantum_bits}-bit post-quantum · ${esc(st.kex_family.toUpperCase())}</span>` : ""}
+      </div>
+    </div>`;
+
+  const handshake = sessions.length
+    ? sessions.map(s => {
+        const prop = pickIkeProposal(s);
+        const algs = prop
+          ? prop.transforms.map(t => `<span class="alg ${algClass(t)}">${esc(pretty(t))}</span>`).join("")
+          : `<span class="alg">proposal not observed</span>`;
+        return `<div class="ld-rec">
+          <div class="meta">${esc(s.version)} · ${esc(s.vendor_family)} · ${s.messages.length} messages</div>
+          <div class="ld-spi mono">initiator SPI ${esc(s.initiator_spi)}</div>
+          <div class="algs">${algs}</div>
+        </div>`;
+      }).join("")
+    : `<p class="ld-none">No IKE negotiation observed for this pair. The tunnel below is
+        inferred with no handshake to corroborate it.</p>`;
+
+  const tunnel = flows.length
+    ? flows.map(({f, i}) => {
+        const pct = Math.round((f.framing_confidence ?? f.confidence ?? 0) * 100);
+        const label = f.framing_class || f.predicted_suite || "unresolved";
+        return `<div class="ld-rec">
+          <div class="meta">${esc(f.src)} &rarr; ${esc(f.dst)} · ${f.packets} packets${f.encapsulated ? " · NAT-T" : ""}</div>
+          <div class="ld-spi mono">SPI ${esc(f.spi)}</div>
+          <div class="algs"><span class="alg ${suiteClass(label)}">${esc(label)}</span>
+            <span class="ld-conf">${pct}% confidence in the framing class</span></div>
+          ${f.ambiguous ? `<div class="cand">${esc(f.framing_candidates.join(" or "))}</div>` : ""}
+          <button type="button" class="linkish ld-evidence" data-evidence="${i}" aria-haspopup="dialog">Show the framing arithmetic</button>
+        </div>`;
+      }).join("")
+    : `<p class="ld-none">No ESP traffic observed for this pair.</p>`;
+
+  const findings = link.findings.length
+    ? link.findings.map(i => findingHTML(a.findings[i], i, "ld")).join("")
+    : `<p class="ld-none">No findings on this link.</p>`;
+
+  el.innerHTML = `${head}
+    <div class="ld-cols">
+      <section class="ld-block obs" aria-label="Handshake">
+        <h4>Handshake <span class="domain-tag obs">observed</span></h4>${handshake}
+      </section>
+      <section class="ld-block inf" aria-label="Tunnel">
+        <h4>Tunnel <span class="domain-tag inf">inferred</span></h4>${tunnel}
+      </section>
+    </div>
+    <p class="ld-note">ESP is matched to IKE by address pair: the child SA's SPI is negotiated
+      inside encrypted IKE_AUTH, so it cannot be linked cryptographically.${link.pooled
+        ? ` This pair carries ${link.tunnels} tunnels, pooled here.` : ""}</p>
+    <section class="ld-findings" aria-label="Findings on this link">
+      <h4>Findings on this link <span class="ld-count">${link.findings.length}</span></h4>
+      ${findings}
+    </section>`;
+}
+
+function selectLink(id, {updateHash = true, focusDetail = false} = {}){
+  const a = state.assessment;
+  const link = linkById(a, id) || worstLink(a);
+  if (!link) return;
+  state.selectedLink = link.id;
+  document.querySelectorAll("#link-list .link-item").forEach(b =>
+    b.setAttribute("aria-current", b.dataset.link === link.id ? "true" : "false"));
+  renderLinkDetail(a, link);
+  renderRibbon(a);
+  if (updateHash) writeHash(a.capture, link.id);
+  if (focusDetail) $("link-detail").focus();
 }
 
 /* --------------------------------------------------------------- panels */
@@ -503,16 +705,32 @@ function renderScore(a){
     .join("") || `<span class="sev-chip info">clean</span>`;
 
   const s = a.stats;
+  // The server decides whether a rate is meaningful (pipeline.throughput_
+  // estimate). Payloads from before that rule carry no `measurable` flag and
+  // a rate computed with model load included, so they are treated as not
+  // measurable rather than shown.
+  const tp = a.throughput || {};
+  const measurable = tp.measurable === true && tp.packets_per_second != null;
+  const processing = tp.processing_seconds ?? s.processing_seconds;
   $("stats").innerHTML = [
-    [s.packets_read, "packets read"],
+    [Number(s.packets_read).toLocaleString(), "packets read"],
     [s.ike_sessions, "IKE sessions"],
     [s.esp_flows_assessed, "ESP tunnels"],
-    [a.throughput ? a.throughput.packets_per_second.toLocaleString() : "—", "packets/sec"],
-    [s.analysis_seconds + "s", "analysis time"],
+    measurable
+      ? [Math.round(tp.packets_per_second).toLocaleString(), "packets/sec, model load excluded"]
+      : [processing != null ? processing + "s" : s.analysis_seconds + "s", "processing time"],
+    [s.analysis_seconds + "s", "total, incl. model load"],
     [s.parse_errors, "parse errors"]
   ].map(([k, l]) =>
     `<div class="stat"><div class="k">${esc(k)}</div>`
     + `<div class="l">${esc(l)}</div></div>`).join("");
+
+  const note = $("stat-note");
+  if (note){
+    note.hidden = measurable;
+    note.textContent = measurable ? "" : (tp.note
+      || "Capture too small to measure throughput. Run `cipherguard bench` for a reproducible figure.");
+  }
 
   $("capmeta").textContent =
     `${a.capture} · assessed ${a.started} · report ${a.digest}`;
@@ -547,7 +765,15 @@ function renderFlows(a){
     el.innerHTML = `<div class="empty">No ESP traffic observed in this capture.</div>`;
     return;
   }
-  el.innerHTML = a.flows.map(f => {
+  // Delegated rather than inline, so a flow is looked up by index and no
+  // attacker-influenced string is ever interpolated into a handler.
+  el.onclick = (e) => {
+    const btn = e.target.closest(".flow-open");
+    if (!btn) return;
+    const flow = a.flows[Number(btn.dataset.flow)];
+    if (flow) EvidencePanel.open(flow, btn);
+  };
+  el.innerHTML = a.flows.map((f, i) => {
     // Report the framing class and its total probability mass, not a single
     // member at its exact-suite score. Naming one suite out of a set the wire
     // cannot separate reads as a wrong answer to anyone who checks it against
@@ -558,10 +784,17 @@ function renderFlows(a){
       ? `<div class="cand">${esc(f.framing_candidates.join(" or "))}</div>`
         + `<div class="cand">framing-identical; not separable passively</div>`
       : "";
+    const skipped = (f.inference_notes || []).filter(n => n.kind !== "summary").length;
+    const warn = skipped
+      ? ` <span class="flow-open-warn">${skipped} caveat${skipped > 1 ? "s" : ""}</span>`
+      : "";
     return `<div class="rec">
-      <div class="peers">${esc(f.src)} &rarr; ${esc(f.dst)}</div>
-      <div class="meta">SPI ${esc(f.spi)} · ${f.packets} packets · mean ${f.mean_payload}B${f.encapsulated ? " · NAT-T" : ""}</div>
-      <div class="algs"><span class="alg ${suiteClass(label)}">${esc(label)}</span></div>
+      <button type="button" class="flow-open" data-flow="${i}" aria-haspopup="dialog">
+        <span class="peers">${esc(f.src)} &rarr; ${esc(f.dst)}</span>
+        <span class="meta">SPI ${esc(f.spi)} · ${f.packets} packets · mean ${f.mean_payload}B${f.encapsulated ? " · NAT-T" : ""}</span>
+        <span class="algs"><span class="alg ${suiteClass(label)}">${esc(label)}</span></span>
+        <span class="flow-open-hint">Show the framing arithmetic${warn}</span>
+      </button>
       <div class="confbar"><i style="width:${pct}%"></i></div>
       <div class="cand">${pct}% confidence in the framing class</div>
       ${candidates}
@@ -574,6 +807,272 @@ function renderFlows(a){
   }).join("");
 }
 
+/* ------------------------------------------------ framing evidence panel */
+/* The working behind one ESP attribution, laid out so a reviewer can redo it
+   by hand from the capture. Everything above the final block is RFC 4303
+   arithmetic over observed ciphertext lengths: deterministic, recomputable,
+   and drawn in the "observed" colour. The learned models' ranking sits in a
+   separate block in the "inferred" colour, because a probability is not
+   something a reviewer can check, and the two must never read as one claim.
+   Suite names and reasons are server strings derived from attacker-chosen
+   packet lengths, so every one goes through esc(). */
+const EvidencePanel = (() => {
+  let lastTrigger = null;
+  let bound = false;
+
+  const NOTE_LABEL = {
+    skipped: "Test did not run",
+    fallback: "No suite fits the framing",
+    unresolved: "Arithmetic did not decide",
+  };
+  const VERDICT_CLASS = { prohibited: "bad", legacy: "warn", acceptable: "good" };
+
+  function pct(n, d){ return d ? Math.round((n / d) * 100) : 0; }
+
+  /* One residue histogram as inline SVG. Surviving suites whose padding
+     boundary equals this modulus mark the residue they require. */
+  function histogram(mod, counts, survivors){
+    const W = 320, H = 138, TOP = 24, BASE = 108;
+    const total = counts.reduce((s, c) => s + c, 0);
+    const max = Math.max(1, ...counts);
+    const bw = W / mod;
+    const gap = Math.min(4, bw * 0.18);
+
+    const expected = {};
+    for (const s of survivors){
+      if (s.boundary !== mod) continue;
+      (expected[s.expected_residue] = expected[s.expected_residue] || []).push(s.suite);
+    }
+
+    let body = "";
+    counts.forEach((c, r) => {
+      const h = c ? Math.max(1.5, (c / max) * (BASE - TOP)) : 0;
+      const x = r * bw + gap / 2;
+      const cx = r * bw + bw / 2;
+      const marked = expected[r];
+      if (marked){
+        body += `<line class="ev-guide" x1="${cx.toFixed(1)}" y1="${TOP - 6}" x2="${cx.toFixed(1)}" y2="${BASE}"/>`
+              + `<path class="ev-mark" d="M${(cx - 5).toFixed(1)},${TOP - 16} h10 l-5,8 z"/>`;
+      }
+      body += `<rect class="ev-bar${marked ? " is-expected" : ""}" x="${x.toFixed(1)}" `
+            + `y="${(BASE - h).toFixed(1)}" width="${(bw - gap).toFixed(1)}" height="${h.toFixed(1)}">`
+            + `<title>residue ${r}: ${c} of ${total} lengths (${pct(c, total)}%)</title></rect>`
+            + `<text class="ev-axis" x="${cx.toFixed(1)}" y="${BASE + 15}" text-anchor="middle">${r}</text>`;
+    });
+    body += `<line class="ev-base" x1="0" y1="${BASE}" x2="${W}" y2="${BASE}"/>`;
+
+    const peak = counts.indexOf(Math.max(...counts));
+    const peakText = total
+      ? `${pct(counts[peak], total)}% of lengths fall at residue ${peak}.`
+      : "No lengths observed.";
+    const marks = Object.keys(expected).map(r =>
+      `residue ${r} required by ${expected[r].join(", ")} `
+      + `(${pct(counts[r], total)}% of lengths comply)`);
+    const aria = `Ciphertext length mod ${mod}. ${peakText} `
+      + (marks.length ? `Marked: ${marks.join("; ")}.` : "No surviving suite pads to this boundary.");
+
+    const caption = marks.length
+      ? Object.keys(expected).map(r =>
+          `<li><span class="ev-tri" aria-hidden="true">&#9660;</span> residue ${esc(r)}: `
+          + `${esc(expected[r].join(", "))} <span class="ev-dim">(${pct(counts[r], total)}% comply)</span></li>`).join("")
+      : `<li class="ev-dim">No surviving suite pads to ${mod === 8 ? "an" : "a"} ${mod}-byte boundary.</li>`;
+
+    return `<figure class="ev-hist">
+      <figcaption><b>len mod ${mod}</b> <span class="ev-dim">${esc(peakText)}</span></figcaption>
+      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(aria)}" preserveAspectRatio="none">${body}</svg>
+      <ul class="ev-marks">${caption}</ul>
+    </figure>`;
+  }
+
+  function measured(f, fa){
+    const g = f.granularity_usable
+      ? `${f.length_granularity}&nbsp;B`
+      : `<span class="ev-warn-text">not measurable</span>`;
+    const ent = f.mean_entropy == null
+      ? `<span class="ev-warn-text">not measurable</span>`
+      : `${f.mean_entropy.toFixed(2)} bits/byte`;
+    return `<dl class="ev-facts">
+      <div><dt>Ciphertext lengths</dt><dd>${fa.lengths_observed}</dd></div>
+      <div><dt>Distinct lengths</dt><dd>${f.distinct_lengths}</dd></div>
+      <div><dt>Length granularity</dt><dd>${g}</dd></div>
+      <div><dt>Mean payload entropy</dt><dd>${ent}<span class="ev-dim"> over ${fa.entropy_samples} samples</span></dd></div>
+    </dl>`;
+  }
+
+  /* All catalogued suites in the order the constraints eliminated them, each
+     with its specific reason, then the ones that survived everything. */
+  function eliminations(f, fa){
+    const notRun = new Set((f.inference_notes || [])
+      .filter(n => n.kind === "skipped").map(n => n.test || "all"));
+    const steps = fa.constraints.map(c => {
+      const out = fa.suites.filter(s => s.eliminated_by === c.id);
+      const ran = !(notRun.has(c.id) || notRun.has("all"));
+      const items = out.map(s => `<li>
+          <s class="ev-suite">${esc(s.suite)}</s>
+          <span class="visually-hidden">eliminated:</span>
+          <span class="ev-reason">${esc(s.reason)}</span>
+        </li>`).join("");
+      const status = !ran
+        ? `<span class="ev-status is-skipped">did not run</span>`
+        : out.length ? `<span class="ev-status">eliminated ${out.length}</span>`
+        : `<span class="ev-status is-none">eliminated none</span>`;
+      return `<li class="ev-step">
+        <div class="ev-step-head"><span class="ev-step-n">${c.step}</span>
+          <b>${esc(c.title)}</b> ${status}</div>
+        <div class="ev-rule">${esc(c.rule)}</div>
+        ${items ? `<ul class="ev-suites">${items}</ul>` : ""}
+      </li>`;
+    }).join("");
+
+    const alive = fa.suites.filter(s => !s.eliminated_by);
+    const survivors = alive.length
+      ? alive.map(s => `<li><span class="ev-suite is-alive">${esc(s.suite)}</span>
+          <span class="ev-reason">IV ${s.iv}&nbsp;B, ICV ${s.icv}&nbsp;B, `
+          + `pads to ${s.boundary}&nbsp;B, requires residue ${s.expected_residue}</span></li>`).join("")
+      : `<li class="ev-warn-text">None. Every catalogued suite failed at least one constraint.</li>`;
+
+    return `<ol class="ev-steps">${steps}</ol>
+      <div class="ev-survivors"><div class="ev-step-head"><b>Survived every constraint</b>
+        <span class="ev-status is-alive">${alive.length} of ${fa.suites.length}</span></div>
+        <ul class="ev-suites">${survivors}</ul></div>`;
+  }
+
+  function classes(fa){
+    if (fa.fallback || !fa.classes.length){
+      return `<p class="ev-warn-text">No framing class is consistent with this flow, so any
+        attribution shown for it rests on the learned models alone.</p>`;
+    }
+    return fa.classes.map(c => {
+      const partial = c.members.length < c.all_members.length
+        ? `<div class="ev-dim">Other members of this class were eliminated above.</div>` : "";
+      return `<div class="ev-class">
+        <div class="ev-class-head"><b>${esc(c.name)}</b>
+          <span class="alg ${VERDICT_CLASS[c.verdict] || ""}">${esc(c.verdict)}</span></div>
+        <div class="ev-sig">${esc(c.signature)}</div>
+        <ul class="ev-members">${c.members.map(m => `<li>${esc(m)}</li>`).join("")}</ul>
+        ${partial}
+        <p class="ev-why">${esc(c.why_inseparable)}</p>
+      </div>`;
+    }).join("");
+  }
+
+  function notes(f){
+    const list = (f.inference_notes || []).filter(n => n.kind !== "summary");
+    if (!list.length){
+      return `<p class="ev-ok">Every constraint ran on enough data. Nothing was skipped.</p>`;
+    }
+    return list.map(n => `<div class="ev-note is-${esc(n.kind)}" role="note">
+        <b>${esc(NOTE_LABEL[n.kind] || "Note")}</b>
+        <p>${esc(n.text)}</p>
+      </div>`).join("");
+  }
+
+  function model(f){
+    const ranked = (f.ranked || []).map(([name, p]) => `<li>
+        <span>${esc(name)}</span>
+        <span class="ev-model-bar" aria-hidden="true"><i style="width:${Math.round(p * 100)}%"></i></span>
+        <span class="ev-model-p">${Math.round(p * 100)}%</span></li>`).join("");
+    return `<section class="ev-model" aria-labelledby="ev-model-h">
+      <h3 id="ev-model-h">Learned models' ranking <span class="domain-tag inf">not arithmetic</span></h3>
+      <p class="ev-dim">Random Forest and 1D-CNN probabilities, after the mask above. They
+        choose among the survivors and cannot be checked by hand; the arithmetic above can.</p>
+      ${ranked ? `<ol class="ev-model-list">${ranked}</ol>` : `<p class="ev-dim">No model was loaded for this analysis.</p>`}
+    </section>`;
+  }
+
+  function render(f){
+    const fa = f.framing_arithmetic;
+    if (!fa){
+      return `<p class="ev-warn-text">This assessment was produced before the framing
+        arithmetic was recorded. Re-run the analysis to see the working.</p>` + model(f);
+    }
+    const caveats = (f.inference_notes || []).filter(n => n.kind !== "summary").length;
+    const alert = caveats
+      ? `<button type="button" class="ev-alert" data-jump="ev-notes">
+          <b>${caveats} caveat${caveats > 1 ? "s" : ""}</b> apply to this inference.
+          <span>Read them before relying on it &darr;</span></button>`
+      : "";
+    const survivors = fa.suites.filter(s => !s.eliminated_by);
+    return `${alert}
+      <div class="ev-arith">
+        <section aria-labelledby="ev-a"><h3 id="ev-a"><span class="ev-sec-n">a</span>What the capture shows</h3>
+          ${measured(f, fa)}
+          <div class="ev-hists">${[4, 8, 16].map(m =>
+            histogram(m, (f.residues || {})[m] || new Array(m).fill(0), survivors)).join("")}</div>
+          <p class="ev-dim">&#9660; marks the residue each surviving suite requires, on the histogram
+            for its padding boundary. RFC 4303 forces len &equiv; (IV + ICV) mod boundary.</p>
+        </section>
+        <section aria-labelledby="ev-b"><h3 id="ev-b"><span class="ev-sec-n">b</span>Constraints, in the order applied</h3>
+          ${eliminations(f, fa)}
+        </section>
+        <section aria-labelledby="ev-c"><h3 id="ev-c"><span class="ev-sec-n">c</span>What survives</h3>
+          ${classes(fa)}
+        </section>
+        <section id="ev-notes" tabindex="-1" aria-labelledby="ev-d"><h3 id="ev-d"><span class="ev-sec-n">d</span>Caveats</h3>
+          ${notes(f)}
+        </section>
+      </div>
+      ${model(f)}`;
+  }
+
+  function focusables(){
+    const card = document.querySelector("#evidence-modal .evidence-card");
+    return card ? [...card.querySelectorAll(
+      'button, [href], [tabindex]:not([tabindex="-1"]), input, select, textarea')]
+      .filter(el => !el.disabled && el.offsetParent !== null) : [];
+  }
+
+  function onKey(e){
+    if (e.key === "Escape" || e.key === "Esc"){ e.preventDefault(); close(); return; }
+    if (e.key !== "Tab") return;
+    const els = focusables();
+    if (!els.length) return;
+    const first = els[0], last = els[els.length - 1];
+    if (e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+  }
+
+  function bind(){
+    if (bound) return;
+    bound = true;
+    const modal = $("evidence-modal");
+    modal.addEventListener("keydown", onKey);
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) { close(); return; }
+      const jump = e.target.closest("[data-jump]");
+      if (jump){
+        const target = $(jump.dataset.jump);
+        if (target){ target.scrollIntoView({behavior: "smooth", block: "start"}); target.focus({preventScroll: true}); }
+      }
+    });
+    $("evidence-modal-close").addEventListener("click", close);
+  }
+
+  function open(flow, trigger){
+    const modal = $("evidence-modal");
+    if (!modal) return;
+    bind();
+    lastTrigger = trigger || document.activeElement;
+    $("evidence-modal-subtitle").textContent =
+      `${flow.src} → ${flow.dst} · SPI ${flow.spi} · ${flow.packets} packets`;
+    $("evidence-body").innerHTML = render(flow);
+    $("evidence-body").scrollTop = 0;
+    modal.hidden = false;
+    $("evidence-modal-close").focus();
+  }
+
+  function close(){
+    const modal = $("evidence-modal");
+    if (!modal || modal.hidden) return;
+    modal.hidden = true;
+    if (lastTrigger && document.contains(lastTrigger)) lastTrigger.focus();
+    lastTrigger = null;
+  }
+
+  return { open, close, render };
+})();
+window.EvidencePanel = EvidencePanel;
+
 function renderFindings(a){
   const el = $("findings");
   if (!a.findings.length){
@@ -583,40 +1082,117 @@ function renderFindings(a){
     return;
   }
   const inferred = a.findings.filter(f => f.inferred).length;
+  const groups = a.finding_groups || [];
   $("findsub").textContent =
-    `${a.findings.length} findings · ${a.findings.length - inferred} from parsed `
-    + `bytes, ${inferred} inferred from encrypted traffic.`;
+    `${a.findings.length} findings`
+    + (groups.length ? ` in ${groups.length} distinct problems` : "")
+    + ` · ${a.findings.length - inferred} from parsed bytes, `
+    + `${inferred} inferred from encrypted traffic.`;
 
-  el.innerHTML = a.findings.map((f, i) => `
-    <div class="finding" data-i="${i}">
-      <div class="fhead" role="button" tabindex="0" aria-expanded="false">
+  document.querySelectorAll("[data-fview]").forEach(b =>
+    b.setAttribute("aria-pressed", b.dataset.fview === state.findingsView ? "true" : "false"));
+
+  el.innerHTML = state.findingsView === "link" && a.links
+    ? findingsByLinkHTML(a)
+    : groups.length
+      ? groups.map(g => groupHTML(g, a)).join("")
+      : a.findings.map((f, i) => findingHTML(f, i, "f")).join("");
+
+  el.onclick = (e) => {
+    const open = e.target.closest("[data-open-link]");
+    if (open){
+      selectLink(open.dataset.openLink);
+      $("links-panel").scrollIntoView({behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start"});
+      $("link-detail").focus({preventScroll: true});
+      return;
+    }
+    toggleDisclosure(e);
+  };
+}
+
+/* One disclosure pattern for every expandable row: a real <button> carrying
+   aria-expanded and aria-controls, so Enter, Space and screen readers work
+   without per-row key handlers. */
+function toggleDisclosure(e){
+  const btn = e.target.closest("button[aria-controls]");
+  if (!btn || !btn.classList.contains("fhead")) return;
+  const open = btn.getAttribute("aria-expanded") !== "true";
+  btn.setAttribute("aria-expanded", open ? "true" : "false");
+  const panel = document.getElementById(btn.getAttribute("aria-controls"));
+  if (panel) panel.hidden = !open;
+  const host = btn.parentElement;
+  if (host) host.classList.toggle("open", open);
+}
+
+let disclosureSeq = 0;
+
+function findingHTML(f, i, prefix){
+  const id = `${prefix}-${i}-${++disclosureSeq}`;
+  return `<div class="finding" data-i="${i}">
+      <button type="button" class="fhead" aria-expanded="false" aria-controls="${id}">
         <span class="sev-mark ${esc(f.severity)}">${esc(f.severity)}</span>
         <span class="fmain">
           <span class="ftitle">${esc(f.title)}</span>
-          ${f.inferred
-            ? `<span class="domain-tag inf inline">inferred</span>` : ``}
-          <div class="fsub">${esc(f.rule_id)} · ${esc(f.subject)}</div>
+          ${f.inferred ? `<span class="domain-tag inf inline">inferred</span>` : ``}
+          <span class="fsub">${esc(f.rule_id)} · ${esc(f.subject)}</span>
         </span>
         <span class="chev" aria-hidden="true">&#9662;</span>
-      </div>
-      <div class="fbody">
+      </button>
+      <div class="fbody" id="${id}" hidden>
         <p>${esc(f.detail)}</p>
         <div class="ref">${esc(f.reference)}</div>
         <div class="fix"><b>Fix:</b> ${esc(f.remediation)}</div>
       </div>
-    </div>`).join("");
+    </div>`;
+}
 
-  el.querySelectorAll(".fhead").forEach(h => {
-    const toggle = () => {
-      const open = h.parentElement.classList.toggle("open");
-      h.setAttribute("aria-expanded", open ? "true" : "false");
-      h.querySelector(".chev").innerHTML = open ? "&#9652;" : "&#9662;";
-    };
-    h.addEventListener("click", toggle);
-    h.addEventListener("keydown", e => {
-      if (e.key === "Enter" || e.key === " "){ e.preventDefault(); toggle(); }
-    });
-  });
+/* A group is one rule firing on one or more subjects. A group of one is shown
+   as the finding itself, so a single occurrence is one click from its fix. */
+function groupHTML(g, a){
+  if (g.count === 1) return findingHTML(a.findings[g.findings[0]], g.findings[0], "g");
+  const id = `grp-${++disclosureSeq}`;
+  const where = g.subjects.length === 1
+    ? g.subjects[0]
+    : `${g.subjects.length} subjects`;
+  // Deliberately not class "finding": `.finding.open .fbody` is a descendant
+  // rule, so an open group would force every member's body open too.
+  return `<div class="fgroup">
+      <button type="button" class="fhead" aria-expanded="false" aria-controls="${id}">
+        <span class="sev-mark ${esc(g.severity)}">${esc(g.severity)}</span>
+        <span class="fmain">
+          <span class="ftitle">${esc(g.title)}</span>
+          ${g.inferred ? `<span class="domain-tag inf inline">inferred</span>` : ``}
+          <span class="fsub">${esc(g.rule_id)} · ${esc(where)}</span>
+        </span>
+        <span class="gcount" aria-label="${g.count} occurrences">&times;${g.count}</span>
+        <span class="chev" aria-hidden="true">&#9662;</span>
+      </button>
+      <div class="gbody" id="${id}" hidden>
+        ${g.findings.map(i => findingHTML(a.findings[i], i, "gm")).join("")}
+      </div>
+    </div>`;
+}
+
+function findingsByLinkHTML(a){
+  const sections = (a.links || []).filter(l => l.findings.length).map(l => `
+    <section class="flink" aria-label="Findings for ${esc(linkLabel(l))}">
+      <div class="flink-head">
+        <span class="sev-mark ${esc(l.worst_severity)}">${esc(l.worst_severity)}</span>
+        <span class="flink-peers mono">${esc(linkLabel(l))}</span>
+        <span class="flink-count">${l.findings.length} finding${l.findings.length === 1 ? "" : "s"}</span>
+        <button type="button" class="linkish" data-open-link="${esc(l.id)}">Open link</button>
+      </div>
+      ${l.findings.map(i => findingHTML(a.findings[i], i, "bl")).join("")}
+    </section>`);
+  const loose = (a.unlinked_findings || []);
+  if (loose.length){
+    sections.push(`<section class="flink" aria-label="Findings not tied to a link">
+      <div class="flink-head"><span class="flink-peers">Not tied to a gateway pair</span>
+        <span class="flink-count">${loose.length}</span></div>
+      ${loose.map(i => findingHTML(a.findings[i], i, "bu")).join("")}
+    </section>`);
+  }
+  return sections.join("") || `<div class="empty">No findings.</div>`;
 }
 
 function renderPQ(a){
@@ -1209,9 +1785,17 @@ async function runAnalysis(){
   setButtonLoading(btn, true, "Assessing capture...");
   try{
     state.assessment = await fetchAssessment(name);
+    // A link named in the URL wins if it belongs to this capture; otherwise
+    // the worst link, which the server already put first.
+    const wanted = readHash();
+    const fromHash = (!wanted.capture || wanted.capture === state.assessment.capture)
+      ? linkById(state.assessment, wanted.link) : null;
+    state.selectedLink = (fromHash || worstLink(state.assessment) || {}).id || null;
+    if (wanted.capture && wanted.capture !== state.assessment.capture) writeHash(null, null);
     renderScore(state.assessment);
     renderSessions(state.assessment);
     renderFlows(state.assessment);
+    renderLinks(state.assessment);
     renderFindings(state.assessment);
     renderRibbon(state.assessment);
     renderPQ(state.assessment);
@@ -4642,6 +5226,7 @@ async function init(){
       closeBackendModal();
       closeShortcutsModal();
       closeCbomModal();
+      EvidencePanel.close();
       const rogueBanner = $("wifi-evil-twin-banner");
       if (rogueBanner) rogueBanner.style.display = "none";
       if (isInput && activeEl && activeEl.blur) activeEl.blur();
@@ -4754,8 +5339,33 @@ async function init(){
   // Primary Default: IPsec VPN Protocol Analyzer
   switchTab("ipsec");
 
-  // Load and assess initial IPsec capture immediately
+  // Findings grouping toggle: by rule (default) or by link
+  document.querySelectorAll("[data-fview]").forEach(btn =>
+    btn.addEventListener("click", () => {
+      state.findingsView = btn.dataset.fview;
+      if (state.assessment) renderFindings(state.assessment);
+    }));
+
+  // A pasted or edited #capture=...&link=... selects that capture and link
+  window.addEventListener("hashchange", () => {
+    const want = readHash();
+    const sel = $("capture");
+    if (!state.assessment) return;
+    if (want.capture && want.capture !== state.assessment.capture && sel
+        && [...sel.options].some(o => o.value === want.capture)){
+      sel.value = want.capture;
+      runAnalysis();
+    } else if (want.link){
+      selectLink(want.link, {updateHash: false});
+    }
+  });
+
+  // Load and assess initial IPsec capture immediately, honouring a capture
+  // named in the URL so a shared link opens on the right gateway pair
   loadCaptures().then(() => {
+    const want = readHash().capture;
+    const sel = $("capture");
+    if (want && sel && [...sel.options].some(o => o.value === want)) sel.value = want;
     if ($("run") && !$("run").disabled && state.assessment === null) {
       runAnalysis();
     }

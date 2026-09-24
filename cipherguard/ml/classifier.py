@@ -18,7 +18,6 @@ report "AES-CTR or AES-GCM" instead of guessing one and stating it as fact.
 from __future__ import annotations
 
 import json
-import math
 import os
 from dataclasses import dataclass
 
@@ -26,6 +25,7 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
+from ..core import framing
 from ..core.constants import ESP_SUITES
 from ..core.models import EspFlow
 from . import features as F
@@ -77,8 +77,8 @@ def feature_hash() -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
-MIN_CIPHERTEXT_ENTROPY = 6.8  # below this, the payload is not cipher output
-MAX_PLAINTEXT_ENTROPY = 7.2   # above this, the payload is not plaintext
+MIN_CIPHERTEXT_ENTROPY = framing.MIN_CIPHERTEXT_ENTROPY
+MAX_PLAINTEXT_ENTROPY = framing.MAX_PLAINTEXT_ENTROPY
 
 
 @dataclass
@@ -89,6 +89,8 @@ class Prediction:
     group: list[str]
     group_confidence: float
     excluded: list[tuple[str, str]] | None = None  # (suite, why it was ruled out)
+    notes: list[str] | None = None                 # tests that could not run, etc.
+    trace: dict | None = None                      # framing.evaluate() working
 
     @property
     def ambiguous(self) -> bool:
@@ -122,94 +124,35 @@ def plausibility(
     # The caller's label ordering is authoritative. The classifier stores labels
     # sorted, while ESP_SUITES is in catalogue order; masking one with the other
     # silently applies each suite's constraint to a different suite.
+    return _mask_from_trace(framing.evaluate(flow), labels)
+
+
+def _mask_from_trace(
+    trace: dict, labels: list[str] | None = None
+) -> tuple[np.ndarray, list[tuple[str, str]], list[str]]:
+    """Project a framing trace onto the classifier's label order.
+
+    The arithmetic itself lives in `core.framing`, including the granularity
+    test that stops the residue test's one-directional implication (a flow
+    padded to 16 bytes satisfies len = 12 mod 16, which implies len = 4 mod 8,
+    so residue alone lets AES-CBC pass as 3DES). Keeping it in one place means
+    the dashboard's worked explanation is the computation that set this mask.
+    """
     labels = labels if labels is not None else sorted(ESP_SUITES.keys())
     mask = np.ones(len(labels))
     excluded: list[tuple[str, str]] = []
-    notes: list[str] = []
 
-    lengths = np.asarray(flow.payload_lengths, dtype=np.int64)
-    if lengths.size == 0:
-        return mask, excluded, notes
+    if not trace["lengths_observed"]:
+        return mask, excluded, []
 
-    entropy = (
-        sum(flow.entropy_samples) / len(flow.entropy_samples)
-        if len(flow.entropy_samples) >= 12
-        else None
-    )
-
-    # Observed granularity: the GCD of the gaps between distinct ciphertext
-    # lengths, which recovers the true padding boundary directly.
-    #
-    # The residue test alone is one-directional and therefore not sufficient. A
-    # flow padded to 16 bytes satisfies len = 12 (mod 16), which *implies*
-    # len = 4 (mod 8), so an AES-CBC tunnel passes the 3DES test for free and the
-    # two collapse together. Granularity breaks the implication: padding to 16
-    # leaves gaps that are multiples of 16, padding to 8 produces gaps of 8. The
-    # two constraints together pin the block size in both directions.
-    distinct = np.unique(lengths)
-    granularity = 0
-    for gap in np.diff(distinct):
-        granularity = math.gcd(granularity, int(gap))
-    granularity_usable = distinct.size >= 8 and granularity > 0
-    if not granularity_usable:
-        # The strongest tie-breaker switches off exactly where inference is
-        # weakest — a low-volume or heavily TFC-padded flow with too few
-        # distinct lengths. Degrading quietly there would be the worst place
-        # to do it, so the caller is told.
-        notes.append(
-            f"Only {distinct.size} distinct ciphertext lengths observed, so the "
-            "padding-boundary test could not run and suites differing only by "
-            "block size cannot be separated. Treat this attribution as weaker "
-            "than its confidence suggests."
-        )
-
+    notes = [n["text"] for n in trace["notes"] if n["kind"] == "skipped"]
+    by_suite = {r["suite"]: r for r in trace["suites"]}
     for i, name in enumerate(labels):
-        spec = ESP_SUITES.get(name)
-        if spec is None:
+        record = by_suite.get(name)
+        if record is None or record["eliminated_by"] is None:
             continue
-        modulus = max(spec["block"], 4)
-        expected = (spec["iv"] + spec["icv"]) % modulus
-        agree = float((lengths % modulus == expected).mean())
-
-        if granularity_usable and granularity != modulus:
-            mask[i] = 0.0
-            excluded.append(
-                (name, f"length granularity is {granularity}B, so the padding "
-                       f"boundary is not this suite's {modulus}B")
-            )
-            continue
-
-        if agree < 0.90:
-            mask[i] = 0.0
-            excluded.append(
-                (name, f"framing mismatch: {agree:.0%} of lengths match the "
-                       f"required len mod {modulus} == {expected}")
-            )
-            continue
-
-        overhead = spec["iv"] + spec["icv"]
-        if lengths.min() < overhead + 4:
-            mask[i] = 0.0
-            excluded.append(
-                (name, f"shortest packet ({lengths.min()}B) cannot hold this "
-                       f"suite's {overhead}B IV+ICV overhead")
-            )
-            continue
-
-        if entropy is not None:
-            encrypts = not name.startswith("NULL")
-            if encrypts and entropy < MIN_CIPHERTEXT_ENTROPY:
-                mask[i] = 0.0
-                excluded.append(
-                    (name, f"payload entropy {entropy:.2f} is below the "
-                           f"ciphertext floor of {MIN_CIPHERTEXT_ENTROPY}")
-                )
-            elif not encrypts and entropy > MAX_PLAINTEXT_ENTROPY:
-                mask[i] = 0.0
-                excluded.append(
-                    (name, f"payload entropy {entropy:.2f} exceeds the plaintext "
-                           f"ceiling of {MAX_PLAINTEXT_ENTROPY}; payload is encrypted")
-                )
+        mask[i] = 0.0
+        excluded.append((name, record["reason"]))
 
     if mask.sum() == 0:  # nothing survived: fall back to the models alone
         notes.append(
@@ -226,6 +169,45 @@ def plausibility(
     return mask, excluded, notes
 
 
+SYNTHETIC_CORPUS = "synthetic RFC 4303 framing model"
+
+
+def corpus_composition(
+    synthetic_flows: int,
+    real_samples: list | None = None,
+    unlabelled_captures: list[str] | None = None,
+) -> dict:
+    """Describe a training corpus by what it actually contains.
+
+    The description is derived from the counts, never passed in, so a model
+    trained mostly on synthetic flows cannot be described as real-world and a
+    model with real flows in it cannot be described as synthetic.
+    """
+    real_samples = real_samples or []
+    captures = sorted({s.capture for s in real_samples})
+    real = len(real_samples)
+    total = synthetic_flows + real
+    fraction = real / total if total else 0.0
+    if real == 0:
+        description = SYNTHETIC_CORPUS
+    else:
+        description = (
+            f"{SYNTHETIC_CORPUS} plus {real} labelled real ESP flow"
+            f"{'s' if real != 1 else ''} from {len(captures)} capture"
+            f"{'s' if len(captures) != 1 else ''} ({fraction:.1%} of the corpus is real)"
+        )
+    return {
+        "description": description,
+        "synthetic_flows": synthetic_flows,
+        "real_flows": real,
+        "real_captures": len(captures),
+        "real_fraction": round(fraction, 4),
+        "real_capture_names": captures,
+        "label_sources": sorted({s.source for s in real_samples}),
+        "unlabelled_captures_not_used": sorted(unlabelled_captures or []),
+    }
+
+
 class SuiteClassifier:
     """Random Forest + 1D-CNN soft-voting ensemble."""
 
@@ -235,6 +217,10 @@ class SuiteClassifier:
         self.cnn: EspCNN | None = None
         self.rf_weight = rf_weight
         self.metrics: dict = {}
+        # What the model was fitted on. Set by the trainer; written into
+        # meta.json so the artefact itself says how much of it is real.
+        self.corpus: dict = corpus_composition(0, [])
+        self.provenance: dict = {}
 
     # -- training -----------------------------------------------------------
 
@@ -326,9 +312,23 @@ class SuiteClassifier:
 
     def predict_one(self, flow: EspFlow) -> Prediction:
         vec = F.extract(flow).reshape(1, -1)
-        probs = self._blend(vec)[0]
+        return self._finish(flow, self._blend(vec)[0])
 
-        mask, excluded, _notes = plausibility(flow, self.labels)
+    def predict_many(self, flows: list[EspFlow]) -> list[Prediction]:
+        """Predict every flow in one call to each model.
+
+        Identical output to calling predict_one per flow; the difference is
+        cost. The forest's per-call overhead is paid once per call, not once
+        per row, so one batched call replaces one per tunnel.
+        """
+        if not flows:
+            return []
+        probs = self._blend(F.extract_batch(flows))
+        return [self._finish(flow, row) for flow, row in zip(flows, probs)]
+
+    def _finish(self, flow: EspFlow, probs: np.ndarray) -> Prediction:
+        trace = framing.evaluate(flow)
+        mask, excluded, notes = _mask_from_trace(trace, self.labels)
         if len(mask) == len(probs):
             masked = probs * mask
             if masked.sum() > 0:
@@ -346,16 +346,21 @@ class SuiteClassifier:
             group=group,
             group_confidence=gconf,
             excluded=excluded,
+            notes=notes,
+            trace=trace,
         )
 
     def annotate(self, flows: list[EspFlow]) -> list[Prediction]:
-        preds = []
-        for flow in flows:
-            pred = self.predict_one(flow)
+        preds = self.predict_many(flows)
+        for flow, pred in zip(flows, preds):
             flow.predicted_suite = pred.label
             flow.confidence = pred.confidence
             flow.ranked = pred.ranked
-            preds.append(pred)
+            # The reasons are the auditable half of the answer; keep them with
+            # the flow rather than discarding them after the mask is applied.
+            flow.exclusions = list(pred.excluded or [])
+            flow.framing_trace = pred.trace
+            flow.inference_notes = list((pred.trace or {}).get("notes", []))
         return preds
 
     # -- persistence --------------------------------------------------------
@@ -406,7 +411,8 @@ class SuiteClassifier:
                         "python": sys.version.split()[0],
                         "sklearn": sklearn.__version__,
                         "platform": platform.platform(),
-                        "corpus": "synthetic RFC 4303 framing model",
+                        "corpus": self.corpus["description"],
+                        "corpus_composition": self.corpus,
                     },
                 },
                 fh,
@@ -489,7 +495,17 @@ class SuiteClassifier:
         model.labels = meta["labels"]
         model.metrics = meta.get("metrics", {})
         model.provenance = meta.get("provenance", {})
+        # Models from before real-capture support were synthetic-only, which is
+        # exactly what the default composition says.
+        if model.provenance.get("corpus_composition"):
+            model.corpus = model.provenance["corpus_composition"]
         model.rf = joblib.load(os.path.join(directory, "rf.joblib"))
+        # Training wants every core; inference does not. Predictions are made
+        # one flow at a time, and with n_jobs=-1 each single-row predict_proba
+        # dispatches 300 trees to a thread pool and waits on it — about 90 ms
+        # of scheduling per flow, far more than the prediction itself. The
+        # output is identical either way.
+        model.rf.n_jobs = 1
         model.cnn = EspCNN.load(os.path.join(directory, "cnn.npz"))
         return model
 

@@ -299,10 +299,101 @@ def cmd_cbom(args: argparse.Namespace) -> int:
 
 
 def cmd_train(args: argparse.Namespace) -> int:
+    from .lab.labels import LabelError
     from .ml.train import train
 
-    train(args.samples, args.epochs, args.seed, args.models)
+    try:
+        train(args.samples, args.epochs, args.seed, args.models,
+              include_real=args.include_real, min_packets=args.min_packets)
+    except LabelError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 5
     return 0
+
+
+def _load_model_or_explain(model_dir: str):
+    from .ml.classifier import SuiteClassifier
+
+    if not SuiteClassifier.is_trained(model_dir):
+        print(f"error: no trained model in {model_dir}/. Run: cipherguard train",
+              file=sys.stderr)
+        return None
+    return SuiteClassifier.load(model_dir)
+
+
+def _print_label_result(r: dict) -> None:
+    """One capture's ESP label comparison, misses explained in full."""
+    if not r["labelled"]:
+        print(f"  [{_c('33', 'UNLABELLED')}] {r['capture']}")
+        print(_c("90", f"         no {os.path.basename(r['label_path'])}; ESP ground "
+                       "truth must come from the endpoint's own configuration"))
+        return
+
+    mark = _c("32", "PASS") if r["passed"] else _c("1;31", "FAIL")
+    print(f"  [{mark}] {r['capture']}  {r['hits']}/{len(r['results'])} flows "
+          "correct at framing-class level")
+    if r["label_source"]:
+        print(_c("90", f"         label source: {r['label_source']}"))
+
+    for row in r["results"]:
+        tag = _c("32", "hit ") if row["hit"] else _c("1;31", "MISS")
+        print(f"    {tag} {row['flow']}  ({row['packets']} packets)")
+        print(f"         label     {row['label_class']}  [{row['label_suite']}]")
+        print(f"         inferred  {row['predicted_class']}  "
+              f"({row['class_confidence']:.0%} confidence)")
+        if row["label_source"] != r["label_source"]:
+            print(_c("90", f"         label source: {row['label_source']}"))
+        miss = row.get("miss")
+        if miss:
+            for line in _wrap("Diagnosis: " + miss["diagnosis"], 66):
+                print(_c("33", f"         {line}"))
+            print(_c("90", f"         labelled class held "
+                           f"{miss['truth_class_probability']:.0%} of the probability"))
+            if miss["all_exclusions"]:
+                print(_c("90", "         plausibility exclusions:"))
+                for ex in miss["all_exclusions"]:
+                    flag = " <- labelled class" if ex in miss["truth_excluded"] else ""
+                    print(_c("90", f"           {ex['suite']}: {ex['reason']}{flag}"))
+            else:
+                print(_c("90", "         plausibility exclusions: none"))
+
+    for u in r.get("unmatched_entries", []):
+        print(_c("33", f"    label entry {u['label']} ({u['suite']}) matched no flow"))
+    for s in r.get("too_short", []):
+        print(_c("33", f"    {s['flow']} is labelled but has only {s['packets']} "
+                       f"packets (< {r['min_packets']}); not scored"))
+    for u in r.get("unlabelled_flows", []):
+        print(_c("90", f"    unlabelled flow {u['flow']} ({u['packets']} packets); "
+                       "not scored"))
+
+
+def cmd_label_check(args: argparse.Namespace) -> int:
+    """Compare ESP inference against a user-supplied ground-truth label."""
+    from .lab.labels import LabelError, check_capture
+
+    if not os.path.exists(args.capture):
+        raise FileNotFoundError(args.capture)
+    model = _load_model_or_explain(args.models)
+    if model is None:
+        return 1
+    try:
+        result = check_capture(args.capture, model, min_packets=args.min_packets)
+    except LabelError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 5
+
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        print()
+        print(_c("1", "ESP inference against labelled ground truth"))
+        print(_c("90", f"  model corpus: {model.corpus['description']}"))
+        print()
+        _print_label_result(result)
+        print()
+    if not result["labelled"]:
+        return 1
+    return 0 if result["passed"] else 1
 
 
 def _prune_evidence(directory: str, keep: int, max_bytes: int) -> tuple[int, int]:
@@ -455,16 +546,78 @@ def cmd_sensor(args: argparse.Namespace) -> int:
 
 def cmd_verify_real(args: argparse.Namespace) -> int:
     """Validate the dissector against real captures from a public corpus."""
+    from .lab.labels import LABEL_SUFFIX, find_captures
     from .lab.realworld import EXPECTATIONS, SOURCE, check_all
 
     result = check_all(args.dir)
-    if not result["available"]:
+    labelled = [
+        n for n in find_captures(args.dir)
+        if os.path.exists(os.path.join(args.dir, n + LABEL_SUFFIX))
+    ]
+    if not result["available"] and not labelled:
         print(f"No real captures in {args.dir}/. Fetch them with:")
         print("    ./scripts/fetch-real-captures.sh")
+        print(f"or add your own with a <capture>{LABEL_SUFFIX} sidecar.")
         return 1
 
     print()
     print(_c("1", "Validation against real-world captures"))
+    ike_ok = _verify_real_ike(args, result, EXPECTATIONS, SOURCE)
+    esp_ok = _verify_real_esp(args, labelled)
+
+    known = {e.filename for e in EXPECTATIONS}
+    uncovered = [n for n in find_captures(args.dir)
+                 if n not in known and n not in labelled]
+    if uncovered:
+        print(_c("33", f"  {len(uncovered)} capture(s) in {args.dir}/ are unlabelled and "
+                       "validate nothing:"))
+        for name in uncovered:
+            print(_c("33", f"    {name}  (add {name}{LABEL_SUFFIX} to use it)"))
+        print()
+    return 0 if ike_ok and esp_ok else 1
+
+
+def _verify_real_esp(args: argparse.Namespace, labelled: list[str]) -> bool:
+    """ESP inference against user-labelled captures, reported on its own."""
+    from .lab.labels import check_directory
+
+    print(_c("1", "  ESP inference (ground truth: endpoint configuration, via labels)"))
+    if not labelled:
+        print(_c("90", "    No labelled captures. The ESP model has NOT been validated "
+                       "against real traffic."))
+        print()
+        return True
+
+    model = _load_model_or_explain(args.models)
+    if model is None:
+        return False
+    esp = check_directory(args.dir, model)
+    print(_c("90", f"    model corpus: {model.corpus['description']}"))
+    if model.corpus.get("real_flows"):
+        print(_c("33", "    This model trained on labelled real flows, possibly these "
+                       "ones; for an unbiased figure use the leave-one-capture-out "
+                       "result recorded by `train --include-real`."))
+    print()
+    for r in esp["captures"]:
+        _print_label_result(r)
+        print()
+    for err in esp["label_errors"]:
+        print(_c("1;31", f"  [LABEL ERROR] {err['capture']}: {err['error']}"))
+        print()
+    print(f"  ESP: {esp['hits']}/{esp['flows']} flows correct at framing-class level "
+          f"across {esp['labelled']} labelled capture(s)")
+    print()
+    return esp["passed"]
+
+
+def _verify_real_ike(args: argparse.Namespace, result: dict, EXPECTATIONS, SOURCE) -> bool:
+    """The IKE dissector against the public Wireshark corpus."""
+    print(_c("1", "  IKE dissector (ground truth: upstream filenames)"))
+    if not result["available"]:
+        print(_c("90", "    No public IKE captures present. Fetch with "
+                       "./scripts/fetch-real-captures.sh"))
+        print()
+        return True
     print(f"  Source: {SOURCE}")
     print(f"  Ground truth is the upstream filename, not anything written here.")
     print()
@@ -485,12 +638,53 @@ def cmd_verify_real(args: argparse.Namespace) -> int:
             print(_c("1;31", f"         {problem}"))
         print()
 
-    print(f"  {result['passed']}/{result['available']} validated")
+    print(f"  IKE: {result['passed']}/{result['available']} validated")
     if result["missing"]:
         print(_c("90", f"  {len(result['missing'])} not downloaded: "
                        + ", ".join(result["missing"])))
     print()
-    return 0 if result["passed"] == result["available"] else 1
+    return result["passed"] == result["available"]
+
+
+def cmd_bench(args: argparse.Namespace) -> int:
+    """Generate a large capture and measure reader and pipeline throughput."""
+    from .lab.bench import run
+
+    print(f"Generating a ~{args.packets:,}-packet capture and timing "
+          f"{args.repeat} interleaved runs of each path...")
+    result = run(packets=args.packets, model_dir=args.models, repeat=args.repeat,
+                 keep=args.keep)
+    if args.json:
+        print(json.dumps(result, indent=2))
+        return 0
+
+    cap, rd, pl = result["capture"], result["reader"], result["pipeline"]
+    print()
+    print(_c("1", "CipherGuard throughput benchmark"))
+    print(f"  capture   {cap['packets']:,} packets, {cap['bytes'] / 1e6:.1f} MB, "
+          f"{cap['links']} gateway pairs (generated in {cap['generate_seconds']}s)")
+    print(f"  host      Python {result['host']['python']} on {result['host']['platform']}")
+    print()
+    def spread(r: dict) -> str:
+        lo, hi = r.get("range") or (None, None)
+        return f"range {lo:,.0f}-{hi:,.0f}" if lo else ""
+
+    print(f"  reader    {rd['packets_per_second']:>10,.0f} packets/sec   "
+          + _c("90", spread(rd)))
+    if pl["packets_per_second"] is None:
+        print("  pipeline  not measurable: capture below the minimum size")
+    else:
+        print(f"  pipeline  {pl['packets_per_second']:>10,.0f} packets/sec   "
+              + _c("90", spread(pl)))
+    load = (f"{pl['model_load_seconds']}s, excluded from the rate above"
+            if pl["model_loaded"] else "no trained model found; inference skipped")
+    print(_c("90", f"  model load {load}"))
+    print()
+    print(_c("90", f"  Median of {result['repeat']} interleaved runs after a warm-up, "
+                   "single-threaded pure-Python path. Rates depend on the host; "
+                   "compare runs on the same machine."))
+    print()
+    return 0
 
 
 def cmd_export_demo(args: argparse.Namespace) -> int:
@@ -838,7 +1032,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--samples", type=int, default=90)
     p.add_argument("--epochs", type=int, default=60)
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--include-real", metavar="DIR",
+                   help="add labelled real captures (<capture>.label.json) from DIR; "
+                        "scored leave-one-capture-out. Default: synthetic only")
+    p.add_argument("--min-packets", type=int, default=8,
+                   help="minimum ESP packets for a real flow to be used")
     p.set_defaults(func=cmd_train)
+
+    p = sub.add_parser("label-check",
+                       help="score ESP inference against a capture's ground-truth label")
+    p.add_argument("capture", help="capture with a <capture>.label.json sidecar")
+    p.add_argument("--min-packets", type=int, default=8,
+                   help="minimum ESP packets before a flow is scored")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_label_check)
 
     p = sub.add_parser("sensor", help="continuous live capture and assessment")
     p.add_argument("interface", help="interface to monitor (a mirror/tap port)")
@@ -864,6 +1071,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dir", default=os.path.join("samples", "real"))
     p.add_argument("-v", "--verbose", action="store_true")
     p.set_defaults(func=cmd_verify_real)
+
+    p = sub.add_parser("bench",
+                       help="measure reader and pipeline throughput on a generated capture")
+    p.add_argument("--packets", type=int, default=200_000,
+                   help="approximate size of the generated capture")
+    p.add_argument("--repeat", type=int, default=3, help="runs per path; best is reported")
+    p.add_argument("--keep", metavar="PATH", help="write the capture here and keep it")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_bench)
 
     p = sub.add_parser("export-demo",
                        help="build a static dashboard for GitHub Pages")
