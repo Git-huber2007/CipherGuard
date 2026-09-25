@@ -489,12 +489,57 @@ button.ghost[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:
 }
 
 /* ---------- post-quantum exposure ---------- */
-.mosca{
-  padding:11px 14px;border-radius:4px;margin-bottom:14px;
-  font-size:.87rem;line-height:1.5;
+
+/* Harvest clock. Read like a gauge on an instrument panel: flat, bordered,
+   tabular numerals so digits do not jitter as they change. "Late" is carried
+   by the critical colour on the reading and a plain text tag, never by glow,
+   shadow or motion. */
+.hclock{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  border:1px solid var(--rule);border-radius:var(--radius-sm);
+  background:var(--sunk);margin-bottom:14px;
 }
-.mosca.late{background:#fbe9e7;color:#7d1810;border:1px solid #e8b4ae}
-.mosca.ok{background:#e4f2eb;color:#17513a;border:1px solid #a8cfbc}
+.hclock[hidden]{display:none}
+.hclock-read{padding:12px 14px;min-width:0}
+.hclock-read + .hclock-read{border-left:1px solid var(--rule)}
+.hclock-label{
+  font-size:var(--text-xs);color:var(--muted);
+  text-transform:uppercase;letter-spacing:.05em;
+}
+.hclock-value{
+  font-family:var(--mono);font-size:var(--text-xl);font-weight:500;
+  font-variant-numeric:tabular-nums;color:var(--ink);
+  margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.hclock-read.is-late .hclock-value{color:var(--crit)}
+.hclock-meta{font-size:var(--text-xs);color:var(--muted);margin-top:4px}
+.hclock-status{
+  display:inline-block;margin-left:6px;padding:0 5px;
+  border:1px solid currentColor;border-radius:var(--radius-sm);
+  font-family:var(--mono);letter-spacing:0;
+}
+.hclock-status.is-late{color:var(--crit)}
+.hclock-status.is-ok{color:var(--ok)}
+.hclock-foot{
+  grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;
+  padding:10px 14px;border-top:1px solid var(--rule);
+}
+.hclock-foot label{font-size:var(--text-sm);color:var(--muted)}
+.hclock-foot select{
+  font-family:var(--sans);font-size:var(--text-sm);color:var(--ink);
+  background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius-sm);
+  padding:3px 6px;min-width:9rem;
+}
+.hclock-foot .hclock-meta{margin-top:0}
+.hclock-note{
+  grid-column:1/-1;margin:0;padding:0 14px 12px;
+  font-size:var(--text-xs);color:var(--muted);max-width:86ch;
+}
+.hclock-note code{font-family:var(--mono);font-size:inherit}
+@media (max-width:640px){
+  .hclock{grid-template-columns:1fr}
+  .hclock-read + .hclock-read{border-left:none;border-top:1px solid var(--rule)}
+}
 .pql{
   display:flex;gap:14px;align-items:flex-start;
   padding:12px 0;border-bottom:1px solid var(--rule);
@@ -523,6 +568,84 @@ button.ghost[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:
 .phase h3{font-size:.86rem;margin-bottom:4px}
 .phase p{font-size:.83rem;color:#374b58;max-width:74ch}
 .phase .tgt{font-family:var(--mono);font-size:.75rem;color:var(--observed);margin-top:5px}
+
+/* ---------- posture replay ---------- */
+
+/* One measured series (observed teal), a neutral dashed reference for the
+   baseline it was judged against, and downgrades in the reserved critical
+   colour with their own shape and a label, so none of them depends on colour
+   alone. The reference grey #848f98 was chosen with the dataviz palette
+   validator: it separates from the teal for protan/deutan/tritan and normal
+   vision and still clears 3:1 on the panel surface; the dashboard's --muted
+   slate did not. */
+.replay-point{margin:2px 0 12px;font-size:var(--text-sm);color:var(--ink);max-width:80ch}
+.replay-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:10px}
+.replay-controls[hidden]{display:none}
+.replay-controls label{font-size:var(--text-sm);color:var(--muted)}
+.replay-controls select{min-width:0;max-width:100%;padding:5px 8px;font-size:var(--text-sm)}
+.replay-controls button{padding:5px 14px;font-size:var(--text-sm)}
+.replay-controls input[type=range]{flex:1 1 160px;min-width:120px;accent-color:var(--observed)}
+.replay-pos{font-family:var(--mono);font-size:var(--text-sm);color:var(--muted);font-variant-numeric:tabular-nums}
+.replay-chart{position:relative;min-height:0}
+.rp-svg{display:block;max-width:100%;overflow:visible}
+.rp-grid{stroke:#e3e9ee;stroke-width:1}
+.rp-axis{stroke:var(--rule);stroke-width:1}
+.rp-tick{font-family:var(--mono);font-size:11px;fill:var(--muted);font-variant-numeric:tabular-nums}
+.rp-axis-title{font-size:11px;fill:var(--faint)}
+.rp-line{fill:none;stroke:var(--observed);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.rp-ref{fill:none;stroke:#848f98;stroke-width:1.5;stroke-dasharray:5 4}
+.rp-mark{fill:var(--observed);stroke:var(--surface);stroke-width:2;paint-order:stroke}
+.rp-mark.rp-unconf{fill:var(--surface);stroke:var(--observed);stroke-width:2}
+.rp-mark.rp-down{fill:var(--crit)}
+.rp-drop{stroke:var(--crit);stroke-width:1.5}
+.rp-dlabel{font-family:var(--mono);font-size:12px;font-weight:600;fill:var(--ink)}
+.rp-cursor .rp-band{fill:#e9eff3}
+.rp-cursor .rp-current{fill:none;stroke:var(--ink);stroke-width:1.5}
+.rp-cursor{transition:transform .3s ease}
+.rp-hit{fill:transparent;cursor:pointer}
+.rp-tip{
+  position:absolute;pointer-events:none;white-space:nowrap;
+  background:var(--ink);color:#fff;font-family:var(--mono);font-size:11px;
+  padding:3px 7px;border-radius:var(--radius-sm);
+}
+.rp-tip[hidden]{display:none}
+.rp-legend{display:flex;flex-wrap:wrap;gap:4px 16px;margin:6px 0 12px 44px;font-size:var(--text-xs);color:var(--muted)}
+.rp-key{display:inline-flex;align-items:center;gap:6px}
+.replay-detail{border-top:1px solid var(--rule);padding-top:12px}
+.rp-head{font-size:var(--text-sm);color:var(--ink)}
+.rp-cap{font-family:var(--mono)}
+.rp-verdict{margin-top:8px;font-size:var(--text-base);font-weight:600;color:var(--ink)}
+.rp-verdict.is-down{color:var(--crit)}
+.rp-why{font-size:var(--text-xs);color:var(--muted)}
+.rp-strength{margin-top:6px;font-size:var(--text-sm);color:var(--muted)}
+.rp-tx{list-style:none;margin:6px 0 0;padding:0;font-family:var(--mono);font-size:var(--text-sm)}
+.rp-tx li{padding:1px 0}
+.rp-tx li.gone,.rp-tx li.new{font-weight:600}
+.rp-compare{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;margin-top:10px;
+  border:1px solid var(--rule);border-radius:var(--radius-sm)}
+.rp-col{padding:10px 12px;min-width:0}
+.rp-col + .rp-col{border-left:1px solid var(--rule)}
+.rp-col-h{font-size:var(--text-xs);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.rp-col .rp-tx{overflow-wrap:anywhere}
+.replay-table{margin-top:12px}
+.replay-table[hidden]{display:none}
+.replay-table summary{cursor:pointer;font-size:var(--text-sm);color:var(--observed)}
+.rp-table{width:100%;border-collapse:collapse;margin-top:8px;font-size:var(--text-xs)}
+.rp-table th,.rp-table td{text-align:left;padding:4px 8px;border-bottom:1px solid var(--rule);vertical-align:top}
+.rp-table td:nth-child(4),.rp-table td:nth-child(5),.rp-table td:nth-child(7){
+  font-family:var(--mono);font-variant-numeric:tabular-nums}
+.rp-table tr.is-down td:nth-child(6){color:var(--crit);font-weight:600}
+.replay-table > div{overflow-x:auto}
+.replay-source{margin-top:10px}
+.replay-source code{font-family:var(--mono);font-size:inherit}
+@media (max-width:640px){
+  .rp-compare{grid-template-columns:1fr}
+  .rp-col + .rp-col{border-left:none;border-top:1px solid var(--rule)}
+  .rp-legend{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){
+  .rp-cursor{transition:none}
+}
 
 /* ---------- remediation ---------- */
 .plat-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}

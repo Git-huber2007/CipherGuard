@@ -41,9 +41,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from cipherguard.cli import _prune_evidence  # noqa: E402
 from cipherguard.core.audit_log import AuditLog, retention_ceiling  # noqa: E402
 from cipherguard.core.health import write_sensor_state  # noqa: E402
+from cipherguard.core.retention import prune_evidence  # noqa: E402
 from cipherguard.intel.baseline import BaselineStore  # noqa: E402
 from cipherguard.pipeline import analyze  # noqa: E402
 
@@ -203,8 +203,8 @@ def run(
             inserted = sum(1 for s in assessment.sessions
                            if s.negotiated("IKE", confirmed_only=True))
             rows_pruned += before + inserted - store.conn.execute(count).fetchone()[0]
-        removed, _ = _prune_evidence(evidence, cfg.retain_windows,
-                                     cfg.max_evidence_bytes, protect=window)
+        removed, _ = prune_evidence(evidence, cfg.retain_windows,
+                                    cfg.max_evidence_bytes, protect=window)
         evidence_removed += removed
         write_sensor_state(evidence, window=iteration, window_seconds=0,
                            score=assessment.score(), evidence=os.path.basename(window))

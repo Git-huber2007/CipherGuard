@@ -341,6 +341,32 @@ def test_concurrent_writers_neither_corrupt_nor_lose_a_line(tmp_path):
     assert set(seen) == {f"{w}:{i}" for w in range(writers) for i in range(per)}
 
 
+@pytest.mark.no_model
+@pytest.mark.skipif(os.name != "nt", reason="the msvcrt lock path is Windows-only")
+def test_a_lock_error_that_is_not_contention_is_raised_not_retried(tmp_path, monkeypatch):
+    """Retrying is right for EDEADLOCK (LK_LOCK's ten-second timeout under
+    contention). Retrying anything else spins forever and hangs the sensor on
+    its next audit write."""
+    import errno
+    import msvcrt
+
+    from cipherguard.core.audit_log import AuditLog
+
+    calls = {"n": 0}
+
+    def locking(fd, mode, nbytes):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError(errno.EDEADLOCK, "contended")     # retried
+        raise OSError(errno.EBADF, "bad file descriptor")    # must surface
+
+    monkeypatch.setattr(msvcrt, "locking", locking)
+    with pytest.raises(OSError) as exc:
+        AuditLog(str(tmp_path / "audit.jsonl")).denied("x")
+    assert exc.value.errno == errno.EBADF
+    assert calls["n"] == 2
+
+
 # ---------------------------------------------------------------------------
 # Evidence retention
 # ---------------------------------------------------------------------------
@@ -365,6 +391,59 @@ def test_the_newest_window_survives_its_own_byte_ceiling(tmp_path):
 
     _prune_evidence(str(tmp_path), keep=0, max_bytes=1, protect=str(newest))
     assert newest.exists()
+
+
+class _FakeCapture:
+    """Stands in for LiveCapture: each window writes a small capture file and
+    yields no packets, which is all the library sensor loop needs to exercise
+    its evidence handling without a privileged socket."""
+
+    def __init__(self, interface, **_kw):
+        from cipherguard.capture.live import CaptureStats
+
+        self.stats = CaptureStats()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return None
+
+    def packets(self, max_seconds=None, max_packets=None, pcap_path=None, **_kw):
+        from cipherguard.dissector.pcap import PcapWriter
+
+        if pcap_path:
+            with PcapWriter(pcap_path) as w:
+                w.write_esp(0.0, "10.0.0.1", "10.0.0.2", 1, 1, b"x" * 2000)
+        self.stats.packets += 1
+        return iter(())
+
+
+@pytest.mark.no_model
+def test_library_sensor_loop_bounds_its_evidence(tmp_path, monkeypatch):
+    """Regression: `capture.sensor.run` wrote one capture per window into
+    `evidence_dir` and never pruned it, and named the files so that the
+    shared retention would not have matched them even if it had been called."""
+    import cipherguard.capture.sensor as sensor
+    from cipherguard.core.health import read_sensor_state
+
+    monkeypatch.setattr(sensor, "LiveCapture", _FakeCapture)
+    evidence = tmp_path / "evidence"
+    results = sensor.run(sensor.SensorConfig(
+        interface="Local Area Connection* 2", window_seconds=0.01, max_windows=12,
+        baseline_db=None, audit_log=None, model_dir=str(tmp_path / "no-model"),
+        evidence_dir=str(evidence), retain_windows=3,
+    ))
+
+    kept = sorted(os.listdir(evidence))
+    pcaps = [n for n in kept if n.endswith(".pcap")]
+    assert len(results) == 12
+    assert len(pcaps) == 3
+    newest = os.path.basename(results[-1].evidence_path)
+    assert newest in pcaps, "the latest window's evidence was pruned"
+    assert all(n.startswith("window-Local_Area_Connection_2-") for n in pcaps)
+    state = read_sensor_state(str(evidence))
+    assert state and state["window"] == 12 and state["evidence"] == newest
 
 
 # ---------------------------------------------------------------------------

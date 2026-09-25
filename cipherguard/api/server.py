@@ -37,6 +37,10 @@ ALLOWED_SUFFIXES = (".pcap", ".pcapng", ".cap")
 # writes to disk. Without a ceiling, one request fills the sensor's filesystem.
 MAX_UPLOAD_BYTES = 512 << 20
 
+# Two IPv6 addresses with zone IDs and the separator fit well inside this; a
+# longer "peer key" is not one.
+MAX_PEER_KEY = 256
+
 
 class AnalyzeRequest(BaseModel):
     capture: str
@@ -294,14 +298,40 @@ def create_app(
 
         return JSONResponse(build_cbom(_run(capture)))
 
+    # Both fleet endpoints open the store read-only. The normal constructor runs
+    # the schema script and migrations, so opening it with that from a GET would
+    # let a page view modify the database the sensor writes.
     @app.get("/api/fleet", dependencies=guard)
     def fleet() -> dict:
         from ..intel.baseline import BaselineStore
 
-        if not os.path.exists(baseline_db):
+        if not os.path.isfile(baseline_db):
             return {"tracked": False, "hint": "run: cipherguard watch <capture>"}
-        with BaselineStore(baseline_db) as store:
+        with BaselineStore.open_readonly(baseline_db) as store:
             return {"tracked": True, "summary": store.summary(), "links": store.fleet()}
+
+    @app.get("/api/fleet/history", dependencies=guard)
+    def fleet_history(peer: str) -> dict:
+        """One link's recorded posture, oldest first, for the replay timeline.
+
+        The store path is fixed at construction, like /api/fleet. The only input
+        is a peer key, and it has to name a link already in the store: it is
+        length-checked before the store is opened, only ever bound as an SQL
+        parameter, and an unknown key is a 404 rather than an empty history, so
+        the endpoint cannot be used to probe for observations of peers the
+        fleet does not show.
+        """
+        from ..intel.baseline import BaselineStore
+
+        if not peer or len(peer) > MAX_PEER_KEY or not peer.isprintable():
+            raise HTTPException(400, "invalid peer key")
+        if not os.path.isfile(baseline_db):
+            raise HTTPException(404, "no baseline store")
+        with BaselineStore.open_readonly(baseline_db) as store:
+            try:
+                return store.replay(peer)
+            except KeyError:
+                raise HTTPException(404, "no such link in the baseline store") from None
 
     @app.get("/api/rules", dependencies=guard)
     def rules() -> dict:

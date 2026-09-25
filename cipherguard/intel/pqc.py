@@ -83,6 +83,11 @@ def mosca_gap(secrecy_years: float, migration_years: float,
 
     Positive means the data will still be sensitive when it becomes decryptable,
     so migration is already overdue. Negative is the margin remaining.
+
+    The dashboard's harvest clock recomputes this in the browser when the data
+    classification is changed (`HarvestClock.moscaGap` in dashboard.js), with
+    the same operands in the same order so both produce the same double. A test
+    runs both over a table of inputs; change them together.
     """
     return (secrecy_years + migration_years) - crqc_years
 
@@ -229,6 +234,9 @@ def roadmap(
             "crqc_years": crqc_years,
             "mosca_gap_years": round(gap, 1),
             "already_late": gap > 0,
+            # Published so a client can recompute the deadline for another
+            # class without keeping its own copy of the table to drift.
+            "secrecy_lifetimes": dict(SECRECY_LIFETIME),
             "note": (
                 "The CRQC arrival estimate is a planning assumption, not a "
                 "prediction. Substitute the agency's own figure; the ranking of "
@@ -240,6 +248,9 @@ def roadmap(
             "quantum_exposed": len(exposed),
             "quantum_safe": len(links) - len(exposed),
             "total_bytes_harvestable": sum(l.bytes_observed for l in exposed),
+            # The rate at which that total grows while the links keep carrying
+            # traffic as observed: the harvest clock's tick rate.
+            "harvest_rate_mbps": round(sum(l.harvest_rate_mbps for l in exposed), 2),
         },
         "links": [l.to_dict() for l in links],
         "phases": phases,

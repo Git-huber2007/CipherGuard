@@ -359,6 +359,42 @@ a legacy standby, or a botched firmware rollback) is invisible to a single captu
 *and* to configuration review, which sees intended policy rather than what the
 peers actually settled on. Exit code 3 makes it a CI/monitoring gate.
 
+**Posture replay.** The dashboard can replay one link's recorded history, which
+makes the detection visible rather than just described:
+
+- **Timeline.** One mark per observation, with the negotiated strength drawn
+  against the baseline each observation was compared with.
+- **Downgrades** are drawn as ▼ with the bit delta.
+- **Scrubber and Play control** step through the history. Stepping is discrete;
+  the only motion is the cursor gliding between observations, and
+  `prefers-reduced-motion` removes that.
+- **Side-by-side detail.** At a downgrade, the baseline's transform set and the
+  downgraded one are shown in two columns.
+
+The marks are the detector's own verdicts. `record()` now stores what it
+concluded for each observation (`new`, `steady`, `downgrade`, `unconfirmed`
+until a stronger suite is seen again, `improvement` when promoted, `withheld`),
+together with the baseline it compared against. The replay never re-derives
+them, because a re-derivation would drift from the truth once retention had
+pruned the rows that promotion counted. Observations recorded before this change
+honestly show no verdict. The detection rules themselves are unchanged.
+
+`GET /api/fleet/history?peer=<key>` serves the history. Its design:
+
+- **Like `/api/fleet`:** behind the same token, with the database path fixed
+  when the app is built.
+- **One input:** a peer key, which must name a link already in the store. An
+  unknown key returns 404 rather than an empty list, so peers withheld as
+  possible spoofs can't be probed through it.
+- **Read-only:** both fleet endpoints open SQLite with `mode=ro`. Previously
+  `/api/fleet` used the normal constructor, which runs the schema script and
+  migrations, so a page view could rewrite the sensor's database. A regression
+  test checks the file is byte-for-byte unchanged after a GET.
+
+The static build has no store, so `export-demo` runs the two commands above
+into a throwaway database at export time and bakes the replay from what they
+recorded, including their exit codes (0, then 3).
+
 ### 2. Security strength as a number, not an adjective
 
 An agency with four hundred links needs an ordering, not a list of adjectives.
@@ -406,6 +442,30 @@ RFC 8784 pre-shared keys, which work on existing firmware. Phase 3 enables hybri
 ML-KEM under RFC 9370. The exposure index is a transparent weighted product,
 documented in full so a reviewer can disagree with the weights rather than
 reverse-engineer them.
+
+**The harvest clock.** The dashboard's post-quantum panel shows the same
+arithmetic as two instrument readings:
+
+- **Harvestable on quantum-exposed links.** This starts at the ESP bytes
+  observed on those links in the capture. It then grows at their summed
+  observed rate for as long as the view is open. The measured figure and the
+  extrapolation are labelled separately, and the count runs from when the view
+  opened, not from the capture time, so a months-old static export doesn't show
+  months of invented traffic. With `prefers-reduced-motion` it moves in 5-second
+  steps instead of running continuously.
+- **Mosca deadline.** This shows years and months until the deadline, or how far
+  past it, for the classification chosen in the selector. The browser
+  recomputes it with a copy of `mosca_gap()`. The class table itself isn't
+  copied; the roadmap publishes it (`assumptions.secrecy_lifetimes`). A test runs
+  the JavaScript and Python formulas over a table of inputs under Node and
+  requires identical doubles. Re-bracketing the JS as `s + (m − c)` makes that
+  test fail.
+
+The panel states on screen that the quantum arrival year is a planning
+assumption, not a forecast, and shows how to substitute your own figure
+(`--crqc-years`). Changing the classification moves only the deadline. The
+exposure index values stay those of the class the capture was analysed under,
+and the ranking order doesn't depend on the class.
 
 ### 5. CBOM export: inventory derived from traffic, not source
 
@@ -595,7 +655,7 @@ python -m cipherguard.cli analyze docker/captures/weak.pcap
 ## Tests
 
 ```bash
-python -m pytest tests/ -q                 # 274 passed, 14 skipped without real captures
+python -m pytest tests/ -q                 # 289 passed, 14 skipped without real captures
 python -m pytest tests/ -q -m "not soak"   # skip the ~90 s of soak tests
 ```
 
@@ -690,6 +750,10 @@ evidence behind the most recent assessment:
 | Window captures | `--retain 24` files, `--max-disk-mb 4096` | The capture behind the most recent assessment, even if that one window exceeds the byte cap. Before this change, a single oversize window deleted itself right after it was assessed. |
 | Baseline observations | `--retain-observations 500` per link, `--retain-days 90` | The row that established each link's current baseline (the evidence behind "was N bits" in a downgrade alert). Also each baselined link's latest row, so a link that has gone quiet stays in the fleet view, and every row of the most recent assessment, even across a clock step. |
 | Audit log | `--audit-max-mb 16`, `--audit-backups 5` (`audit.jsonl.1` … `.5`) | The most recent record. Rotation runs before the write, so the record that triggers it lands in the fresh file. |
+
+Both sensor loops (the `cipherguard sensor` command and the library
+`capture.sensor.run`) share one retention implementation and use the same
+defaults.
 
 Peers that never earned a baseline (withheld by the new-peer rate limit, which
 is what spoofed addresses look like) get no protection and age out completely.

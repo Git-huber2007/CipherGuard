@@ -11,3 +11,4 @@ docker/captures/*.pcap
 # docs/ is tracked so GitHub Pages can deploy from branch or Actions
 
 *.jsonl
+*.lock

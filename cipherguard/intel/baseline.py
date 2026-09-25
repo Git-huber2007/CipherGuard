@@ -46,6 +46,26 @@ DEFAULT_DB = "cipherguard-baseline.db"
 DEFAULT_RETAIN_PER_PEER = 500
 DEFAULT_RETAIN_DAYS = 90
 
+# The detector's conclusion for each observation, stored as it is reached so a
+# replay shows what was actually decided rather than a reconstruction of it. A
+# reconstruction would drift from the truth as soon as retention pruned the
+# rows the promotion rule had counted.
+VERDICTS = {
+    "new": "first confirmed sighting; established the baseline",
+    "withheld": "new peer beyond the per-capture limit; no baseline created",
+    "steady": "matched the baseline",
+    "downgrade": "weaker than the baseline",
+    "unconfirmed": "stronger than the baseline, not yet seen often enough to promote",
+    "improvement": "stronger than the baseline, seen repeatedly; promoted",
+}
+
+# Columns added after a store may already exist, with their SQL types.
+_ADDED_COLUMNS = {
+    "baselines": {"best_observation_id": "INTEGER"},
+    "observations": {"verdict": "TEXT", "baseline_bits": "INTEGER",
+                     "baseline_transforms": "TEXT"},
+}
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS observations (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,7 +78,12 @@ CREATE TABLE IF NOT EXISTS observations (
     quantum_bits    INTEGER NOT NULL,
     dh_group        INTEGER,
     transforms      TEXT NOT NULL,
-    score           INTEGER NOT NULL
+    score           INTEGER NOT NULL,
+    -- what record() concluded when it compared this observation with the
+    -- baseline in effect at the time; see VERDICTS
+    verdict             TEXT,
+    baseline_bits       INTEGER,
+    baseline_transforms TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_peer ON observations(peer_key, observed_at);
 
@@ -135,16 +160,23 @@ class BaselineStore:
         self.conn.commit()
 
     def _migrate(self) -> None:
-        """Add `best_observation_id` to stores created before retention existed.
+        """Add columns to stores created before they existed.
 
-        The backfill matches on the timestamp and strength the baseline recorded,
-        which identifies the establishing row because both were written from the
-        same `now` in the same transaction.
+        `best_observation_id` is backfilled: matching on the timestamp and
+        strength the baseline recorded identifies the establishing row, because
+        both were written from the same `now` in the same transaction. Verdicts
+        are not backfilled. They cannot be recovered exactly once rows have been
+        pruned, so older observations honestly carry none.
         """
-        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(baselines)")}
-        if "best_observation_id" in cols:
+        added = set()
+        for table, columns in _ADDED_COLUMNS.items():
+            have = {r["name"] for r in self.conn.execute(f"PRAGMA table_info({table})")}
+            for name, sql_type in columns.items():
+                if name not in have:
+                    self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}")
+                    added.add(name)
+        if "best_observation_id" not in added:
             return
-        self.conn.execute("ALTER TABLE baselines ADD COLUMN best_observation_id INTEGER")
         self.conn.execute(
             """
             UPDATE baselines SET best_observation_id = (
@@ -156,6 +188,31 @@ class BaselineStore:
             )
             """
         )
+
+    @classmethod
+    def open_readonly(cls, path: str) -> "BaselineStore":
+        """Open an existing store so that nothing can be written through it.
+
+        The normal constructor is not a read: it creates parent directories,
+        runs the schema script and migrates old stores with ALTER TABLE. The
+        dashboard's endpoints only read, so they open the file with SQLite's
+        `mode=ro`, which also refuses to create a missing file, and any write
+        attempted through this handle raises instead of landing.
+        """
+        from pathlib import Path
+
+        if not os.path.isfile(path):
+            raise FileNotFoundError(path)
+        store = cls.__new__(cls)
+        store.path = path
+        store.retain_per_peer = None
+        store.retain_days = None
+        # as_uri() percent-encodes, so a path containing '?' or '#' cannot
+        # smuggle in URI parameters that override mode=ro
+        uri = Path(path).resolve().as_uri() + "?mode=ro"
+        store.conn = sqlite3.connect(uri, uri=True)
+        store.conn.row_factory = sqlite3.Row
+        return store
 
     def close(self) -> None:
         self.conn.close()
@@ -227,6 +284,16 @@ class BaselineStore:
                 "SELECT * FROM baselines WHERE peer_key = ?", (key,)
             ).fetchone()
 
+            def mark(verdict: str, against: sqlite3.Row | None = None) -> None:
+                self.conn.execute(
+                    "UPDATE observations SET verdict = ?, baseline_bits = ?, "
+                    "baseline_transforms = ? WHERE id = ?",
+                    (verdict,
+                     against["best_classical_bits"] if against else None,
+                     against["best_transforms"] if against else None,
+                     obs_id),
+                )
+
             if row is None:
                 new_peers += 1
                 if new_peers > max_new_peers:
@@ -234,7 +301,9 @@ class BaselineStore:
                     # any real deployment changes, which is what address
                     # spoofing looks like. Observations are still recorded; only
                     # baseline creation is withheld.
+                    mark("withheld")
                     continue
+                mark("new")
                 self.conn.execute(
                     "INSERT INTO baselines (peer_key, best_classical_bits, "
                     "best_quantum_bits, best_transforms, best_seen_at, first_seen_at, "
@@ -255,12 +324,15 @@ class BaselineStore:
             best = row["best_classical_bits"]
             previous = json.loads(row["best_transforms"])
 
-            if strength.classical_bits < best:
+            if strength.classical_bits == best:
+                mark("steady", row)
+            elif strength.classical_bits < best:
+                mark("downgrade", row)
                 drifts.append(
                     Drift(key, "downgrade", best, strength.classical_bits,
                           previous, transforms, row["best_seen_at"])
                 )
-            elif strength.classical_bits > best:
+            else:
                 # Promote only once the stronger suite has been seen enough
                 # times to be a configuration rather than an anomaly.
                 seen_at_least = self.conn.execute(
@@ -269,7 +341,9 @@ class BaselineStore:
                     (key, strength.classical_bits),
                 ).fetchone()[0]
                 if seen_at_least < min_observations:
+                    mark("unconfirmed", row)
                     continue
+                mark("improvement", row)
                 drifts.append(
                     Drift(key, "improvement", best, strength.classical_bits,
                           previous, transforms, row["best_seen_at"])
@@ -364,6 +438,63 @@ class BaselineStore:
         return [
             {**dict(r), "transforms": json.loads(r["transforms"])} for r in rows
         ]
+
+    def has_link(self, key: str) -> bool:
+        """Whether `key` is a link with a baseline, i.e. one the fleet shows."""
+        return self.conn.execute(
+            "SELECT 1 FROM baselines WHERE peer_key = ?", (key,)).fetchone() is not None
+
+    def replay(self, key: str, limit: int = 1000) -> dict:
+        """A link's recorded history, oldest first, with the detector's verdicts.
+
+        Only links with a baseline can be replayed: peers withheld by the new-
+        peer limit are what spoofed addresses look like, and exposing their rows
+        would let anyone who can put packets on the segment put content on the
+        dashboard. Raises KeyError for any other key.
+
+        Reads only. Works on a store opened with `open_readonly()`, including
+        one created before verdicts were recorded, where they read as None.
+        """
+        if not self.has_link(key):
+            raise KeyError(key)
+        have = {r["name"] for r in self.conn.execute("PRAGMA table_info(observations)")}
+        extra = ", ".join(c if c in have else f"NULL AS {c}"
+                          for c in ("verdict", "baseline_bits", "baseline_transforms"))
+        rows = self.conn.execute(
+            "SELECT * FROM (SELECT id, observed_at, capture, classical_bits, quantum_bits, "
+            f"dh_group, transforms, ike_version, {extra} FROM observations "
+            "WHERE peer_key = ? ORDER BY observed_at DESC, id DESC LIMIT ?) "
+            "ORDER BY observed_at ASC, id ASC",
+            (key, limit + 1),
+        ).fetchall()
+        truncated = len(rows) > limit
+        rows = rows[-limit:] if truncated else rows
+
+        observations = []
+        for r in rows:
+            d = dict(r)
+            d["transforms"] = json.loads(d["transforms"])
+            bt = d.pop("baseline_transforms")
+            d["baseline_transforms"] = json.loads(bt) if bt else None
+            d["delta_bits"] = (d["classical_bits"] - d["baseline_bits"]
+                               if d["baseline_bits"] is not None else None)
+            observations.append(d)
+
+        b = self.conn.execute("SELECT * FROM baselines WHERE peer_key = ?", (key,)).fetchone()
+        return {
+            "peer_key": key,
+            "baseline": {
+                "classical_bits": b["best_classical_bits"],
+                "quantum_bits": b["best_quantum_bits"],
+                "transforms": json.loads(b["best_transforms"]),
+                "established_at": b["best_seen_at"],
+                "first_seen_at": b["first_seen_at"],
+                "observations_total": b["observations"],
+            },
+            "observations": observations,
+            "truncated": truncated,
+            "verdicts": VERDICTS,
+        }
 
     def fleet(self) -> list[dict]:
         """One row per link, weakest current state first — the triage queue."""

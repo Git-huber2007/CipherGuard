@@ -16,21 +16,27 @@ it is a parameter because the right value depends on the link's rekey interval.
 Memory is bounded per window by construction: each window builds its own
 tracker, the assessment is emitted, and the packet state is discarded. A sensor
 that accumulates across windows is a sensor that eventually dies on a busy link.
+Disk is bounded the same way `cipherguard sensor` bounds it: evidence, baseline
+observations and the audit log all have ceilings, with the same defaults.
 """
 
 from __future__ import annotations
 
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable
 
 from ..audit.engine import evaluate
-from ..core.audit_log import AuditLog
+from ..core.audit_log import DEFAULT_BACKUPS, DEFAULT_MAX_BYTES, AuditLog
+from ..core.health import write_sensor_state
 from ..core.models import Assessment
+from ..core.retention import EVIDENCE_PREFIX, prune_evidence
 from ..dissector import ike as ike_mod
 from ..dissector.esp import EspTracker
+from ..intel.baseline import DEFAULT_RETAIN_DAYS, DEFAULT_RETAIN_PER_PEER
 from ..ml.classifier import SuiteClassifier
 from ..pipeline import _attribute_volume
 from .live import CaptureUnavailable, LiveCapture
@@ -47,6 +53,23 @@ class SensorConfig:
     audit_log: str | None = "cipherguard-audit.jsonl"
     evidence_dir: str | None = None
     max_packets_per_window: int = 2_000_000
+    # retention: the same ceilings and defaults as `cipherguard sensor`
+    retain_windows: int = 24
+    max_evidence_bytes: int = 4096 << 20
+    retain_per_peer: int | None = DEFAULT_RETAIN_PER_PEER
+    retain_days: float | None = DEFAULT_RETAIN_DAYS
+    audit_max_bytes: int = DEFAULT_MAX_BYTES
+    audit_backups: int = DEFAULT_BACKUPS
+
+
+def _evidence_name(interface: str, index: int) -> str:
+    """`window-<iface>-<n>-<epoch>.pcap`: the prefix is what retention prunes.
+
+    The interface name is flattened because on Windows it is a display name
+    ("Local Area Connection* 2") that can hold characters no path may contain.
+    """
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", interface).strip("_") or "if"
+    return f"{EVIDENCE_PREFIX}{safe}-{index}-{int(time.time())}.pcap"
 
 
 @dataclass
@@ -118,8 +141,10 @@ def run(
     if config.baseline_db:
         from ..intel.baseline import BaselineStore
 
-        store = BaselineStore(config.baseline_db)
-    log = AuditLog(config.audit_log, actor="sensor")
+        store = BaselineStore(config.baseline_db, retain_per_peer=config.retain_per_peer,
+                              retain_days=config.retain_days)
+    log = AuditLog(config.audit_log, actor="sensor", max_bytes=config.audit_max_bytes,
+                   backups=config.audit_backups)
 
     results: list[WindowResult] = []
     index = 0
@@ -135,7 +160,7 @@ def run(
                 if config.evidence_dir:
                     os.makedirs(config.evidence_dir, exist_ok=True)
                     evidence = os.path.join(
-                        config.evidence_dir, f"{name}-{int(time.time())}.pcap"
+                        config.evidence_dir, _evidence_name(config.interface, index)
                     )
 
                 before = cap.stats.packets
@@ -165,6 +190,19 @@ def run(
                                 "counts": assessment.counts(),
                             }
                         )
+
+                if config.evidence_dir:
+                    # after the assessment is recorded, and never the window it
+                    # was made from
+                    prune_evidence(config.evidence_dir, config.retain_windows,
+                                   config.max_evidence_bytes, protect=evidence)
+                    write_sensor_state(
+                        config.evidence_dir, window=index,
+                        window_seconds=config.window_seconds,
+                        packets=cap.stats.packets - before,
+                        score=assessment.score(),
+                        evidence=os.path.basename(evidence) if evidence else None,
+                    )
 
                 result = WindowResult(
                     index=index,

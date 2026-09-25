@@ -488,8 +488,46 @@
       <section class="panel" style="margin-bottom:18px">
         <h2>Post-quantum exposure <span class="domain-tag obs">observed</span></h2>
         <div class="sub" id="pqsub">Links ranked by what an adversary recording traffic today could read later.</div>
-        <div id="mosca"></div>
+        <div class="hclock" id="hclock" role="group" aria-label="Harvest clock" hidden>
+          <div class="hclock-read">
+            <div class="hclock-label">Harvestable on quantum-exposed links</div>
+            <div class="hclock-value" id="hclock-bytes">&mdash;</div>
+            <div class="hclock-meta" id="hclock-rate"></div>
+          </div>
+          <div class="hclock-read" id="hclock-mosca">
+            <div class="hclock-label"><span id="hclock-mosca-label">Mosca deadline</span>
+              <span class="hclock-status" id="hclock-status"></span></div>
+            <div class="hclock-value" id="hclock-deadline" aria-live="polite">&mdash;</div>
+            <div class="hclock-meta" id="hclock-terms"></div>
+          </div>
+          <div class="hclock-foot">
+            <label for="hclock-class">Data classification</label>
+            <select id="hclock-class"></select>
+            <span class="hclock-meta" id="hclock-secrecy"></span>
+          </div>
+          <p class="hclock-note" id="hclock-note"></p>
+        </div>
         <div id="pqlinks"><div class="empty">No links assessed yet.</div></div>
+      </section>
+
+      <section class="panel replay" id="replay-panel" style="margin-bottom:18px" aria-labelledby="replay-title">
+        <h2 id="replay-title">Posture replay <span class="domain-tag obs">baseline store</span></h2>
+        <p class="replay-point">This change is invisible in either capture alone: each one shows a valid negotiation, and only the comparison the baseline store makes reveals the drop.</p>
+        <div class="replay-controls" id="replay-controls" hidden>
+          <label for="replay-link">Link</label>
+          <select id="replay-link"></select>
+          <button type="button" class="ghost" id="replay-play" aria-pressed="false">Play</button>
+          <input type="range" id="replay-scrub" min="0" max="0" value="0" step="1" aria-label="Observation">
+          <span class="replay-pos" id="replay-pos"></span>
+        </div>
+        <div class="replay-chart" id="replay-chart"></div>
+        <div class="replay-detail" id="replay-detail"></div>
+        <details class="replay-table" id="replay-table-wrap" hidden>
+          <summary>Table view</summary>
+          <div id="replay-table"></div>
+        </details>
+        <div class="empty" id="replay-empty">Loading the baseline store&hellip;</div>
+        <div class="sub replay-source" id="replay-source"></div>
       </section>
       <!-- Interactive Q-Day Post-Quantum Mosca Cockpit -->
       <section class="panel pqc-mosca-cockpit" id="pqc-mosca-cockpit" style="margin-bottom:18px">

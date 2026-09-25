@@ -20,6 +20,7 @@ can share a log without interleaving partial lines or losing one to a rename.
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import socket
@@ -159,6 +160,11 @@ class AuditLog:
         self._write({"event": "denied", "reason": reason, "detail": detail[:200]})
 
 
+# EDEADLOCK is what msvcrt raises; macOS has no such name, and this is built at
+# import time on every platform.
+_LOCK_CONTENDED = {getattr(errno, "EDEADLOCK", errno.EDEADLK), errno.EACCES}
+
+
 @contextmanager
 def _interprocess_lock(path: str) -> Generator[None, None, None]:
     """Exclusive advisory lock on a sidecar file, held for one append.
@@ -171,14 +177,17 @@ def _interprocess_lock(path: str) -> Generator[None, None, None]:
         if os.name == "nt":
             import msvcrt
 
-            # LK_LOCK retries for about ten seconds and then raises; waiting
-            # longer is correct, since the alternative is an unserialised write.
+            # LK_LOCK retries for about ten seconds and then raises EDEADLOCK;
+            # waiting longer is correct, since the alternative is an
+            # unserialised write. Any other error is not contention and would
+            # never clear, so it propagates instead of hanging the sensor.
             while True:
                 try:
                     msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
                     break
-                except OSError:
-                    continue
+                except OSError as exc:
+                    if exc.errno not in _LOCK_CONTENDED:
+                        raise
             try:
                 yield
             finally:
