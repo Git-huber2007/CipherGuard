@@ -316,3 +316,65 @@ def test_presentation_steps_exist_in_order():
     assert 'behavior: reduced() ? "auto"' in pres              # no smooth scroll if reduced
     css = _read("css", "dashboard.css")
     assert "html.presenting{font-size:" in css and "#header-controls" in css
+
+
+# ---------------------------------------------------------------------------
+# Theme: light by default, Dark and System on request
+# ---------------------------------------------------------------------------
+
+_THEME_PAGE = r"""
+let osDark = true, stored = null, storageThrows = false;
+const listeners = [];
+const attrs = {};
+const document = { documentElement: { setAttribute: (k, v) => { attrs[k] = v; } } };
+const sel = { value: "", addEventListener: (ev, fn) => { sel.onchange = fn; } };
+const $ = id => (id === "theme-select" ? sel : null);
+const localStorage = {
+  getItem: k => { if (storageThrows) throw new Error("denied"); return stored; },
+  setItem: (k, v) => { if (storageThrows) throw new Error("denied"); stored = v; },
+};
+const mq = {
+  get matches(){ return osDark; },
+  addEventListener: (ev, fn) => listeners.push(fn),
+};
+const window = { matchMedia: () => mq };
+const matchMedia = window.matchMedia;
+"""
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+@pytest.mark.no_model
+def test_theme_is_light_unless_the_reader_asks():
+    js = dashboard_js()
+    got = run_node(_THEME_PAGE + module("Theme", js) + r"""
+const out = {};
+Theme.init();                       out.fresh_on_dark_os = attrs["data-theme"];
+sel.value = "dark"; sel.onchange(); out.picked_dark = attrs["data-theme"]; out.saved = stored;
+sel.value = "system"; sel.onchange(); out.system_dark_os = attrs["data-theme"];
+osDark = false; listeners.forEach(f => f()); out.os_turns_light = attrs["data-theme"];
+sel.value = "light"; sel.onchange(); osDark = true; listeners.forEach(f => f());
+out.light_ignores_os = attrs["data-theme"];
+stored = "neon"; Theme.init();      out.junk_saved = attrs["data-theme"];
+storageThrows = true; Theme.init(); out.no_storage = attrs["data-theme"];
+Theme.set("dark");                  out.no_storage_still_switches = attrs["data-theme"];
+console.log(JSON.stringify(out));
+""")
+    assert got == {
+        "fresh_on_dark_os": "light", "picked_dark": "dark", "saved": "dark",
+        "system_dark_os": "dark", "os_turns_light": "light", "light_ignores_os": "light",
+        "junk_saved": "light", "no_storage": "light", "no_storage_still_switches": "dark",
+    }
+
+
+@pytest.mark.no_model
+def test_saved_theme_is_applied_before_the_stylesheet_paints():
+    html = _read("index.html")
+    head = html[: html.index("</head>")]
+    tag = re.search(r'<script src="[^"]*js/theme-init\.js"></script>', head)
+    assert tag, "theme-init.js must load in <head>, without defer or async"
+    assert tag.start() < head.index('rel="stylesheet"')        # no flash of the wrong theme
+    init = _read("js", "theme-init.js")
+    assert 'localStorage.getItem("cipherguard.theme")' in init
+    assert '"cipherguard.theme"' in module("Theme", dashboard_js())
+    options = re.findall(r'<option value="(\w+)">', html[html.index('id="theme-select"'):][:400])
+    assert options == ["light", "dark", "system"]

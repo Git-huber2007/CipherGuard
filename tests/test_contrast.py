@@ -3,7 +3,7 @@
 --faint used to be #8798a4: about 3:1 on white and 2.5:1 on the page paper,
 which fails WCAG AA for body text and disappears entirely on a projector. Every
 text token is now checked against every surface and tint token it can sit on,
-in both colour schemes, at 4.5:1.
+in both themes, at 4.5:1.
 
 The dark scheme also re-points the stylesheet's hard-coded colours through
 generated --dk-* variables. Their text colours are checked against the lightest
@@ -53,23 +53,38 @@ def _tokens(block: str) -> dict[str, str]:
     return {k: v.lower() for k, v in re.findall(r"--([\w-]+)\s*:\s*(#[0-9a-fA-F]{3,6})\b", block)}
 
 
+DARK = 'html[data-theme="dark"]{'
+
+
 def _light_tokens(css: str) -> dict[str, str]:
     """Top-level :root blocks in source order; a later block overrides."""
-    body = css[: css.index("@media (prefers-color-scheme:dark)")]
     out: dict[str, str] = {}
-    for block in re.findall(r"(?m)^:root\s*\{(.*?)\}", body, re.S):
+    for block in re.findall(r"(?m)^:root\s*\{(.*?)\}", css, re.S):
         out.update(_tokens(block))
     return out
 
 
 def _dark_block(css: str) -> str:
-    start = css.index("@media (prefers-color-scheme:dark)")
-    depth, i = 0, css.index("{", start)
-    for j in range(i, len(css)):
-        depth += {"{": 1, "}": -1}.get(css[j], 0)
-        if depth == 0:
-            return css[i + 1: j]
-    raise AssertionError("unterminated dark-scheme block")
+    """The dark theme's variable blocks (the tokens, then the generated --dk-*
+    counterparts), joined. Dark is opt-in: it applies only under
+    html[data-theme="dark"], which the theme switch sets."""
+    blocks = []
+    start = css.find(DARK)
+    while start != -1:
+        end = css.index("}", start)
+        blocks.append(css[start + len(DARK): end])
+        start = css.find(DARK, end)
+    assert blocks, "no dark theme block"
+    return "\n".join(blocks)
+
+
+def test_dark_is_opt_in_not_forced_by_the_os():
+    """A dark OS used to force the dark scheme with no way back. Light is the
+    default now; the OS preference only counts when the reader picks System,
+    and that is resolved in script, so the stylesheet must not follow it."""
+    css = _css()
+    assert "prefers-color-scheme" not in css
+    assert css.count(DARK) == 2
 
 
 def _dark_tokens(css: str) -> dict[str, str]:
@@ -130,7 +145,7 @@ def test_light_rendering_is_unchanged_by_the_dark_variables():
     """Each --dk-* reference carries the original colour as its fallback, and
     no --dk-* variable is defined outside the dark block."""
     css = _css()
-    outside = css.replace(_dark_block(css), "")
+    outside = re.sub(re.escape(DARK) + r"[^}]*\}", "", css)
     assert not re.search(r"(?m)^\s*--dk-[\w-]+\s*:", outside)
     for ref in re.findall(r"var\(--dk-[\w-]+,\s*([^)]*\)?)\)", css):
         assert re.match(r"(#[0-9a-fA-F]{3,6}|rgba\()", ref.strip()), ref

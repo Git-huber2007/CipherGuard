@@ -336,91 +336,13 @@ def create_app(
     def rules() -> dict:
         return {"rules": rule_catalogue()}
 
-    server_state = {"simulate_rogue": False}
-
-    @app.get("/api/wifi/simulate-rogue")
-    def get_simulate_rogue() -> dict:
-        return {"active": server_state["simulate_rogue"]}
-
-    @app.post("/api/wifi/simulate-rogue")
-    async def toggle_simulate_rogue(request: Request) -> dict:
-        try:
-            body = await request.json()
-            if "active" in body:
-                server_state["simulate_rogue"] = bool(body["active"])
-            else:
-                server_state["simulate_rogue"] = not server_state["simulate_rogue"]
-        except Exception:
-            server_state["simulate_rogue"] = not server_state["simulate_rogue"]
-        return {"active": server_state["simulate_rogue"]}
-
-    def _apply_simulated_rogue(res: dict, sim_rogue: bool | None = None) -> None:
-        should_sim = sim_rogue if sim_rogue is not None else server_state["simulate_rogue"]
-        if should_sim and not res.get("rogue_aps"):
-            iface = res.get("interface") or {}
-            active_ssid = iface.get("ssid") or "CipherGuard-HQ-Secure"
-            ch = iface.get("channel") or 6
-            band = iface.get("band") or "2.4 GHz"
-            sim_clone = {
-                "ssid": active_ssid,
-                "bssid": "58:61:63:de:ad:01",
-                "signal_percent": 96,
-                "rssi_dbm": -38,
-                "channel": ch,
-                "band": band,
-                "radio_type": "802.11ax",
-                "authentication": "Open",
-                "encryption": "None",
-                "security_grade": "F",
-                "connected": False,
-                "is_rogue": True,
-                "rogue_reason": f"Open / Unencrypted clone of secured WPA2 network '{active_ssid}' (Classic Evil Twin MitM honeypot)",
-                "notes": "Adversary AP broadcasting at high RF power to entice victim association",
-                "cipher": "None",
-            }
-            nets = res.get("networks_in_range", [])
-            if not any(n.get("bssid") == sim_clone["bssid"] for n in nets):
-                nets.insert(1, sim_clone)
-            res["networks_in_range"] = nets
-            res["rogue_aps"] = [
-                {
-                    "ssid": active_ssid,
-                    "bssid": "58:61:63:de:ad:01",
-                    "band": band,
-                    "channel": ch,
-                    "signal": "96% (-38 dBm)",
-                    "signal_percent": 96,
-                    "threat_level": "CRITICAL",
-                    "reason": f"Evil Twin Clone: Open vs {iface.get('authentication', 'WPA2-Personal')}",
-                }
-            ]
-            crit_finding = {
-                "severity": "critical",
-                "rule_id": "WIFI-001",
-                "title": "Potential Evil Twin / Rogue AP Detected",
-                "subject": f"SSID: {active_ssid}",
-                "detail": f"Detected access points broadcasting SSID '{active_ssid}' with mismatched security postures. Genuine AP enforces {iface.get('authentication', 'WPA2-Personal')}, while rogue clone BSSID 58:61:63:de:ad:01 is broadcasting as Open (unencrypted) with strong 96% signal. This is a classic Evil Twin honeypot designed to intercept credentials and perform Adversary-in-the-Middle (MitM) inspection.",
-                "remediation": "Investigate physical location of BSSID 58:61:63:de:ad:01 using RF signal strength triangulation. Do not connect to unencrypted clones. Enforce 802.11w Protected Management Frames (PMF) and WPA3-Enterprise on authentic infrastructure.",
-                "reference": "NIST SP 800-153 / MITRE ATT&CK T1040",
-                "inferred": False,
-            }
-            findings = [f for f in res.get("findings", []) if f.get("rule_id") != "WIFI-001"]
-            findings.insert(0, crit_finding)
-            res["findings"] = findings
-            counts = res.get("counts", {})
-            counts["critical"] = sum(1 for f in findings if f.get("severity") == "critical")
-            res["counts"] = counts
-            res["score"] = min(res.get("score", 100), 45)
-            res["grade"] = "F"
-
     @app.get("/api/wifi/current", dependencies=guard)
-    def wifi_current(sim_rogue: bool | None = None) -> JSONResponse:
+    def wifi_current() -> JSONResponse:
         from ..wifi.auditor import WifiAuditor
         from ..vpn.detector import VpnDetector
         auditor = WifiAuditor()
         assessment = auditor.audit_current()
         res = assessment.to_dict()
-        _apply_simulated_rogue(res, sim_rogue)
 
         try:
             vpn_detector = VpnDetector()
@@ -541,7 +463,6 @@ def create_app(
         auditor = WifiAuditor()
         assessment = auditor.audit_current(force_scan=True)
         res = assessment.to_dict()
-        _apply_simulated_rogue(res)
         try:
             vpn_detector = VpnDetector()
             wifi_name = assessment.interface.name if assessment.interface else "Wi-Fi"

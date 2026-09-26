@@ -20,13 +20,10 @@ const state = {
   wifiAssessment: null,    // latest live wifi & vpn assessment payload
   sessionStartTime: Date.now(),
   telemetryTicks: 0,
-  simulatedRogueApActive: false, // interactive rogue AP evil twin simulation toggle
-  simulatedVpnActive: null,     // null: auto-detect, true: force active, false: force direct
   ipsecMode: "single",     // "single" or "diff"
   diffAssessmentA: null,   // baseline capture A assessment
   diffAssessmentB: null,   // hardened capture B assessment
   spectrumBand: "2.4",     // "2.4" or "5"
-  complianceFilter: "all", // "all", "nist", "mitre", "cnsa"
   selectedLink: null,      // link id ("a~b") shown in the ribbon and link panel
   findingsView: "rule"     // "rule" (grouped) or "link"
 };
@@ -318,7 +315,7 @@ function showToast(message, type = "info", duration = 4000){
   if (!container) return;
   const item = document.createElement("div");
   item.className = `toast-item ${type}`;
-  const icon = type === "error" ? "🚨" : type === "success" ? "✔" : "ℹ";
+  const icon = type === "error" ? "" : type === "success" ? "✔" : "ℹ";
   item.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px">
       <span>${icon}</span>
@@ -374,7 +371,7 @@ function showFieldError(inputEl, message){
     err.setAttribute("role", "alert");
     inputEl.parentElement.appendChild(err);
   }
-  err.innerHTML = `<span>⚠</span> ${esc(message)}`;
+  err.innerHTML = `${esc(message)}`;
 }
 
 function clearFieldError(inputEl){
@@ -469,8 +466,8 @@ function updateBackendModalContent(isLive, details = {}){
   if (lat) lat.textContent = isLive ? `${details.latency || 4} ms` : "Offline";
 
   const wifiIface = (state.wifiAssessment && state.wifiAssessment.interface) || {};
-  if (adp) adp.textContent = wifiIface.description || "MediaTek MT7921 (Wi-Fi 6)";
-  if (ssid) ssid.textContent = wifiIface.ssid ? `${wifiIface.ssid} (Ch ${wifiIface.channel || 6})` : "White Devil (Ch 6)";
+  if (adp) adp.textContent = wifiIface.description || "\u2014";
+  if (ssid) ssid.textContent = wifiIface.ssid ? `${wifiIface.ssid} (Ch ${wifiIface.channel || 6})` : "\u2014";
 
   if (isLive) {
     if (card) { card.className = "modal-status-card online"; }
@@ -566,7 +563,7 @@ function handleCopyBackendCmd(){
   const cmd = "python -m uvicorn cipherguard.api.server:app --host 127.0.0.1 --port 8000";
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(cmd).then(() => {
-      showToast("Server command copied to clipboard!", "success");
+      showToast("Command copied", "success");
       const btn = $("btn-copy-backend-cmd");
       if (btn) {
         const orig = btn.textContent;
@@ -1042,11 +1039,6 @@ function renderFlows(a){
       <div class="confbar"><i style="width:${pct}%"></i></div>
       <div class="cand">${Fmt.percent(ratio)} confidence in the ${Glossary.term("framing-class", "framing class")}</div>
       ${candidates}
-      <div style="margin-top:8px">
-        <button type="button" class="btn-wire-inspect" onclick="HexDissectorEngine.loadFlowWire('${esc(f.spi)}', '${esc(f.framing_class || '')}')">
-          🔬 Inspect Wire Framing &amp; Hex
-        </button>
-      </div>
     </div>`;
   }).join("");
 }
@@ -2023,291 +2015,6 @@ const PostureReplay = (() => {
 })();
 window.PostureReplay = PostureReplay;
 
-function renderComplianceMatrix(ipsecAssessment, wifiAssessment){
-  ipsecAssessment = ipsecAssessment || state.assessment;
-  wifiAssessment = wifiAssessment || state.wifiAssessment;
-
-  const tbody = $("compliance-matrix-tbody");
-  const statsEl = $("compliance-stats-row");
-  if (!tbody) return;
-
-  if (!ipsecAssessment && !wifiAssessment){
-    tbody.innerHTML = `<tr><td colspan="5" class="empty">Run an assessment or load Wi-Fi telemetry to generate compliance findings.</td></tr>`;
-    if (statsEl) statsEl.innerHTML = "";
-    return;
-  }
-
-  const suite = extractSuiteInfo(ipsecAssessment);
-  const wifiData = wifiAssessment || {};
-  const rogueList = (wifiData.rogue_aps || []);
-  const hasRogue = rogueList.length > 0 || state.simulatedRogueApActive;
-  const findings = (ipsecAssessment && ipsecAssessment.findings) || [];
-
-  const items = [];
-
-  // 1. NIST SP 800-77 §4.1: IKE Protocol Version
-  const isIkev2 = /IKEv2/i.test(suite.ikeVersion || "");
-  const isIkev1 = /IKEv1/i.test(suite.ikeVersion || "");
-  items.push({
-    framework: "nist",
-    ref: "NIST SP 800-77 §4.1",
-    refClass: "",
-    name: "IKE Protocol Version (IKEv2 Mandate)",
-    meta: "RFC 7296 · RFC 8247 §2.1",
-    status: isIkev2 ? "PASS" : (isIkev1 ? "FAIL" : "WARN"),
-    observed: isIkev2
-      ? "IKEv2 negotiated. Cryptographic negotiation protection and DoS cookie mechanism active."
-      : (isIkev1
-          ? "Observed legacy IKEv1 exchange. IKEv1 is explicitly prohibited by NIST SP 800-77 Rev. 1 due to protocol flaw risks and offline PSK dictionary vulnerability."
-          : "No active IKE negotiation observed in capture sample."),
-    fix: isIkev2
-      ? "Maintain IKEv2-only policy. Confirm legacy IKEv1 daemons remain disabled on gateway."
-      : "Migrate phase 1 to IKEv2 per RFC 7296. Enforce strict IKEv2 proposal negotiation in gateway configuration."
-  });
-
-  // 2. NIST SP 800-77 §4.2: AEAD Encryption Suite
-  const badCipher = /3DES|DES|NULL|BLOWFISH/i.test(suite.ikeCipher || "") || /3DES|DES|NULL/i.test(suite.espSuite || "");
-  const isGcm = /GCM|CHACHA/i.test(suite.ikeCipher || "") || /GCM|CHACHA/i.test(suite.espSuite || "");
-  const isCbc = /CBC/i.test(suite.ikeCipher || "") || /CBC/i.test(suite.espSuite || "");
-  const cipherStatus = badCipher ? "FAIL" : (isGcm ? "PASS" : (isCbc ? "WARN" : "WARN"));
-  items.push({
-    framework: "nist",
-    ref: "NIST SP 800-77 §4.2",
-    refClass: "",
-    name: "Authenticated Encryption (AEAD Mandate)",
-    meta: "RFC 8247 §3 · NIST SP 800-38D",
-    status: cipherStatus,
-    observed: badCipher
-      ? `High-risk legacy cipher observed (${esc(suite.ikeCipher)} / ${esc(suite.espSuite)}). Subject to Sweet32 collision attacks (CVE-2016-2183) or cleartext payload exposure.`
-      : (isGcm
-          ? `Modern AEAD encryption active (${esc(suite.ikeCipher)} / ${esc(suite.espSuite)}). Combined confidentiality and integrity tag verified.`
-          : `CBC-mode cipher observed (${esc(suite.ikeCipher)} / ${esc(suite.espSuite)}). Non-AEAD mode requires separate integrity verification and risks padding oracle side-channels.`),
-    fix: isGcm
-      ? "Enforce AES-256-GCM (ENCR_AES_GCM_16) as default encryption transform across all ESP child SAs."
-      : "Upgrade IPsec proposals to combined-mode AEAD (AES-256-GCM or ChaCha20-Poly1305). Eliminate CBC and 64-bit block ciphers."
-  });
-
-  // 3. NIST SP 800-77 §4.3: Diffie-Hellman Group Key Exchange
-  const dhWeak = [1, 2, 5, 22, 25].includes(suite.dhVal) || /Group 1|Group 2|Group 5/i.test(suite.dhGroup || "");
-  const dhStrong = [14, 19, 20, 21, 28, 29, 30, 31].includes(suite.dhVal) || /Group 14|Group 19|Group 20|Group 21|Curve25519/i.test(suite.dhGroup || "");
-  const dhStatus = dhWeak ? "FAIL" : (dhStrong ? "PASS" : "WARN");
-  items.push({
-    framework: "nist",
-    ref: "NIST SP 800-77 §4.3",
-    refClass: "",
-    name: "Diffie-Hellman Key Exchange Strength",
-    meta: "RFC 8247 §2.4 · FIPS 140-3",
-    status: dhStatus,
-    observed: dhWeak
-      ? `Sub-standard DH group observed (${esc(suite.dhGroup)}, < 2048-bit MODP). Precomputation attacks (Logjam) can compromise ephemeral key generation.`
-      : (dhStrong
-          ? `Approved cryptographic DH group (${esc(suite.dhGroup)}, >= 2048-bit MODP / Curve25519). High-order prime security margin satisfied.`
-          : `DH Group undetermined or unobserved in capture window (${esc(suite.dhGroup)}).`),
-    fix: dhStrong
-      ? "Maintain minimum DH Group 14 (MODP-2048) or Group 19 (ECP-256). Prepare post-quantum hybrid transition."
-      : "Require Diffie-Hellman Group 14 (2048-bit MODP), Group 19 (256-bit ECP), or Group 31 (Curve25519) in IKE_SA proposals."
-  });
-
-  // 4. NIST SP 800-77 §4.4: Integrity & PRF Hash Function
-  const prfBad = /MD5|SHA1|SHA_1/i.test(suite.ikePrf || "");
-  const prfGood = /SHA2|SHA3|SHA_256|SHA_384|SHA_512/i.test(suite.ikePrf || "");
-  const prfStatus = prfBad ? "FAIL" : (prfGood ? "PASS" : "WARN");
-  items.push({
-    framework: "nist",
-    ref: "NIST SP 800-77 §4.4",
-    refClass: "",
-    name: "Cryptographic Hash & PRF Function",
-    meta: "RFC 8247 §2.2-2.3 · NIST SP 800-107",
-    status: prfStatus,
-    observed: prfBad
-      ? `Deprecated hash/PRF algorithm observed (${esc(suite.ikePrf)}). Collision resistance is broken, violating federal standards.`
-      : (prfGood
-          ? `Cryptographically secure SHA-2 hash family observed (${esc(suite.ikePrf)}). Full pseudorandom entropy generation verified.`
-          : `PRF hash algorithm unconfirmed in active proposal (${esc(suite.ikePrf)}).`),
-    fix: prfGood
-      ? "Enforce SHA-256 or SHA-512 as baseline hash family across authentication and PRF."
-      : "Enforce PRF_HMAC_SHA2_256 or PRF_HMAC_SHA2_512. Deprecate MD5 and SHA-1 in crypto policies."
-  });
-
-  // 5. NIST SP 800-77 §4.5: Extended Sequence Numbers (ESN Replay Defense)
-  const hasEsn = findings.some(f => /ESN|Sequence Number/i.test(f.title || ""));
-  const esnStatus = hasEsn ? "WARN" : "PASS";
-  items.push({
-    framework: "nist",
-    ref: "NIST SP 800-77 §4.5",
-    refClass: "",
-    name: "Extended Sequence Numbers (ESN 64-bit)",
-    meta: "RFC 4303 §2.2.1 · High-Speed ESP",
-    status: esnStatus,
-    observed: hasEsn
-      ? "Standard 32-bit sequence numbers in use without ESN. On high-throughput connections (> 1 Gbps), rollover can cause premature SA renegotiation or replay window exhaustion."
-      : "Extended Sequence Number (ESN) or robust anti-replay sliding window enabled for ESP packet streams.",
-    fix: hasEsn
-      ? "Enable 64-bit Extended Sequence Numbers (ESN) in IPsec child SA configurations to sustain gigabit data rates without replay drops."
-      : "Ensure replay window size is configured to minimum 64 packets across all tunnel endpoints."
-  });
-
-  // 6. NSA CNSA 2.0 §3: Post-Quantum Cryptographic Readiness
-  const isPqSafe = suite.pqSafe;
-  const pqStatus = isPqSafe ? "PASS" : "WARN";
-  items.push({
-    framework: "cnsa",
-    ref: "NSA CNSA 2.0 §3",
-    refClass: "cnsa",
-    name: "Post-Quantum Cryptographic Readiness (HNDL Defense)",
-    meta: "RFC 9370 · FIPS 203 ML-KEM",
-    status: pqStatus,
-    observed: isPqSafe
-      ? "Post-quantum resistant key encapsulation / hybrid exchange validated. Protected against future quantum cryptanalysis."
-      : "Classical public-key exchange in use without post-quantum hybrid KEM. Traffic recorded today is vulnerable to Harvest Now, Decrypt Later (HNDL) adversaries.",
-    fix: isPqSafe
-      ? "Maintain hybrid post-quantum readiness; verify FIPS 203 ML-KEM compatibility in firmware."
-      : "Deploy hybrid Post-Quantum IKEv2 key exchange (ML-KEM-768 / RFC 9370) to satisfy NSA CNSA 2.0 commercial national security compliance."
-  });
-
-  // 7. MITRE ATT&CK T1557.002: Adversary-in-the-Middle / Rogue AP
-  items.push({
-    framework: "mitre",
-    ref: "MITRE ATT&CK T1557.002",
-    refClass: "mitre",
-    name: "Adversary-in-the-Middle: Rogue AP / Evil Twin",
-    meta: "802.11 Spectral Defense · Honeypot MitM",
-    status: hasRogue ? "FAIL" : "PASS",
-    observed: hasRogue
-      ? "CRITICAL: Rogue clone AP detected broadcasting target SSID with open/downgraded security. Adversary is actively staging an Evil Twin MitM honeypot to harvest credentials."
-      : "Zero rogue clone APs or spoofed BSSID anomalies detected within local RF spectral radius.",
-    fix: hasRogue
-      ? "Isolate area, locate rogue BSSID with RF spectrum visualizer, block MAC address at controller, and enforce 802.11w Protected Management Frames (PMF)."
-      : "Maintain continuous RF spectrum anomaly detection and 802.11w PMF mandatory enforcement."
-  });
-
-  // 8. MITRE ATT&CK T1040: Network Sniffing (Passive Wire Traffic Analysis)
-  const isCleartext = /unencrypted|cleartext|NULL/i.test(suite.espSuite || "");
-  const sniffStatus = isCleartext ? "FAIL" : (isIkev1 ? "WARN" : "PASS");
-  items.push({
-    framework: "mitre",
-    ref: "MITRE ATT&CK T1040",
-    refClass: "mitre",
-    name: "Network Sniffing: Passive Wire Traffic Analysis",
-    meta: "RFC 4303 Framing · Passive Sensor Auditing",
-    status: sniffStatus,
-    observed: isCleartext
-      ? "Cleartext payload encapsulation detected on wire. Adversary with tap or mirror port access can read sensitive payload bytes directly."
-      : (isIkev1
-          ? "IKEv1 Aggressive Mode handshakes expose hashed pre-shared key credentials to passive wire captures."
-          : "ESP packet payload fully encapsulated with cryptographic confidentiality. Passive sensor confirms zero cleartext payload leakage."),
-    fix: isCleartext
-      ? "Immediately re-enable ESP encryption (AES-256-GCM). Eliminate NULL cipher tunnels."
-      : "Enforce physical port security, 802.1AE MACsec on intra-datacenter trunks, and switch mirror port access controls."
-  });
-
-  // 9. MITRE ATT&CK T1565.002: Data Manipulation (Weak ICV Truncation)
-  const has96Bit = findings.some(f => /96-bit|truncat/i.test(f.title || "")) || /96/i.test(suite.espSuite || "");
-  const icvStatus = has96Bit ? "FAIL" : "PASS";
-  items.push({
-    framework: "mitre",
-    ref: "MITRE ATT&CK T1565.002",
-    refClass: "mitre",
-    name: "Data Manipulation: Weak ICV / 96-Bit Tag Truncation",
-    meta: "RFC 8247 §3.2 · Integrity Check Value",
-    status: icvStatus,
-    observed: has96Bit
-      ? "Truncated 96-bit ICV (AUTH_HMAC_SHA1_96 / MD5_96) in use. Reduced tag size lowers collision complexity and facilitates active packet forgery attacks."
-      : "Full 128-bit or 256-bit authentication tags verified (AES-GCM-16). Anti-tamper packet verification resilient against bit-flipping.",
-    fix: has96Bit
-      ? "Transition ESP proposals to AEAD suites with full 128-bit ICV tags (AES-GCM ICV-16). Deprecate 96-bit truncated HMACs."
-      : "Reject any packets failing ICV verification silently to avoid cryptographic oracle leakage."
-  });
-
-  // 10. MITRE ATT&CK T1590.005: Gather Victim Network Info (DNS Leakage)
-  const vpnActive = wifiData && wifiData.vpn && wifiData.vpn.connected;
-  const dnsStatus = vpnActive ? "PASS" : "WARN";
-  items.push({
-    framework: "mitre",
-    ref: "MITRE ATT&CK T1590.005",
-    refClass: "mitre",
-    name: "Gather Network Info: DNS Resolver & Gateway Leakage",
-    meta: "DNS Leaks · Cleartext Metadata Reconnaissance",
-    status: dnsStatus,
-    observed: vpnActive
-      ? "Encrypted VPN overlay tunnel active. DNS requests and gateway metadata encapsulated within secure tunnel transport."
-      : "Direct ISP gateway link active without encrypted VPN overlay. Outgoing DNS resolution is transmitted in cleartext, exposing visited network endpoints.",
-    fix: vpnActive
-      ? "Enforce strict tunnel DNS routing and verify no split-tunnel bypass leaks occur."
-      : "Deploy DNS-over-HTTPS (DoH) or establish an encrypted IPsec/WireGuard VPN overlay to protect metadata from eavesdroppers."
-  });
-
-  // Calculate summary metrics
-  const totalCount = items.length;
-  const passCount = items.filter(i => i.status === "PASS").length;
-  const failCount = items.filter(i => i.status === "FAIL").length;
-  const warnCount = items.filter(i => i.status === "WARN").length;
-  const compliancePct = Math.round((passCount / totalCount) * 100);
-
-  if (statsEl){
-    statsEl.innerHTML = `
-      <div class="compliance-stat-card">
-        <div class="val" style="color:${compliancePct >= 80 ? 'var(--ok)' : (compliancePct >= 60 ? 'var(--med)' : 'var(--crit)')}">
-          ${compliancePct}%
-        </div>
-        <div class="lbl">Compliance Score</div>
-      </div>
-      <div class="compliance-stat-card">
-        <div class="val">${totalCount}</div>
-        <div class="lbl">Controls Evaluated</div>
-      </div>
-      <div class="compliance-stat-card">
-        <div class="val" style="color:var(--ok)">${passCount} Passing</div>
-        <div class="lbl">Compliant Controls</div>
-      </div>
-      <div class="compliance-stat-card">
-        <div class="val" style="color:${failCount > 0 ? 'var(--crit)' : 'var(--muted)'}">${failCount} Critical</div>
-        <div class="lbl">Violations Detected</div>
-      </div>
-      <div class="compliance-stat-card">
-        <div class="val" style="color:${warnCount > 0 ? 'var(--med)' : 'var(--muted)'}">${warnCount} Warnings</div>
-        <div class="lbl">Hardening Advised</div>
-      </div>
-    `;
-  }
-
-  // Filter items based on active tab
-  const activeFilter = state.complianceFilter || "all";
-  const filteredItems = items.filter(item => {
-    if (activeFilter === "all") return true;
-    return item.framework === activeFilter;
-  });
-
-  if (filteredItems.length === 0){
-    tbody.innerHTML = `<tr><td colspan="5" class="empty">No controls matching current framework filter.</td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = filteredItems.map(item => {
-    const statusIcon = item.status === "PASS" ? "&#10004; COMPLIANT" : (item.status === "FAIL" ? "&#10008; VIOLATION" : "&#9888; DEFICIENCY");
-    const statusCls = item.status === "PASS" ? "pass" : (item.status === "FAIL" ? "fail" : "warn");
-    return `
-      <tr>
-        <td>
-          <span class="compliance-ref-badge ${esc(item.refClass)}">${esc(item.ref)}</span>
-        </td>
-        <td>
-          <div class="compliance-ctrl-name">${esc(item.name)}</div>
-          <div class="compliance-ctrl-meta">${esc(item.meta)}</div>
-        </td>
-        <td>
-          <span class="compliance-status-badge ${statusCls}">${statusIcon}</span>
-        </td>
-        <td>
-          <div class="compliance-obs-text">${item.observed}</div>
-        </td>
-        <td>
-          <div class="compliance-fix-text">${item.fix}</div>
-        </td>
-      </tr>
-    `;
-  }).join("");
-}
 
 function renderPlatforms(a){
   const row = $("platforms");
@@ -2356,13 +2063,14 @@ function renderPlaybookUI(){
   // Update syntax badge
   const syntaxBadge = $("playbook-syntax-badge");
   if (syntaxBadge) {
+    syntaxBadge.hidden = false;
     if (currentPlan.syntax_valid) {
       syntaxBadge.className = "playbook-chip chip-ok";
-      syntaxBadge.textContent = "✔ Syntax Valid";
+      syntaxBadge.textContent = "✔ Syntax check passed";
       syntaxBadge.title = "Passes vendor grammar and RFC 8247 structure rules";
     } else {
       syntaxBadge.className = "playbook-chip chip-err";
-      syntaxBadge.textContent = "✖ Syntax Warning";
+      syntaxBadge.textContent = "✖ Syntax check failed";
       syntaxBadge.title = (currentPlan.syntax_errors || []).join("; ");
     }
   }
@@ -2370,6 +2078,7 @@ function renderPlaybookUI(){
   // Update status badge
   const statusBadge = $("playbook-status-badge");
   if (statusBadge) {
+    statusBadge.hidden = false;
     const st = currentPlan.status || "DRAFTED";
     statusBadge.className = "playbook-chip chip-status " + st.toLowerCase();
     if (st === "APPROVED") {
@@ -2398,6 +2107,10 @@ function renderPlaybookUI(){
 
 async function loadRemediation(){
   if (staticMode.active){
+    // the build bakes the forward plan text only: no syntax verdict, no
+    // rollback and no plan store to record an approval in, so none is shown
+    ["playbook-syntax-badge", "playbook-status-badge", "btn-playbook-rollback", "btn-playbook-approve"]
+      .forEach(id => { if ($(id)) $(id).hidden = true; });
     const pre = $("remediation");
     const canned = (state.assessment && state.assessment.remediation) || {};
     const text = canned[state.platform];
@@ -2855,6 +2568,58 @@ const Upload = (() => {
 })();
 window.Upload = Upload;
 
+/* Colour theme: Light (the default), Dark, or System, which follows the OS
+ * and keeps following it while the page is open. The choice is a per-browser
+ * convenience in localStorage; js/theme-init.js applies it before first
+ * paint, and this keeps the select and the page in step afterwards. */
+const Theme = (() => {
+  const KEY = "cipherguard.theme";
+  const CHOICES = ["light", "dark", "system"];
+  const dark = window.matchMedia ? matchMedia("(prefers-color-scheme: dark)") : null;
+  let choice = "light";
+
+  function read(){
+    try {
+      const v = localStorage.getItem(KEY);
+      return CHOICES.includes(v) ? v : "light";
+    } catch (e){ return "light"; }
+  }
+
+  function resolve(c){
+    return c === "system" ? (dark && dark.matches ? "dark" : "light") : c;
+  }
+
+  function apply(){
+    document.documentElement.setAttribute("data-theme", resolve(choice));
+  }
+
+  function set(c){
+    choice = CHOICES.includes(c) ? c : "light";
+    try { localStorage.setItem(KEY, choice); } catch (e){ /* private window: this page only */ }
+    apply();
+    const sel = $("theme-select");
+    if (sel) sel.value = choice;
+  }
+
+  function init(){
+    choice = read();
+    apply();
+    const sel = $("theme-select");
+    if (sel){
+      sel.value = choice;
+      sel.addEventListener("change", () => set(sel.value));
+    }
+    if (dark){
+      const onOs = () => { if (choice === "system") apply(); };
+      if (dark.addEventListener) dark.addEventListener("change", onOs);
+      else if (dark.addListener) dark.addListener(onOs);
+    }
+  }
+
+  return { init, set, resolve, get choice(){ return choice; } };
+})();
+window.Theme = Theme;
+
 /* Presentation mode: for a projector or a judging panel. Larger type, no
  * masthead controls or secondary panels, and one step on screen at a time in
  * a fixed order that tells the story of a capture. Left/Right (or Page
@@ -2972,7 +2737,6 @@ async function renderAssessment(a, opts = {}){
   renderFindings(a);
   renderRibbon(a);
   renderPQ(a);
-  renderComplianceMatrix(a, state.wifiAssessment);
   renderPlatforms(a);
   Report.update(a);
   if (!opts.keepRemediation) await loadRemediation();
@@ -2984,7 +2748,7 @@ async function runAnalysis(){
   const btn = $("run");
   if (!name){
     if (sel) showFieldError(sel, "Please select a valid capture file (.pcap, .pcapng)");
-    showToast("No capture file selected. Please choose a capture.", "error");
+    showToast("Choose a capture first.", "error");
     return;
   }
   if (sel) clearFieldError(sel);
@@ -3006,13 +2770,9 @@ async function runAnalysis(){
     Skeleton.done();
     showBanner(null);
     Present.onAssessment();
-    showToast(`Assessment complete: Score ${a.score}/100 (Grade ${a.grade})`, "success");
     CipherGuardTelemetry.recordEvent("ipsec_assessment_run", {
       capture: name, score: a.score, grade: a.grade
     });
-    if (typeof MitreHeatmapEngine !== "undefined" && MitreHeatmapEngine.render) {
-      MitreHeatmapEngine.render();
-    }
   }catch(err){
     // The whole error, body included, is for the console; the page gets one
     // calm sentence and keeps the last good result on screen.
@@ -3138,11 +2898,11 @@ async function runDiffAnalysis(){
     state.diffAssessmentB = b;
     renderDiffView(a, b);
   }catch(err){
-    alert("Differential analysis failed: " + err.message);
+    alert("The comparison failed: " + err.message);
   }finally{
     if (btn){
       btn.disabled = false;
-      btn.textContent = "Run Diff Comparison";
+      btn.textContent = "Compare";
     }
   }
 }
@@ -3258,7 +3018,7 @@ function renderDiffView(a, b){
   if ($("diff-meta-a")){
     $("diff-meta-a").innerHTML = `
       <div style="font-size:0.75rem;color:var(--muted)">
-        ${(a.sessions || []).length} IKE Sessions &middot; ${(a.flows || []).length} ESP SAs &middot; ${(a.findings || []).length} Vulnerabilities
+        ${(a.sessions || []).length} IKE sessions &middot; ${(a.flows || []).length} ESP SAs &middot; ${(a.findings || []).length} findings
       </div>
     `;
   }
@@ -3274,7 +3034,7 @@ function renderDiffView(a, b){
   if ($("diff-meta-b")){
     $("diff-meta-b").innerHTML = `
       <div style="font-size:0.75rem;color:var(--muted)">
-        ${(b.sessions || []).length} IKE Sessions &middot; ${(b.flows || []).length} ESP SAs &middot; ${(b.findings || []).length} Vulnerabilities
+        ${(b.sessions || []).length} IKE sessions &middot; ${(b.flows || []).length} ESP SAs &middot; ${(b.findings || []).length} findings
       </div>
     `;
   }
@@ -3283,14 +3043,14 @@ function renderDiffView(a, b){
   const statDeltaEl = $("diff-stat-delta");
   if (verdictEl && statDeltaEl){
     if (delta > 0){
-      verdictEl.innerHTML = `<span style="color:var(--text-success)">&#9650; Hardened (+${delta} Pts)</span>`;
-      statDeltaEl.textContent = `Security posture upgraded from Grade ${a.grade} to ${b.grade}`;
+      verdictEl.innerHTML = `<span style="color:var(--text-success)">&#9650; +${delta} points</span>`;
+      statDeltaEl.textContent = `Grade ${a.grade} to ${b.grade}`;
     } else if (delta < 0){
-      verdictEl.innerHTML = `<span style="color:#dc2626">&#9660; Degraded (${delta} Pts)</span>`;
-      statDeltaEl.textContent = `Security posture regressed from Grade ${a.grade} to ${b.grade}`;
+      verdictEl.innerHTML = `<span style="color:var(--crit)">&#9660; ${delta} points</span>`;
+      statDeltaEl.textContent = `Grade ${a.grade} to ${b.grade}`;
     } else {
-      verdictEl.innerHTML = `<span style="color:var(--muted)">Parity (0 Pts)</span>`;
-      statDeltaEl.textContent = `Both captures exhibit equivalent security posture`;
+      verdictEl.innerHTML = `<span style="color:var(--muted)">No change</span>`;
+      statDeltaEl.textContent = `Both captures score the same`;
     }
   }
 
@@ -3304,67 +3064,33 @@ function renderDiffView(a, b){
   const infoA = extractSuiteInfo(a);
   const infoB = extractSuiteInfo(b);
 
+  // one rule for every row: nothing claims an upgrade the data does not show
+  const WEAK_DH = [1, 2, 5, 22, 25];
+  const verdict = (same, aWeak, bWeak) => same ? { text: "Same", cls: "diff-status-same" }
+    : (aWeak && !bWeak) ? { text: "Improved", cls: "diff-status-upgraded" }
+    : (bWeak && !aWeak) ? { text: "Worse", cls: "diff-status-downgraded" }
+    : { text: "Changed", cls: "diff-status-same" };
+  const weakHash = s => BAD_HASH.test(s) || WEAK_HASH.test(s);
+  const weakEsp = s => /64-bit|3?DES|NULL|unencrypted/i.test(s);
   const matrixRows = [
-    {
-      param: "IKE Protocol Version",
-      valA: infoA.ikeVersion,
-      valB: infoB.ikeVersion,
-      status: (infoA.ikeVersion === "IKEv1" && infoB.ikeVersion === "IKEv2")
-        ? { text: "✔ UPGRADED (IKEv2)", cls: "diff-status-upgraded" }
-        : infoA.ikeVersion === infoB.ikeVersion
-          ? { text: "— Parity", cls: "diff-status-same" }
-          : { text: "✔ Modernized", cls: "diff-status-upgraded" }
-    },
-    {
-      param: "IKE SA Cipher Suite",
-      valA: infoA.ikeCipher,
-      valB: infoB.ikeCipher,
-      status: (BAD.test(infoA.ikeCipher) && !BAD.test(infoB.ikeCipher))
-        ? { text: "✔ HARDENED (AEAD)", cls: "diff-status-upgraded" }
-        : infoA.ikeCipher === infoB.ikeCipher
-          ? { text: "— Unchanged", cls: "diff-status-same" }
-          : { text: "✔ Upgraded", cls: "diff-status-upgraded" }
-    },
-    {
-      param: "Integrity & PRF Algorithm",
-      valA: infoA.ikePrf,
-      valB: infoB.ikePrf,
-      status: ((BAD_HASH.test(infoA.ikePrf) || WEAK_HASH.test(infoA.ikePrf)) && !WEAK_HASH.test(infoB.ikePrf) && !BAD_HASH.test(infoB.ikePrf))
-        ? { text: "✔ SECURED (SHA-2/3)", cls: "diff-status-upgraded" }
-        : infoA.ikePrf === infoB.ikePrf
-          ? { text: "— Unchanged", cls: "diff-status-same" }
-          : { text: "✔ Upgraded", cls: "diff-status-upgraded" }
-    },
-    {
-      param: "Diffie-Hellman Group",
-      valA: infoA.dhGroup,
-      valB: infoB.dhGroup,
-      status: ([1, 2, 5, 22, 25].includes(infoA.dhVal) && ![1, 2, 5, 22, 25].includes(infoB.dhVal) && infoB.dhVal > 0)
-        ? { text: "✔ RESILIENT (High DH)", cls: "diff-status-upgraded" }
-        : infoA.dhGroup === infoB.dhGroup
-          ? { text: "— Parity", cls: "diff-status-same" }
-          : { text: "✔ Modern Group", cls: "diff-status-upgraded" }
-    },
-    {
-      param: "ESP Framing & Tunnel Suite",
-      valA: infoA.espSuite,
-      valB: infoB.espSuite,
-      status: (/64-bit|3?DES|NULL|unencrypted/i.test(infoA.espSuite) && !/64-bit|3?DES|NULL/i.test(infoB.espSuite))
-        ? { text: "✔ SECURE TUNNEL", cls: "diff-status-upgraded" }
-        : infoA.espSuite === infoB.espSuite
-          ? { text: "— Parity", cls: "diff-status-same" }
-          : { text: "✔ Hardened", cls: "diff-status-upgraded" }
-    },
-    {
-      param: "Post-Quantum Exposure (PQC)",
-      valA: infoA.pqSafe ? "Zero Exposed Links" : `${infoA.pqCount} Links Exposed to HNDL`,
-      valB: infoB.pqSafe ? "Zero Exposed Links (PQC Safe)" : `${infoB.pqCount} Links Exposed`,
-      status: (!infoA.pqSafe && infoB.pqSafe)
-        ? { text: "✔ PQC READY", cls: "diff-status-upgraded" }
-        : (infoB.pqCount < infoA.pqCount)
-          ? { text: "✔ Exposure Reduced", cls: "diff-status-upgraded" }
-          : { text: "— Maintained", cls: "diff-status-same" }
-    }
+    { param: "IKE version", valA: infoA.ikeVersion, valB: infoB.ikeVersion,
+      status: verdict(infoA.ikeVersion === infoB.ikeVersion,
+                      infoA.ikeVersion === "IKEv1", infoB.ikeVersion === "IKEv1") },
+    { param: "IKE cipher", valA: infoA.ikeCipher, valB: infoB.ikeCipher,
+      status: verdict(infoA.ikeCipher === infoB.ikeCipher, BAD.test(infoA.ikeCipher), BAD.test(infoB.ikeCipher)) },
+    { param: "Integrity and PRF", valA: infoA.ikePrf, valB: infoB.ikePrf,
+      status: verdict(infoA.ikePrf === infoB.ikePrf, weakHash(infoA.ikePrf), weakHash(infoB.ikePrf)) },
+    { param: "Diffie-Hellman group", valA: infoA.dhGroup, valB: infoB.dhGroup,
+      status: verdict(infoA.dhGroup === infoB.dhGroup,
+                      WEAK_DH.includes(infoA.dhVal), WEAK_DH.includes(infoB.dhVal)) },
+    { param: "ESP suite", valA: infoA.espSuite, valB: infoB.espSuite,
+      status: verdict(infoA.espSuite === infoB.espSuite, weakEsp(infoA.espSuite), weakEsp(infoB.espSuite)) },
+    { param: "Quantum-exposed links",
+      valA: infoA.pqSafe ? "none" : `${infoA.pqCount}`,
+      valB: infoB.pqSafe ? "none" : `${infoB.pqCount}`,
+      status: infoA.pqCount === infoB.pqCount ? { text: "Same", cls: "diff-status-same" }
+        : infoB.pqCount < infoA.pqCount ? { text: "Fewer", cls: "diff-status-upgraded" }
+        : { text: "More", cls: "diff-status-downgraded" } },
   ];
 
   const tbody = $("diff-matrix-tbody");
@@ -3396,7 +3122,7 @@ function renderDiffView(a, b){
   const resList = $("diff-resolved-list");
   if (resList){
     if (resolved.length === 0){
-      resList.innerHTML = `<div class="empty">Zero findings were resolved between these two captures.</div>`;
+      resList.innerHTML = `<div class="empty">Capture B still raises every finding in capture A.</div>`;
     } else {
       resList.innerHTML = resolved.map(f => `
         <div class="diff-finding-card resolved">
@@ -3406,7 +3132,6 @@ function renderDiffView(a, b){
             <span class="sev-chip ${f.severity.toLowerCase()}" style="font-size:0.65rem;padding:0 5px">${esc(f.severity)}</span>
           </div>
           <div class="meta">${esc(f.rule_id)} &middot; ${esc(f.subject)}</div>
-          <div class="fix"><b>Remediation Confirmed:</b> Vulnerability eliminated in hardened configuration.</div>
         </div>
       `).join("");
     }
@@ -3416,17 +3141,17 @@ function renderDiffView(a, b){
   if (persistList){
     const remaining = [...persisting, ...newInB];
     if (remaining.length === 0){
-      persistList.innerHTML = `<div class="empty" style="color:var(--text-success);font-weight:600">&#10004; Zero security vulnerabilities remaining in hardened capture!</div>`;
+      persistList.innerHTML = `<div class="empty">Capture B raises no findings.</div>`;
     } else {
       persistList.innerHTML = remaining.map(f => `
         <div class="diff-finding-card persisting">
           <div class="title">
-            <span style="color:#d97706">&#9888;</span>
+
             <span>${esc(f.title)}</span>
             <span class="sev-chip ${f.severity.toLowerCase()}" style="font-size:0.65rem;padding:0 5px">${esc(f.severity)}</span>
           </div>
           <div class="meta">${esc(f.rule_id)} &middot; ${esc(f.subject)}</div>
-          <div class="fix" style="color:#b45309"><b>Action:</b> ${esc(f.remediation || "Review vendor playbook")}</div>
+          <div class="fix"><b>Fix:</b> ${esc(f.remediation || "See the hardening plan")}</div>
         </div>
       `).join("");
     }
@@ -3445,7 +3170,7 @@ function switchTab(tab){
   const mobileCtaLabel = $("mobile-cta-label");
 
   if (tab === "wifi"){
-    document.title = "Live Wi-Fi & RF Security Audit | CipherGuard";
+    document.title = "Wi-Fi · CipherGuard";
     wifiTab.classList.add("active");
     wifiTab.setAttribute("aria-selected", "true");
     ipsecTab.classList.remove("active");
@@ -3456,12 +3181,12 @@ function switchTab(tab){
 
     if (wifiControls) wifiControls.style.display = "flex";
     if (ipsecControls) ipsecControls.style.display = "none";
-    if (mobileCtaLabel) mobileCtaLabel.textContent = "Analyze Live Wi-Fi";
+    if (mobileCtaLabel) mobileCtaLabel.textContent = "Scan Wi-Fi";
     CipherGuardTelemetry.recordEvent("tab_switch", { tab: "wifi" });
   } else {
     document.title = state.ipsecMode === "diff"
-      ? "Cryptographic Diff & Remediation Evolution | CipherGuard"
-      : "IPsec VPN Protocol & Cryptographic Analyzer | CipherGuard";
+      ? "Compare captures · CipherGuard"
+      : "IPsec VPN · CipherGuard";
     ipsecTab.classList.add("active");
     ipsecTab.setAttribute("aria-selected", "true");
     wifiTab.classList.remove("active");
@@ -3472,172 +3197,18 @@ function switchTab(tab){
 
     if (ipsecControls) ipsecControls.style.display = "flex";
     if (wifiControls) wifiControls.style.display = "none";
-    if (mobileCtaLabel) mobileCtaLabel.textContent = state.ipsecMode === "diff" ? "Run Diff Comparison" : "Assess Capture";
+    if (mobileCtaLabel) mobileCtaLabel.textContent = state.ipsecMode === "diff" ? "Compare" : "Assess capture";
     CipherGuardTelemetry.recordEvent("tab_switch", { tab: "ipsec" });
   }
 }
 
 
-function getStaticWifiDemoData(){
-  return {
-  "interface": {
-    "name": "Wi-Fi",
-    "description": "MediaTek MT7921 Wi-Fi 6 802.11ax PCIe Adapter",
-    "mac_address": "2c:3b:70:fc:74:8b",
-    "state": "connected",
-    "ssid": "White Devil",
-    "bssid": "5a:04:bd:22:04:63",
-    "band": "2.4 GHz",
-    "channel": 6,
-    "radio_type": "802.11ax",
-    "authentication": "WPA2-Personal",
-    "cipher": "CCMP",
-    "signal_percent": 84,
-    "rssi_dbm": -52,
-    "rx_rate_mbps": 286.8,
-    "tx_rate_mbps": 286.8,
-    "dns_servers": [
-      "10.2.0.1",
-      "10.187.105.202"
-    ],
-    "gateway_ip": "0.0.0.0",
-    "ipv4_address": "10.2.0.2"
-  },
-  "networks_in_range": [
-    {
-      "ssid": "White Devil",
-      "bssid": "5a:04:bd:22:04:63",
-      "signal_percent": 83,
-      "rssi_dbm": -58,
-      "channel": 6,
-      "band": "2.4 GHz",
-      "radio_type": "802.11ax",
-      "authentication": "WPA2-Personal",
-      "encryption": "CCMP",
-      "security_grade": "B",
-      "connected": true,
-      "is_rogue": false,
-      "rogue_reason": "",
-      "notes": "",
-      "cipher": "CCMP"
-    }
-  ],
-  "score": 80,
-  "grade": "B",
-  "started": "2026-09-13T05:55:01.772817+00:00",
-  "findings": [
-    {
-      "severity": "medium",
-      "rule_id": "WIFI-004",
-      "title": "WPA2 Pre-Shared Key (PSK) Vulnerable to Offline Dictionary Attack",
-      "subject": "SSID: White Devil (WPA2-Personal)",
-      "detail": "WPA2 4-Way Handshake allows passive adversaries recording the handshake to execute offline dictionary and brute-force attacks against the pre-shared key (PMK/PTK).",
-      "remediation": "Enable WPA3-Personal (SAE - Simultaneous Authentication of Equals) with Protected Management Frames (PMF / 802.11w) on your router.",
-      "reference": "IEEE 802.11-2020 / NIST SP 800-162",
-      "inferred": false
-    },
-    {
-      "severity": "info",
-      "rule_id": "WIFI-011",
-      "title": "2.4 GHz Band In Use (Crowded Spectrum)",
-      "subject": "Band: 2.4 GHz \u00b7 Channel 6",
-      "detail": "The 2.4 GHz spectrum has only 3 non-overlapping channels (1, 6, 11) and suffers significant co-channel interference from Bluetooth and microwave emitters.",
-      "remediation": "Migrate clients to 5 GHz or 6 GHz (Wi-Fi 6/6E) for higher bandwidth and isolated DFS channels.",
-      "reference": "IEEE 802.11ax / 802.11be",
-      "inferred": false
-    },
-    {
-      "severity": "medium",
-      "rule_id": "WIFI-030",
-      "title": "Local Gateway Unencrypted DNS Resolver",
-      "subject": "DNS: 10.2.0.1, 10.187.105.202",
-      "detail": "DNS queries are routed through the local router without DNS-over-HTTPS (DoH) or DNS-over-TLS (DoT). Local network eavesdroppers or malicious gateways can inspect visited hostnames and execute DNS spoofing / cache poisoning.",
-      "remediation": "Configure encrypted DNS (DoH/DoT) using trusted resolvers like Cloudflare (1.1.1.1) or Quad9 (9.9.9.9), or enforce DNSSEC validation.",
-      "reference": "RFC 8484 (DoH) / RFC 7858 (DoT)",
-      "inferred": false
-    },
-    {
-      "severity": "info",
-      "rule_id": "WIFI-040",
-      "title": "Wi-Fi Key Exchange Post-Quantum Susceptibility",
-      "subject": "WPA2/WPA3 Key Derivation",
-      "detail": "WPA2 (PBKDF2/SHA1) and WPA3 (ECC Dragonfly P-256) rely on classical cryptography. A recorded Wi-Fi capture can eventually be broken if decrypted by a Cryptanalytically Relevant Quantum Computer (CRQC) or via pre-shared key recovery.",
-      "remediation": "Layer IPsec (RFC 9370 post-quantum hybrid KEM) or WireGuard over sensitive Wi-Fi connections.",
-      "reference": "CNSA 2.0 / NIST PQC Standardization",
-      "inferred": false
-    }
-  ],
-  "counts": {
-    "critical": 0,
-    "high": 0,
-    "medium": 2,
-    "low": 0,
-    "info": 2
-  },
-  "summary": "Connected to 'White Devil' on 2.4 GHz (Channel 6). Security: WPA2-Personal / CCMP with 84% signal. Score: 80/100 (Grade B).",
-  "dns_posture": {
-    "dns_servers": [
-      "10.2.0.1",
-      "10.187.105.202"
-    ],
-    "gateway": "0.0.0.0",
-    "ipv4": "10.2.0.2"
-  },
-  "quantum_risk": "Standard Classical (ECC/RSA Handshake at Risk to CRQC)",
-  "rogue_aps": [],
-  "vpn": {
-    "connected": true,
-    "adapter_name": "ProTUN",
-    "adapter_description": "Proton VPN Windows Tunnel",
-    "vpn_type": "ProtonVPN (WireGuard)",
-    "virtual_ip": "10.2.0.2",
-    "gateway_ip": "",
-    "route_metric": 1,
-    "is_default_route": true,
-    "dns_servers": [
-      "10.2.0.1"
-    ],
-    "dns_leak_detected": false,
-    "dns_leak_details": "",
-    "egress_ip": "212.102.51.91",
-    "egress_isp": "Datacamp Limited",
-    "egress_country": "Japan",
-    "egress_city": "Tokyo",
-    "findings": [
-      {
-        "severity": "info",
-        "rule_id": "VPN-001",
-        "title": "Active Encrypted ProtonVPN (WireGuard) Overlay Tunnel Verified",
-        "subject": "Adapter: ProTUN (ProtonVPN (WireGuard))",
-        "detail": "All transport layer payloads on 'ProTUN' are encapsulated in an encrypted ProtonVPN (WireGuard) tunnel. Even if local Wi-Fi encryption is compromised, intermediate nodes and the local access point cannot inspect or tamper with tunneled packets.",
-        "remediation": "Maintain tunnel keepalive and verify endpoint certificate/key validity.",
-        "reference": "RFC 4301 (IPsec) / RFC 9370 / WireGuard Technical Whitepaper",
-        "inferred": false
-      },
-      {
-        "severity": "info",
-        "rule_id": "VPN-003",
-        "title": "Encrypted Tunnel DNS Enforced",
-        "subject": "Tunnel DNS: 10.2.0.1",
-        "detail": "Domain name resolution is securely isolated inside the VPN tunnel.",
-        "remediation": "Ensure DNSSEC validation is enabled on the tunnel resolver.",
-        "reference": "RFC 8484 / RFC 7858",
-        "inferred": false
-      }
-    ]
-  }
-};
-}
 
 async function detectClientVpnEgress(data){
   if (!data || !data.vpn) return;
   // If backend already confirmed an active VPN tunnel, NEVER downgrade or overwrite it to false!
   const backendConnected = !!data.vpn.connected;
   if (backendConnected && data.vpn.egress_ip) {
-    return;
-  }
-  if (state.simulatedVpnActive !== null) {
-    applyVpnState(data.vpn, state.simulatedVpnActive);
     return;
   }
   try {
@@ -3688,72 +3259,6 @@ async function detectClientVpnEgress(data){
   }
 }
 
-function applyVpnState(vpn, active){
-  if (!vpn) return;
-  if (active) {
-    vpn.connected = true;
-    vpn.vpn_type = (vpn.vpn_type && vpn.vpn_type !== "None") ? vpn.vpn_type : "ProtonVPN (WireGuard)";
-    vpn.adapter_name = vpn.adapter_name || "ProTUN";
-    vpn.adapter_description = vpn.adapter_description || "Proton VPN Windows Tunnel";
-    vpn.virtual_ip = vpn.virtual_ip || "10.2.0.2";
-    vpn.egress_ip = (vpn.egress_ip && vpn.egress_ip !== "115.240.162.162") ? vpn.egress_ip : "205.147.22.38";
-    vpn.egress_isp = (vpn.egress_isp && !/jio/i.test(vpn.egress_isp)) ? vpn.egress_isp : "Proton AG";
-    vpn.egress_city = (vpn.egress_city && vpn.egress_city !== "Mumbai") ? vpn.egress_city : "Mexico City";
-    vpn.egress_country = (vpn.egress_country && vpn.egress_country !== "India") ? vpn.egress_country : "Mexico";
-    vpn.is_default_route = true;
-    vpn.dns_servers = (vpn.dns_servers && vpn.dns_servers.length) ? vpn.dns_servers : ["10.2.0.1"];
-    vpn.dns_leak_detected = false;
-    vpn.dns_leak_details = "";
-    vpn.findings = [
-      {
-        severity: "info",
-        rule_id: "VPN-001",
-        title: `Active Encrypted ${vpn.vpn_type} Overlay Tunnel Verified`,
-        subject: `Adapter: ${vpn.adapter_name} (${vpn.vpn_type})`,
-        detail: `All transport layer payloads on '${vpn.adapter_name}' are encapsulated in an encrypted ${vpn.vpn_type} tunnel terminating in ${vpn.egress_city || "Proton Gateway"}. Even if local Wi-Fi encryption is compromised, intermediate nodes and the local access point cannot inspect or tamper with tunneled packets.`,
-        remediation: "Maintain tunnel keepalive and verify endpoint certificate/key validity.",
-        reference: "RFC 4301 (IPsec) / RFC 9370 / WireGuard Technical Whitepaper",
-        inferred: false
-      },
-      {
-        severity: "info",
-        rule_id: "VPN-003",
-        title: "Encrypted Tunnel DNS Enforced",
-        subject: `Tunnel DNS: ${vpn.dns_servers.join(", ")}`,
-        detail: "Domain name resolution is securely isolated inside the ProtonVPN tunnel resolver.",
-        remediation: "Ensure DNSSEC validation is enabled on the tunnel resolver.",
-        reference: "RFC 8484 / RFC 7858",
-        inferred: false
-      }
-    ];
-  } else {
-    vpn.connected = false;
-    vpn.vpn_type = "None";
-    vpn.adapter_name = "";
-    vpn.adapter_description = "";
-    vpn.virtual_ip = "";
-    vpn.egress_ip = "115.240.162.162";
-    vpn.egress_isp = "Reliance Jio Infocomm Limited";
-    vpn.egress_city = "Mumbai";
-    vpn.egress_country = "India";
-    vpn.is_default_route = false;
-    vpn.dns_servers = [];
-    vpn.dns_leak_detected = false;
-    vpn.dns_leak_details = "";
-    vpn.findings = [
-      {
-        severity: "info",
-        rule_id: "VPN-010",
-        title: "Direct Physical Egress (No Virtual VPN Tunnel)",
-        subject: "Egress: Direct to ISP (Reliance Jio Infocomm Limited)",
-        detail: "Device network traffic egresses directly through the local Wi-Fi router to the public ISP without an outer IPsec or WireGuard protective tunnel. Local network administrators and upstream ISPs can inspect unencrypted transport metadata and SNI hostnames.",
-        remediation: "For sensitive remote access or untrusted networks, establish an IPsec (RFC 4301) or WireGuard tunnel.",
-        reference: "NIST SP 800-77 / NIST SP 800-113",
-        inferred: false
-      }
-    ];
-  }
-}
 
 function updateBackendStatusPill(isLive, details = {}) {
   const pill = $("backend-status-pill");
@@ -3765,7 +3270,7 @@ function updateBackendStatusPill(isLive, details = {}) {
     pill.title = "Connected to CipherGuard backend (:8000). Live hardware & VPN telemetry active. Click to configure bridge.";
   } else {
     pill.className = "backend-status-pill offline";
-    label.innerHTML = `⚡ Connect Backend`;
+    label.innerHTML = `Connect Backend`;
     pill.title = "Operating in standalone mode. Click to connect live backend (:8000) or open local live dashboard.";
   }
   updateBackendModalContent(isLive, details);
@@ -3803,9 +3308,6 @@ async function loadWifiAssessment(forceScan = false, silent = false){
         const res = await fetch("data/wifi_demo.json", { cache: "no-store" });
         if (res.ok) data = await res.json();
       } catch (e) {}
-      if (!data || !data.networks_in_range || data.networks_in_range.length === 0) {
-        data = getStaticWifiDemoData();
-      }
       await detectClientVpnEgress(data);
     }
 
@@ -3814,10 +3316,7 @@ async function loadWifiAssessment(forceScan = false, silent = false){
     updateBackendStatusPill(isLive);
 
     if (isLive) {
-      $("wifi-last-scan").textContent = "Live Telemetry · " + new Date().toLocaleTimeString();
-      if (!silent) {
-        showToast(`Live Wi-Fi scan complete: ${data.interface ? data.interface.ssid : 'Active Link'} (Grade ${data.grade || 'A'})`, "success");
-      }
+      $("wifi-last-scan").textContent = "Scanned from this machine · " + new Date().toLocaleTimeString();
       CipherGuardTelemetry.recordEvent("wifi_assessment_run", {
         mode: "live",
         force_scan: forceScan,
@@ -3825,22 +3324,20 @@ async function loadWifiAssessment(forceScan = false, silent = false){
         grade: data.grade
       });
     } else {
-      const egressDesc = (data.vpn && data.vpn.egress_isp) ? data.vpn.egress_isp : "Active Direct";
-      $("wifi-last-scan").textContent = `Live Telemetry (Egress: ${egressDesc}) · ` + new Date().toLocaleTimeString();
-      if (!silent) {
-        showToast("Operating in live client telemetry mode (Backend engine disconnected).", "info");
-      }
+      // a saved scan from export time, not this viewer's network: say so
+      const when = data.started ? new Date(data.started) : null;
+      $("wifi-last-scan").textContent = "Saved scan, recorded when this demo was built"
+        + (when && !isNaN(when) ? " · " + when.toLocaleString() : "");
       CipherGuardTelemetry.recordEvent("wifi_assessment_run", { mode: "demo", force_scan: forceScan });
     }
   } catch(err){
     console.warn("Live Wi-Fi fetch fallback:", err);
-    const fallback = getStaticWifiDemoData();
-    state.wifiAssessment = fallback;
-    renderWifiDashboard(fallback);
-    $("wifi-last-scan").textContent = "Demonstration Mode Active";
-    if (!silent) {
-      showToast("Live Wi-Fi scan unavailable. Operating in demo telemetry mode.", "info");
-    }
+    // No invented networks: say plainly that there is no scan to show.
+    state.wifiAssessment = null;
+    $("wifi-last-scan").textContent = "Wi-Fi scan unavailable";
+    const wf = $("wifi-findings");
+    if (wf) wf.innerHTML = `<div class="empty">No Wi-Fi scan is available: the local `
+      + `server is not running, and this build has no saved scan.</div>`;
     CipherGuardTelemetry.recordEvent("wifi_assessment_fallback", { error: err.message });
   } finally {
     if (!silent) {
@@ -3870,58 +3367,7 @@ const SocAudioEngine = {
 window.SocAudioEngine = SocAudioEngine;
 
 // 4. Interactive Q-Day Post-Quantum Mosca Calculator
-function initMoscaCalculator() {
-  const sliderX = $("slider-data-shelf");
-  const sliderY = $("slider-migration-time");
 
-  if (sliderX) sliderX.addEventListener("input", updateMoscaValues);
-  if (sliderY) sliderY.addEventListener("input", updateMoscaValues);
-
-  updateMoscaValues();
-}
-
-function updateMoscaValues() {
-  const sliderX = $("slider-data-shelf");
-  const sliderY = $("slider-migration-time");
-  const valX = $("val-data-shelf");
-  const valY = $("val-migration-time");
-  const eqVal = $("eq-xy-val");
-  const badge = $("mosca-risk-badge");
-  const desc = $("mosca-risk-desc");
-  const card = $("mosca-result-card");
-
-  const x = sliderX ? parseInt(sliderX.value, 10) : 10;
-  const y = sliderY ? parseInt(sliderY.value, 10) : 5;
-  const z = 8; // ~2034 estimated Cryptographically Relevant Quantum Computer (CRQC)
-
-  if (valX) valX.textContent = `${x} yrs`;
-  if (valY) valY.textContent = `${y} yrs`;
-  if (eqVal) eqVal.textContent = String(x + y);
-
-  const isHazard = (x + y) > z;
-
-  if (badge) {
-    if (isHazard) {
-      badge.textContent = "🚨 CRITICAL SNDL HAZARD";
-      badge.className = "mosca-risk-badge";
-    } else {
-      badge.textContent = "🛡️ MIGRATION BUFFER SECURE";
-      badge.className = "mosca-risk-badge secure";
-    }
-  }
-
-  if (card) {
-    card.classList.toggle("hazard-active", isHazard);
-  }
-
-  if (desc) {
-    if (isHazard) {
-      desc.textContent = "Adversaries recording encrypted traffic today will be able to decrypt it before the data's security value expires (Store Now, Decrypt Later). Immediate PQC hybrid encapsulation required.";
-    } else {
-      desc.textContent = "Calculated migration window completes before estimated quantum cryptanalysis breakthrough. Maintain CNSA 2.0 deployment schedule.";
-    }
-  }
-}
 
 
 // Terminal removed - python CLI provides the command interface
@@ -3931,49 +3377,12 @@ window.toggleCyberTerminal = toggleCyberTerminal;
 function renderWifiDashboard(data){
   if (!data) return;
   // If networks_in_range is missing or empty, ensure fallback demo networks are populated without overwriting real live interface
-  if (!data.networks_in_range || data.networks_in_range.length === 0){
-    const demo = getStaticWifiDemoData();
-    data.networks_in_range = demo.networks_in_range || [];
-    if (!data.interface) data.interface = demo.interface;
-    if (!data.rogue_aps) data.rogue_aps = demo.rogue_aps || [];
-  }
   const iface = data.interface;
 
   let networks = (data.networks_in_range || []).map(n => Object.assign({}, n));
   let rogueList = (data.rogue_aps || []).map(r => Object.assign({}, r));
 
   // If user requested simulated Evil Twin AP attack, inject realistic clone AP into live view
-  if (state.simulatedRogueApActive) {
-    const activeSsid = (iface && iface.ssid) ? iface.ssid : "Svyasa-Student";
-    const simRogue = {
-      ssid: activeSsid,
-      bssid: "58:61:63:de:ad:01",
-      signal_percent: 96,
-      rssi_dbm: -38,
-      channel: (iface && iface.channel) ? iface.channel : 44,
-      band: (iface && iface.band) ? iface.band : "5 GHz",
-      radio_type: "802.11ax",
-      authentication: "Open",
-      encryption: "None",
-      security_grade: "F",
-      connected: false,
-      is_rogue: true,
-      rogue_reason: `Open / Unencrypted clone of secured WPA2 network '${activeSsid}' (Classic Evil Twin MitM honeypot)`
-    };
-    if (!networks.some(n => n.bssid === simRogue.bssid)){
-      networks.unshift(simRogue);
-    }
-    if (!rogueList.some(r => r.bssid === simRogue.bssid)){
-      rogueList.unshift({
-        ssid: simRogue.ssid,
-        bssid: simRogue.bssid,
-        channel: simRogue.channel,
-        signal: `${simRogue.signal_percent}% (${simRogue.rssi_dbm} dBm)`,
-        threat_level: "CRITICAL",
-        reason: simRogue.rogue_reason
-      });
-    }
-  }
 
   // Render or hide the Evil Twin Alert Banner
   const banner = $("wifi-evil-twin-banner");
@@ -4000,52 +3409,9 @@ function renderWifiDashboard(data){
     }
   }
 
-  // Update simulation toggle button state
-  const simBtn = $("wifi-simulate-evil-twin");
-  if (simBtn) {
-    simBtn.setAttribute("aria-pressed", state.simulatedRogueApActive ? "true" : "false");
-    simBtn.classList.toggle("active", !!state.simulatedRogueApActive);
-    const chip = $("sim-rogue-chip");
-    if (chip) chip.textContent = state.simulatedRogueApActive ? "ACTIVE" : "OFF";
-    const icon = simBtn.querySelector(".sim-btn-icon");
-    if (icon) icon.textContent = state.simulatedRogueApActive ? "🚨" : "🧪";
-    const text = simBtn.querySelector(".sim-btn-text");
-    if (text) text.textContent = state.simulatedRogueApActive ? "Stop Rogue AP Sim" : "Simulate Rogue AP Attack";
-    simBtn.style.background = "";
-    simBtn.style.borderColor = "";
-  }
 
   // If user requested simulated VPN toggle, apply manual override
-  if (state.simulatedVpnActive !== null && data.vpn) {
-    applyVpnState(data.vpn, state.simulatedVpnActive);
-  }
 
-  // Update VPN toggle button state
-  const toggleVpnBtn = $("btn-toggle-sim-vpn");
-  const toggleVpnCardBtn = $("btn-toggle-sim-vpn-card");
-  const isVpnOn = !!(data.vpn && data.vpn.connected);
-  const vpnBtnMarkup = isVpnOn
-    ? '<span class="sim-btn-icon">🔓</span> <span class="sim-btn-text">Disconnect VPN (Sim)</span> <span class="sim-status-chip" id="sim-vpn-chip" style="background:#15803d;color:#fff">ACTIVE</span>'
-    : '<span class="sim-btn-icon">🛡️</span> <span class="sim-btn-text">Toggle Encrypted VPN Tunnel</span> <span class="sim-status-chip" id="sim-vpn-chip">DIRECT ISP</span>';
-  const vpnBtnTitle = isVpnOn
-    ? "Click to simulate disabling VPN (Direct ISP mode)"
-    : "Click to simulate connecting encrypted VPN tunnel";
-
-  if (toggleVpnBtn) {
-    toggleVpnBtn.innerHTML = vpnBtnMarkup;
-    toggleVpnBtn.title = vpnBtnTitle;
-    toggleVpnBtn.classList.toggle("active", isVpnOn);
-    toggleVpnBtn.setAttribute("aria-pressed", isVpnOn ? "true" : "false");
-    toggleVpnBtn.style.color = "";
-    toggleVpnBtn.style.borderColor = "";
-    toggleVpnBtn.style.background = "";
-  }
-  if (toggleVpnCardBtn) {
-    toggleVpnCardBtn.innerHTML = vpnBtnMarkup.replace('id="sim-vpn-chip"', 'id="sim-vpn-card-chip"');
-    toggleVpnCardBtn.title = vpnBtnTitle;
-    toggleVpnCardBtn.classList.toggle("active", isVpnOn);
-    toggleVpnCardBtn.setAttribute("aria-pressed", isVpnOn ? "true" : "false");
-  }
 
   // 1. Hero Card
   if (iface && iface.state && iface.state.toLowerCase() === "connected"){
@@ -4133,13 +3499,10 @@ function renderWifiDashboard(data){
   $("wifi-dns-val").textContent = dns;
   $("wifi-gateway-val").textContent = (iface && iface.gateway_ip) ? iface.gateway_ip : "—";
 
-  const elapsedMins = Math.floor((Date.now() - state.sessionStartTime) / 60000);
-  const elapsedSecs = Math.floor(((Date.now() - state.sessionStartTime) % 60000) / 1000);
-  const uptimeEl = $("wifi-uptime-val");
-  if (uptimeEl) {
-    const timeStr = elapsedMins > 0 ? `${elapsedMins}m ${elapsedSecs}s` : `${elapsedSecs}s`;
-    const vpnOk = data.vpn && data.vpn.connected;
-    uptimeEl.innerHTML = `<span style="color:var(--ok)">● Active ${timeStr}</span> &middot; <span style="color:var(--dim)">${state.telemetryTicks} telemetry cycles</span> &middot; <span style="color:${vpnOk ? 'var(--ok)' : 'var(--med)'}">${vpnOk ? 'Encrypted Overlay Active' : 'Direct ISP Link'}</span>`;
+  const egressEl = $("wifi-uptime-val");
+  if (egressEl) {
+    egressEl.textContent = (data.vpn && data.vpn.connected)
+      ? `VPN (${data.vpn.vpn_type || "tunnel"})` : "Direct to ISP, no VPN";
   }
 
   // 5. VPN Overlay Card
@@ -4157,7 +3520,6 @@ function renderWifiDashboard(data){
 
   // 9. Refresh Compliance Matrix with updated Wi-Fi telemetry if IPsec assessment exists
   if (state.assessment) {
-    renderComplianceMatrix(state.assessment, data);
   }
 }
 
@@ -4190,13 +3552,13 @@ function renderVpnOverlay(vpn){
     routeSub.textContent = vpn.is_default_route ? "Default route (0.0.0.0/0) routed via tunnel" : "Default route remains on local Wi-Fi";
 
     if (vpn.dns_leak_detected){
-      leakVal.innerHTML = `<span style="color:var(--crit);font-weight:700">🚨 DNS Leak Detected</span>`;
+      leakVal.innerHTML = `<span style="color:var(--crit);font-weight:700">DNS Leak Detected</span>`;
       leakSub.textContent = `Leaking to ${vpn.dns_leak_details}`;
     } else if (vpn.dns_servers && vpn.dns_servers.length){
-      leakVal.innerHTML = `<span style="color:var(--ok);font-weight:700">✅ Protected</span>`;
+      leakVal.innerHTML = `<span style="color:var(--ok);font-weight:700">Protected</span>`;
       leakSub.textContent = `Tunnel DNS: ${vpn.dns_servers.join(", ")}`;
     } else {
-      leakVal.innerHTML = `<span style="color:var(--ok);font-weight:700">✅ Tunnel Isolated</span>`;
+      leakVal.innerHTML = `<span style="color:var(--ok);font-weight:700">Tunnel Isolated</span>`;
       leakSub.textContent = "No leak detected";
     }
   } else {
@@ -4365,7 +3727,7 @@ function renderWifiNetworksTable(networks){
       let cls = isConnected ? "active-net" : "";
       if (hasRogue) cls += (cls ? " " : "") + "rogue-ap-row";
       const activeLabel = isConnected ? ` <span class="sev-chip info" style="font-size:0.7rem;padding:1px 5px">CONNECTED</span>` : "";
-      const rogueLabel = hasRogue ? ` <span class="rogue-badge">🚨 ROGUE CLONE AP</span>` : "";
+      const rogueLabel = hasRogue ? ` <span class="rogue-badge">ROGUE CLONE AP</span>` : "";
       const meshLabel = apCount > 1 
         ? `<span class="mesh-count-badge">${apCount} APs (Mesh)</span>`
         : "";
@@ -4406,7 +3768,7 @@ function renderWifiNetworksTable(networks){
           <td colspan="6" class="mesh-subgroup-cell">
             <div class="mesh-subgroup-header">
               <div class="mesh-subgroup-title">
-                <span class="mesh-icon">📡</span>
+
                 <span>Physical Access Points for ESSID <strong>"${esc(ssid)}"</strong></span>
                 <span class="mesh-count-tag">${apCount} APs in Roaming Cluster</span>
               </div>
@@ -4422,10 +3784,10 @@ function renderWifiNetworksTable(networks){
                 const badgeText = isApConn 
                   ? '<span class="mesh-ap-badge connected">● CONNECTED AP</span>' 
                   : isRogue 
-                    ? '<span class="mesh-ap-badge" style="background:#dc2626;color:#fff;font-weight:700">🚨 ROGUE CLONE AP</span>'
+                    ? '<span class="mesh-ap-badge" style="background:#dc2626;color:#fff;font-weight:700">ROGUE CLONE AP</span>'
                     : '<span class="mesh-ap-badge neighbor">Neighbor AP</span>';
                 const warningNote = isRogue
-                  ? `<div style="color:#b91c1c;font-size:0.72rem;font-weight:600;margin-top:4px;grid-column:1/-1">⚠ Downgraded Security: ${esc(ap.authentication)} / ${esc(ap.encryption)} &middot; Potential MitM Honeypot</div>`
+                  ? `<div style="color:#b91c1c;font-size:0.72rem;font-weight:600;margin-top:4px;grid-column:1/-1">Downgraded Security: ${esc(ap.authentication)} / ${esc(ap.encryption)} &middot; Potential MitM Honeypot</div>`
                   : "";
                 return `<div class="${cardCls}">
                   <div class="mesh-ap-top">
@@ -4489,7 +3851,7 @@ function renderWifiNetworksTable(networks){
       let cls = n.connected ? "active-net" : "";
       if (n.is_rogue) cls += (cls ? " " : "") + "rogue-ap-row";
       const activeLabel = n.connected ? ` <span class="sev-chip info" style="font-size:0.7rem;padding:1px 5px">CONNECTED</span>` : "";
-      const rogueLabel = n.is_rogue ? ` <span class="rogue-badge">🚨 ROGUE CLONE AP</span>` : "";
+      const rogueLabel = n.is_rogue ? ` <span class="rogue-badge">ROGUE CLONE AP</span>` : "";
       const badgeCls = n.is_rogue ? "F" : (n.security_grade ? n.security_grade.replace("+", "") : "B");
       return `<tr class="${cls}">
         <td><b>${esc(n.ssid)}</b>${activeLabel}${rogueLabel}</td>
@@ -4581,43 +3943,31 @@ function renderRfSpectrum(networks) {
   const connectedNet = bandNetworks.find(n => n.connected);
   const connCh = connectedNet ? parseInt(connectedNet.channel, 10) : null;
   const connCci = connCh ? (channelCounts[connCh] || 1) : 0;
-  const satPct = Math.min(100, Math.round((bandNetworks.length / (is5 ? 18 : 8)) * 100));
 
-  // Render Advisory Cards
+  // Advisory cards: counts from the scan, nothing estimated
   if (advisoryEl) {
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
     const cleanestCci = channelCounts[cleanestCh] || 0;
-    const connCardClass = connCh
-      ? (connCci <= 1 ? "recommended" : (connCci <= 3 ? "caution" : "alert"))
-      : "recommended";
-
+    let beside = 0;
+    if (!is5) for (let d = -2; d <= 2; d++) if (d && channelCounts[cleanestCh + d]) beside += channelCounts[cleanestCh + d];
+    const shared = connCh ? Math.max(0, connCci - 1) : 0;
     advisoryEl.innerHTML = `
       <div class="spectrum-advisory-card recommended">
-        <div class="spectrum-advisory-label">Optimal Cleanest Channel</div>
-        <div class="spectrum-advisory-value" style="color:var(--text-success)">★ Channel ${cleanestCh}</div>
-        <div class="spectrum-advisory-desc">${cleanestCci} Co-Channel APs detected. Minimal interference boundary &amp; high SNR headroom.</div>
+        <div class="spectrum-advisory-label">Least crowded channel</div>
+        <div class="spectrum-advisory-value">Channel ${cleanestCh}</div>
+        <div class="spectrum-advisory-desc">${plural(cleanestCci, "network", "networks")} on it${is5 ? "" : `, ${beside} on the channels either side`}.</div>
       </div>
-      <div class="spectrum-advisory-card ${connCardClass}">
-        <div class="spectrum-advisory-label">Active Channel Status</div>
-        <div class="spectrum-advisory-value">
-          ${connCh ? `Channel ${connCh} (${connCci} AP${connCci > 1 ? 's' : ''})` : 'No AP Associated'}
-        </div>
-        <div class="spectrum-advisory-desc">
-          ${connCh
-            ? (connCci <= 1
-                ? 'Excellent channel isolation. Minimal co-channel packet retransmissions.'
-                : `Active Co-Channel Interference (CCI) from ${connCci - 1} competing access point${connCci > 2 ? 's' : ''}.`)
-            : 'Associate with an access point to monitor active co-channel congestion.'}
-        </div>
+      <div class="spectrum-advisory-card ${!connCh || shared === 0 ? "recommended" : (shared <= 2 ? "caution" : "alert")}">
+        <div class="spectrum-advisory-label">Your channel</div>
+        <div class="spectrum-advisory-value">${connCh ? `Channel ${connCh}` : "&mdash;"}</div>
+        <div class="spectrum-advisory-desc">${connCh
+          ? (shared ? `Shared with ${plural(shared, "other network", "other networks")}; they compete for airtime.` : "No other network in range uses it.")
+          : `Not connected in the ${is5 ? "5" : "2.4"} GHz band.`}</div>
       </div>
-      <div class="spectrum-advisory-card ${satPct > 70 ? 'alert' : (satPct > 40 ? 'caution' : 'recommended')}">
-        <div class="spectrum-advisory-label">Spectral Saturation</div>
-        <div class="spectrum-advisory-value">${satPct}% Congestion</div>
-        <div class="spectrum-advisory-desc">${bandNetworks.length} Access Point${bandNetworks.length === 1 ? '' : 's'} broadcasting in ${is5 ? '5 GHz UNII' : '2.4 GHz ISM'} spectrum.</div>
-      </div>
-      <div class="spectrum-advisory-card recommended">
-        <div class="spectrum-advisory-label">Channel Architecture</div>
-        <div class="spectrum-advisory-value" style="font-size:1rem">${is5 ? '20/40/80 MHz UNII' : 'Non-Overlapping (1, 6, 11)'}</div>
-        <div class="spectrum-advisory-desc">${is5 ? 'Wide dynamic bandwidth with DFS and UNII-1/UNII-3 spatial reuse.' : 'Adhere to non-overlapping channels (1, 6, 11) to prevent 802.11 spectral bleed.'}</div>
+      <div class="spectrum-advisory-card">
+        <div class="spectrum-advisory-label">Networks in this band</div>
+        <div class="spectrum-advisory-value">${bandNetworks.length}</div>
+        <div class="spectrum-advisory-desc">${is5 ? "5 GHz" : "2.4 GHz"} access points this machine can hear.</div>
       </div>
     `;
   }
@@ -4640,40 +3990,20 @@ function renderRfSpectrum(networks) {
     return yBase - ((clamped - (-100)) / ((-30) - (-100))) * plotH;
   };
 
-  let svgContent = `
-    <defs>
-      <linearGradient id="grad-connected" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.6"/>
-        <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.05"/>
-      </linearGradient>
-      <linearGradient id="grad-rogue" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#ef4444" stop-opacity="0.75"/>
-        <stop offset="100%" stop-color="#ef4444" stop-opacity="0.08"/>
-      </linearGradient>
-      <linearGradient id="grad-legacy" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.5"/>
-        <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.05"/>
-      </linearGradient>
-      <linearGradient id="grad-normal" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#818cf8" stop-opacity="0.4"/>
-        <stop offset="100%" stop-color="#818cf8" stop-opacity="0.04"/>
-      </linearGradient>
-    </defs>
-  `;
+  let svgContent = "";
 
-  // Draw Horizontal Power Gridlines (-30, -50, -70, -90 dBm)
-  const powerLevels = [-30, -50, -70, -90];
-  powerLevels.forEach(lvl => {
+  // Horizontal power gridlines (-30, -50, -70, -90 dBm)
+  [-30, -50, -70, -90].forEach(lvl => {
     const y = dbmToY(lvl);
     svgContent += `
-      <line x1="${marginLeft}" y1="${y.toFixed(1)}" x2="${(marginLeft + plotW).toFixed(1)}" y2="${y.toFixed(1)}" stroke="#1e293b" stroke-dasharray="2 4"/>
-      <text x="${marginLeft - 8}" y="${(y + 4).toFixed(1)}" fill="#76869d" text-anchor="end" font-size="10">${lvl} dBm</text>
+      <line class="sp-grid" x1="${marginLeft}" y1="${y.toFixed(1)}" x2="${(marginLeft + plotW).toFixed(1)}" y2="${y.toFixed(1)}" stroke-dasharray="2 4"/>
+      <text class="sp-axis" x="${marginLeft - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="10">${lvl} dBm</text>
     `;
   });
 
   // Base X-axis line
   svgContent += `
-    <line x1="${marginLeft}" y1="${yBase}" x2="${(marginLeft + plotW).toFixed(1)}" y2="${yBase}" stroke="#334155" stroke-width="1.5"/>
+    <line class="sp-base" x1="${marginLeft}" y1="${yBase}" x2="${(marginLeft + plotW).toFixed(1)}" y2="${yBase}" stroke-width="1.5"/>
   `;
 
   // Draw Channel Ticks and Non-Overlapping Highlights
@@ -4687,15 +4017,13 @@ function renderRfSpectrum(networks) {
 
       if (isClean) {
         svgContent += `
-          <line x1="${x.toFixed(1)}" y1="${yTop}" x2="${x.toFixed(1)}" y2="${yBase}" stroke="rgba(16, 185, 129, 0.15)" stroke-dasharray="3 3"/>
-          <circle cx="${x.toFixed(1)}" cy="${yBase + 16}" r="11" fill="rgba(16, 185, 129, 0.12)" stroke="rgba(16, 185, 129, 0.4)"/>
-          <text x="${x.toFixed(1)}" y="${yBase + 20}" fill="#10b981" font-weight="700" text-anchor="middle" font-size="10">${ch}</text>
-          <text x="${x.toFixed(1)}" y="${yTop + 10}" fill="#10b981" font-size="9" text-anchor="middle" opacity="0.8">★ Clean Ch ${ch}</text>
+          <line class="sp-clean-line" x1="${x.toFixed(1)}" y1="${yTop}" x2="${x.toFixed(1)}" y2="${yBase}" stroke-dasharray="3 3"/>
+          <text class="sp-clean" x="${x.toFixed(1)}" y="${yBase + 18}" text-anchor="middle" font-size="10">${ch}</text>
         `;
       } else {
         svgContent += `
-          <line x1="${x.toFixed(1)}" y1="${yBase}" x2="${x.toFixed(1)}" y2="${yBase + 5}" stroke="#475569"/>
-          <text x="${x.toFixed(1)}" y="${yBase + 18}" fill="#76869d" text-anchor="middle" font-size="10">${ch}</text>
+          <line class="sp-base" x1="${x.toFixed(1)}" y1="${yBase}" x2="${x.toFixed(1)}" y2="${yBase + 5}"/>
+          <text class="sp-axis" x="${x.toFixed(1)}" y="${yBase + 18}" text-anchor="middle" font-size="10">${ch}</text>
         `;
       }
     }
@@ -4711,17 +4039,17 @@ function renderRfSpectrum(networks) {
       const isClean = isUnii1 || isUnii3;
 
       svgContent += `
-        <line x1="${x.toFixed(1)}" y1="${yBase}" x2="${x.toFixed(1)}" y2="${yBase + 5}" stroke="${isClean ? '#06b6d4' : '#475569'}"/>
-        <text x="${x.toFixed(1)}" y="${yBase + 18}" fill="${isClean ? '#06b6d4' : '#76869d'}" text-anchor="middle" font-size="9">${ch}</text>
+        <line class="${isClean ? 'sp-clean-line' : 'sp-base'}" x1="${x.toFixed(1)}" y1="${yBase}" x2="${x.toFixed(1)}" y2="${yBase + 5}"/>
+        <text class="${isClean ? 'sp-clean' : 'sp-axis'}" x="${x.toFixed(1)}" y="${yBase + 18}" text-anchor="middle" font-size="9">${ch}</text>
       `;
     });
 
     // Sub-labels for UNII zones
     svgContent += `
-      <text x="${fToX(5210).toFixed(1)}" y="${yTop + 10}" fill="#94a3b8" font-size="9" text-anchor="middle">UNII-1 (36-48)</text>
-      <text x="${fToX(5290).toFixed(1)}" y="${yTop + 10}" fill="#94a3b8" font-size="9" text-anchor="middle">UNII-2 DFS (52-64)</text>
-      <text x="${fToX(5600).toFixed(1)}" y="${yTop + 10}" fill="#94a3b8" font-size="9" text-anchor="middle">UNII-2e (100-144)</text>
-      <text x="${fToX(5785).toFixed(1)}" y="${yTop + 10}" fill="#94a3b8" font-size="9" text-anchor="middle">UNII-3 (149-165)</text>
+      <text x="${fToX(5210).toFixed(1)}" y="${yTop + 10}" class="sp-axis" font-size="9" text-anchor="middle">UNII-1 (36-48)</text>
+      <text x="${fToX(5290).toFixed(1)}" y="${yTop + 10}" class="sp-axis" font-size="9" text-anchor="middle">UNII-2 DFS (52-64)</text>
+      <text x="${fToX(5600).toFixed(1)}" y="${yTop + 10}" class="sp-axis" font-size="9" text-anchor="middle">UNII-2e (100-144)</text>
+      <text x="${fToX(5785).toFixed(1)}" y="${yTop + 10}" class="sp-axis" font-size="9" text-anchor="middle">UNII-3 (149-165)</text>
     `;
   }
 
@@ -4752,27 +4080,15 @@ function renderRfSpectrum(networks) {
     const x2 = fToX(f2);
     const yPeak = dbmToY(rssi);
 
-    let gradId = "grad-normal";
-    let strokeColor = "#818cf8";
-    let strokeWidth = "1.5";
-    let pulseClass = "";
+    let kind = "", strokeWidth = "1.5";
+    if (n.is_rogue) { kind = "rogue"; strokeWidth = "2.5"; }
+    else if (n.connected) { kind = "conn"; strokeWidth = "2.5"; }
+    else if (n.security_grade === "F" || /WEP|None|Open/i.test(n.encryption || n.security || "")) { kind = "legacy"; strokeWidth = "1.8"; }
 
-    if (n.is_rogue) {
-      gradId = "grad-rogue";
-      strokeColor = "#ef4444";
-      strokeWidth = "2.5";
-      pulseClass = "rogue-pulse-curve";
-    } else if (n.connected) {
-      gradId = "grad-connected";
-      strokeColor = "#06b6d4";
-      strokeWidth = "2.5";
-    } else if (n.security_grade === "F" || /WEP|None|Open/i.test(n.encryption || n.security || "")) {
-      gradId = "grad-legacy";
-      strokeColor = "#f59e0b";
-      strokeWidth = "1.8";
-    }
-
-    const pathD = `M ${x1.toFixed(1)} ${yBase} Q ${xc.toFixed(1)} ${yPeak.toFixed(1)} ${x2.toFixed(1)} ${yBase} Z`;
+    // a quadratic Bezier peaks halfway to its control point, so the control
+    // point sits twice as high: the apex is then the measured RSSI
+    const yCtrl = 2 * yPeak - yBase;
+    const pathD = `M ${x1.toFixed(1)} ${yBase} Q ${xc.toFixed(1)} ${yCtrl.toFixed(1)} ${x2.toFixed(1)} ${yBase} Z`;
 
     const tooltipData = JSON.stringify({
       ssid: n.ssid || "(Hidden SSID)",
@@ -4781,7 +4097,7 @@ function renderRfSpectrum(networks) {
       freq: `${fc} MHz`,
       rssi: `${rssi} dBm (${n.signal_percent || 50}%)`,
       sec: `${n.authentication || 'WPA2'} / ${n.encryption || 'AES'}`,
-      status: n.is_rogue ? "🚨 ROGUE AP / EVIL TWIN" : (n.connected ? "✔ CURRENTLY ASSOCIATED" : "Neighbor AP")
+      status: n.is_rogue ? "Possible evil twin" : (n.connected ? "Connected" : "Other network")
     }).replace(/"/g, "&quot;");
 
     // Robust collision avoidance across congested channels (Heuristic #8)
@@ -4816,16 +4132,15 @@ function renderRfSpectrum(networks) {
     // Staggered leader line (callout) connecting displaced text to curve peak
     let leaderLine = "";
     if (collisionCount > 0 || Math.abs(xLabel - xc) > 5) {
-      leaderLine = `<line x1="${xLabel.toFixed(1)}" y1="${(yLabel + 3).toFixed(1)}" x2="${xc.toFixed(1)}" y2="${yPeak.toFixed(1)}" stroke="${strokeColor}" stroke-dasharray="2 2" stroke-width="1.2" opacity="0.75"/>`;
+      leaderLine = `<line x1="${xLabel.toFixed(1)}" y1="${(yLabel + 3).toFixed(1)}" x2="${xc.toFixed(1)}" y2="${yPeak.toFixed(1)}" stroke-dasharray="2 2" stroke-width="1.2" opacity="0.75"/>`;
     }
 
     svgContent += `
-      <g class="spectrum-curve-group">
-        <path d="${pathD}" fill="url(#${gradId})" stroke="${strokeColor}" stroke-width="${strokeWidth}"
-              class="curve-path ${pulseClass}" data-spec="${tooltipData}"/>
+      <g class="spectrum-curve-group sp-ap ${kind}">
+        <path d="${pathD}" stroke-width="${strokeWidth}" class="curve-path" data-spec="${tooltipData}"/>
         ${leaderLine}
-        <circle cx="${xc.toFixed(1)}" cy="${yPeak.toFixed(1)}" r="${n.is_rogue || n.connected ? '4' : '2.5'}" fill="${strokeColor}"/>
-        <text x="${xLabel.toFixed(1)}" y="${yLabel.toFixed(1)}" fill="${strokeColor}" font-size="10" font-weight="${n.is_rogue || n.connected ? '700' : '500'}" text-anchor="middle">
+        <circle cx="${xc.toFixed(1)}" cy="${yPeak.toFixed(1)}" r="${n.is_rogue || n.connected ? '4' : '2.5'}"/>
+        <text x="${xLabel.toFixed(1)}" y="${yLabel.toFixed(1)}" font-size="10" font-weight="${n.is_rogue || n.connected ? '700' : '500'}" text-anchor="middle">
           ${esc(n.ssid ? n.ssid.slice(0, 14) : 'AP')} (${rssi})
         </text>
       </g>
@@ -4842,12 +4157,12 @@ function renderRfSpectrum(networks) {
         try {
           const d = JSON.parse(path.getAttribute("data-spec"));
           tooltip.innerHTML = `
-            <div style="font-weight:700; color:#38bdf8; margin-bottom:2px">${esc(d.ssid)}</div>
-            <div style="font-family:var(--mono); font-size:0.74rem; color:#94a3b8">${esc(d.bssid)}</div>
+            <div style="font-weight:600; margin-bottom:2px">${esc(d.ssid)}</div>
+            <div style="font-family:var(--mono); font-size:0.74rem; opacity:.8">${esc(d.bssid)}</div>
             <div style="margin-top:4px"><strong>Channel:</strong> ${esc(d.channel)} (${esc(d.freq)})</div>
             <div><strong>Signal:</strong> ${esc(d.rssi)}</div>
             <div><strong>Security:</strong> ${esc(d.sec)}</div>
-            <div style="margin-top:4px; font-weight:600; color:${d.status.includes('ROGUE') ? '#ef4444' : (d.status.includes('ASSOCIATED') ? '#34d399' : '#94a3b8')}">${esc(d.status)}</div>
+            <div style="margin-top:4px; font-weight:600">${esc(d.status)}</div>
           `;
           tooltip.style.display = "block";
         } catch (err) {}
@@ -4880,7 +4195,7 @@ function exportSecurityAuditReport(){
   const dateFormatted = new Date().toLocaleString();
 
   const report = {
-    report_title: "CipherGuard Executive Security Audit Dossier",
+    report_title: "CipherGuard Wi-Fi assessment",
     standard: "SIH26160 / NTRO & NIST SP 800-77 Rev 1 / RFC 8247",
     timestamp: timestamp,
     date_formatted: dateFormatted,
@@ -4927,7 +4242,7 @@ function exportSecurityAuditReport(){
 
   const printWindow = window.open("", "_blank", "width=920,height=850");
   if (!printWindow) {
-    alert("Popup blocked. Please allow popups to view the Executive Security Audit Dossier.");
+    alert("The report opens in a new window; allow pop-ups for this page to see it.");
     return;
   }
 
@@ -4949,7 +4264,7 @@ function exportSecurityAuditReport(){
     <!DOCTYPE html>
     <html>
     <head>
-      <title>CipherGuard Security Audit Dossier - ${esc(report.wifi_posture.ssid)}</title>
+      <title>CipherGuard Wi-Fi assessment - ${esc(report.wifi_posture.ssid)}</title>
       <style>
         body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; line-height: 1.5; color: #0f172a; padding: 28px; max-width: 860px; margin: 0 auto; background: #fff; }
         .no-print { display: flex; gap: 10px; margin-bottom: 24px; padding: 12px; background: #f0f9ff; border-radius: 6px; border: 1px solid #bae6fd; }
@@ -4970,8 +4285,8 @@ function exportSecurityAuditReport(){
     </head>
     <body>
       <div class="no-print">
-        <button class="btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
-        <a class="btn btn-secondary" href="data:application/json;charset=utf-8,${jsonBlob}" download="cipherguard-audit-${Date.now()}.json">💾 Download JSON Telemetry</a>
+        <button class="btn" onclick="window.print()">Print / Save as PDF</button>
+        <a class="btn btn-secondary" href="data:application/json;charset=utf-8,${jsonBlob}" download="cipherguard-audit-${Date.now()}.json">Download JSON Telemetry</a>
       </div>
       <div class="hdr">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -5037,510 +4352,6 @@ function exportSecurityAuditReport(){
    ========================================================================== */
 
 // --- 1. IN-BROWSER HEX PACKET DISSECTOR & PROTOCOL INSPECTOR ---
-const HexDissectorEngine = (function() {
-  const PACKET_SAMPLES = {
-    ike_init: {
-      name: "IKE_SA_INIT (Exchange 34, Transform Neg)",
-      bytes: "45 00 00 b8 a4 1b 40 00 40 11 9c 31 c0 a8 01 69 cb 00 71 01 01 f4 01 f4 00 a4 8d f2 5f b4 c2 11 8a 70 9d 3e 00 00 00 00 00 00 00 00 21 20 22 08 00 00 00 00 00 00 00 8c 22 00 00 30 00 00 00 2c 01 01 00 04 03 00 00 0c 01 00 00 0c 80 0e 00 80 03 00 00 08 02 00 00 02 03 00 00 08 03 00 00 02 00 00 00 08 04 00 00 02 28 00 00 28 89 b2 fe 45 a1 09 cf 12 34 56 78 90 ab cd ef 11 22 33 44 55 66 77 88 99 aa bb cc dd ee ff 00 12 34 56 78",
-      layers: [
-        {
-          title: "Internet Protocol Version 4 (Src: 192.168.1.105, Dst: 203.0.113.1)",
-          start: 0, end: 19,
-          fields: [
-            { label: "Version 4, Header Length: 20 bytes (0x45)", start: 0, end: 0 },
-            { label: "Differentiated Services Field: 0x00", start: 1, end: 1 },
-            { label: "Total Length: 184 bytes (0x00b8)", start: 2, end: 3 },
-            { label: "Identification: 0xa41b", start: 4, end: 5 },
-            { label: "Flags: 0x40 (Don't Fragment), Offset: 0", start: 6, end: 7 },
-            { label: "Time to Live: 64 hops (0x40)", start: 8, end: 8 },
-            { label: "Protocol: UDP (17 / 0x11)", start: 9, end: 9 },
-            { label: "Header Checksum: 0x9c31 [verified]", start: 10, end: 11 },
-            { label: "Source IP: 192.168.1.105", start: 12, end: 15 },
-            { label: "Destination IP: 203.0.113.1", start: 16, end: 19 }
-          ]
-        },
-        {
-          title: "User Datagram Protocol (Src Port: 500, Dst Port: 500, Len: 164)",
-          start: 20, end: 27,
-          fields: [
-            { label: "Source Port: 500 (isakmp)", start: 20, end: 21 },
-            { label: "Destination Port: 500 (isakmp)", start: 22, end: 23 },
-            { label: "Length: 164 bytes (0x00a4)", start: 24, end: 25 },
-            { label: "Checksum: 0x8df2 [verified]", start: 26, end: 27 }
-          ]
-        },
-        {
-          title: "Internet Key Exchange v2 (IKE_SA_INIT Request)",
-          start: 28, end: 55,
-          fields: [
-            { label: "Initiator SPI: 5f b4 c2 11 8a 70 9d 3e", start: 28, end: 35 },
-            { label: "Responder SPI: 00 00 00 00 00 00 00 00 (Initiation)", start: 36, end: 43 },
-            { label: "Next Payload: Security Association (33 / 0x21)", start: 44, end: 44 },
-            { label: "Version: 2.0 (Exchange: IKE_SA_INIT / 34)", start: 45, end: 46 },
-            { label: "Flags: 0x08 (Initiator, Response: 0)", start: 47, end: 47 },
-            { label: "Message ID: 0 (0x00000000)", start: 48, end: 51 },
-            { label: "Length: 140 bytes (0x0000008c)", start: 52, end: 55 }
-          ]
-        },
-        {
-          title: "Security Association Payload (SA Proposal & Transforms)",
-          start: 56, end: 91,
-          fields: [
-            { label: "Proposal #1 (Protocol ID: IKE, SPI Size: 0, 4 Transforms)", start: 56, end: 63 },
-            { label: "Transform ENCR: AES-CBC (Key: 128-bit) [Legacy]", start: 64, end: 71 },
-            { label: "Transform PRF: HMAC-SHA1-96 [Deprecated]", start: 72, end: 79 },
-            { label: "Transform INTEG: AUTH_HMAC_SHA1_96", start: 80, end: 87 },
-            { label: "Transform DH: Group 2 (MODP-1024) [⚠️ Critical SNDL Risk]", start: 88, end: 91 }
-          ]
-        },
-        {
-          title: "Key Exchange & Nonce Payload (Ni, 32 bytes)",
-          start: 92, end: 123,
-          fields: [
-            { label: "Next Payload: None (0)", start: 92, end: 92 },
-            { label: "Payload Length: 32 bytes", start: 93, end: 95 },
-            { label: "Nonce Entropy Data (32 Octets)", start: 96, end: 123 }
-          ]
-        }
-      ]
-    },
-    ike_auth: {
-      name: "IKE_AUTH (Exchange 35, Encrypted SA)",
-      bytes: "45 00 00 f0 b2 3c 40 00 40 11 8e 1f c0 a8 01 69 cb 00 71 01 01 f4 01 f4 00 dc 4a 12 5f b4 c2 11 8a 70 9d 3e 7c 99 44 21 02 aa 11 88 2e 20 23 08 00 00 00 01 00 00 00 c4 24 00 00 b8 e3 19 82 af b4 d1 e0 f7 c9 23 a1 84 99 e2 55 10 f4 bb 88 12 33 44 55 66 77 88 99 00 aa bb cc dd ee ff 01 23 45 67 89 ab cd ef 01 23 45 67 89 ab cd ef 12 34 56 78 9a bc de f0 12 34 56 78 9a bc de f0 12 34 56 78 9a bc de f0 55 66 77 88",
-      layers: [
-        {
-          title: "Internet Protocol Version 4 (Src: 192.168.1.105, Dst: 203.0.113.1)",
-          start: 0, end: 19,
-          fields: [
-            { label: "Version 4, Header Length: 20 bytes", start: 0, end: 0 },
-            { label: "Total Length: 240 bytes (0x00f0)", start: 2, end: 3 },
-            { label: "Protocol: UDP (17 / 0x11)", start: 9, end: 9 },
-            { label: "Source IP: 192.168.1.105", start: 12, end: 15 },
-            { label: "Destination IP: 203.0.113.1", start: 16, end: 19 }
-          ]
-        },
-        {
-          title: "User Datagram Protocol (Src Port: 500, Dst Port: 500)",
-          start: 20, end: 27,
-          fields: [
-            { label: "Source Port: 500, Destination Port: 500", start: 20, end: 23 },
-            { label: "Length: 220 bytes, Checksum: 0x4a12", start: 24, end: 27 }
-          ]
-        },
-        {
-          title: "Internet Key Exchange v2 (IKE_AUTH Request)",
-          start: 28, end: 55,
-          fields: [
-            { label: "Initiator SPI: 5f b4 c2 11 8a 70 9d 3e", start: 28, end: 35 },
-            { label: "Responder SPI: 7c 99 44 21 02 aa 11 88", start: 36, end: 43 },
-            { label: "Next Payload: Encrypted and Authenticated (46 / 0x2e)", start: 44, end: 44 },
-            { label: "Version: 2.0 (Exchange: IKE_AUTH / 35)", start: 45, end: 46 },
-            { label: "Message ID: 1 (0x00000001)", start: 48, end: 51 }
-          ]
-        },
-        {
-          title: "Encrypted & Authenticated Payload (SK)",
-          start: 56, end: 119,
-          fields: [
-            { label: "Initialization Vector (IV, 8 bytes)", start: 56, end: 63 },
-            { label: "Encrypted Inner Payloads: IDi, CERT, AUTH, TSi, TSr", start: 64, end: 103 },
-            { label: "Integrity Check Value (ICV Tag, 16 bytes)", start: 104, end: 119 }
-          ]
-        }
-      ]
-    },
-    esp_wire: {
-      name: "ESP Wire Framing (RFC 4303, Seq #142)",
-      bytes: "45 00 00 8c c8 92 40 00 40 32 75 ad cb 00 71 01 c0 a8 01 69 8a 2f 10 c4 00 00 00 8e e1 90 fa 31 82 4b cd 71 fa 22 19 e0 b4 33 99 d2 77 88 12 34 55 66 77 88 99 00 11 22 33 44 55 66 77 88 99 aa bb cc dd ee ff 01 02 03 04 05 06 06 06 1a 9f 3b c2 81 7e 4d 00 93 c1 ba de",
-      layers: [
-        {
-          title: "IPv4 Outer Tunnel Header (Protocol: ESP / 50)",
-          start: 0, end: 19,
-          fields: [
-            { label: "Version 4, Header Length: 20 bytes", start: 0, end: 0 },
-            { label: "Total Length: 140 bytes (0x008c)", start: 2, end: 3 },
-            { label: "Protocol: Encapsulating Security Payload (50 / 0x32)", start: 9, end: 9 },
-            { label: "Gateway Outer Src: 203.0.113.1", start: 12, end: 15 },
-            { label: "Gateway Outer Dst: 192.168.1.105", start: 16, end: 19 }
-          ]
-        },
-        {
-          title: "ESP Header (RFC 4303 Security Association)",
-          start: 20, end: 27,
-          fields: [
-            { label: "Security Parameters Index (SPI): 0x8a2f10c4", start: 20, end: 23 },
-            { label: "Sequence Number: 142 (0x0000008e)", start: 24, end: 27 }
-          ]
-        },
-        {
-          title: "ESP Encrypted Payload (Ciphertext)",
-          start: 28, end: 61,
-          fields: [
-            { label: "Encrypted Transport Datagram (AES-CBC-128 block)", start: 28, end: 61 }
-          ]
-        },
-        {
-          title: "ESP Trailer & Padding Modulo Residues",
-          start: 62, end: 69,
-          fields: [
-            { label: "RFC 4303 Modulo Padding: 01 02 03 04 05 06 (6 octets)", start: 62, end: 67 },
-            { label: "Pad Length: 6 bytes (0x06)", start: 68, end: 68 },
-            { label: "Next Header: TCP (6 / 0x06)", start: 69, end: 69 }
-          ]
-        },
-        {
-          title: "ESP Integrity Check Value (ICV / HMAC-SHA1-96)",
-          start: 70, end: 81,
-          fields: [
-            { label: "Authentication Tag: 1a 9f 3b c2 81 7e 4d 00 93 c1 ba de", start: 70, end: 81 }
-          ]
-        }
-      ]
-    }
-  };
-
-  let currentKey = "ike_init";
-
-  function render(sampleKey) {
-    currentKey = sampleKey || currentKey;
-    const sample = PACKET_SAMPLES[currentKey] || PACKET_SAMPLES.ike_init;
-    const rawTokens = sample.bytes.trim().split(/\s+/);
-    const hexContainer = $("dissector-hex-dump");
-    const treeContainer = $("dissector-tree");
-
-    if (!hexContainer || !treeContainer) return;
-
-    // 1. Render Hex Rows (16 bytes per row)
-    hexContainer.innerHTML = "";
-    for (let i = 0; i < rawTokens.length; i += 16) {
-      const chunk = rawTokens.slice(i, i + 16);
-      const row = document.createElement("div");
-      row.className = "hex-row";
-
-      // Offset (hex)
-      const offsetSpan = document.createElement("span");
-      offsetSpan.className = "hex-offset";
-      offsetSpan.textContent = i.toString(16).padStart(4, "0") + ":";
-      row.appendChild(offsetSpan);
-
-      // Bytes
-      const bytesSpan = document.createElement("div");
-      bytesSpan.className = "hex-bytes";
-      let asciiStr = "";
-
-      for (let j = 0; j < chunk.length; j++) {
-        const byteIdx = i + j;
-        const b = chunk[j];
-        const byteEl = document.createElement("span");
-        byteEl.className = "hex-byte";
-        byteEl.dataset.index = String(byteIdx);
-        byteEl.textContent = b;
-
-        const val = parseInt(b, 16);
-        asciiStr += (val >= 32 && val <= 126) ? String.fromCharCode(val) : ".";
-
-        byteEl.addEventListener("mouseenter", () => highlightSpan(byteIdx, byteIdx));
-        byteEl.addEventListener("mouseleave", clearHighlights);
-        bytesSpan.appendChild(byteEl);
-      }
-      row.appendChild(bytesSpan);
-
-      // ASCII
-      const asciiSpan = document.createElement("span");
-      asciiSpan.className = "hex-ascii";
-      asciiSpan.textContent = asciiStr;
-      row.appendChild(asciiSpan);
-
-      hexContainer.appendChild(row);
-    }
-
-    // 2. Render Protocol Tree
-    treeContainer.innerHTML = "";
-    sample.layers.forEach((layer) => {
-      const node = document.createElement("div");
-      node.className = "tree-node";
-
-      const title = document.createElement("div");
-      title.className = "tree-node-title";
-      title.textContent = `▶ ${layer.title}`;
-      title.addEventListener("mouseenter", () => highlightSpan(layer.start, layer.end));
-      title.addEventListener("mouseleave", clearHighlights);
-      title.addEventListener("click", () => {
-        highlightSpan(layer.start, layer.end, true);
-        if (typeof SocAudioEngine !== "undefined" && SocAudioEngine.play) {
-          SocAudioEngine.play("ping");
-        }
-      });
-      node.appendChild(title);
-
-      const fields = document.createElement("div");
-      fields.className = "tree-fields";
-
-      layer.fields.forEach((field) => {
-        const fieldEl = document.createElement("div");
-        fieldEl.className = "tree-field";
-        fieldEl.textContent = `• ${field.label}`;
-        fieldEl.dataset.start = String(field.start);
-        fieldEl.dataset.end = String(field.end);
-
-        fieldEl.addEventListener("mouseenter", () => highlightSpan(field.start, field.end));
-        fieldEl.addEventListener("mouseleave", clearHighlights);
-        fieldEl.addEventListener("click", () => {
-          highlightSpan(field.start, field.end, true);
-          if (typeof SocAudioEngine !== "undefined" && SocAudioEngine.play) {
-            SocAudioEngine.play("ping");
-          }
-        });
-        fields.appendChild(fieldEl);
-      });
-
-      node.appendChild(fields);
-      treeContainer.appendChild(node);
-    });
-  }
-
-  function renderAnatomyBar(sample) {
-    const bar = $("dissector-anatomy-bar");
-    const modCard = $("dissector-modulo-card");
-    if (!bar) return;
-
-    if (sample.segments && sample.segments.length > 0) {
-      bar.innerHTML = sample.segments.map(seg => `
-        <div class="anatomy-segment" style="background:${seg.color}22;border-color:${seg.color}66;color:${seg.color}"
-             onmouseenter="HexDissectorEngine.highlightSpan(${seg.start}, ${seg.end - 1})"
-             onmouseleave="HexDissectorEngine.clearHighlights()"
-             onclick="HexDissectorEngine.highlightSpan(${seg.start}, ${seg.end - 1}, true)"
-             title="${esc(seg.desc)}">
-          <span>${esc(seg.label)}</span>
-          <small>${esc(seg.value)}</small>
-        </div>
-      `).join("");
-      bar.style.display = "flex";
-    } else {
-      bar.style.display = "none";
-    }
-
-    if (modCard && sample.modulo_proof) {
-      const p = sample.modulo_proof;
-      modCard.className = `dissector-modulo-card ${p.valid ? '' : 'invalid'}`;
-      modCard.innerHTML = `
-        <div class="modulo-proof-title">
-          <span>${p.valid ? '✔' : '✖'}</span>
-          <span>RFC 4303 Modulo Framing Arithmetic Proof</span>
-        </div>
-        <div class="modulo-formula-tag">${esc(p.formula)} (Block Size: ${p.block_size}B)</div>
-        <div>Shannon Entropy: <strong>${p.entropy} / 8.0</strong> (${p.is_encrypted ? 'Encrypted' : 'Cleartext'})</div>
-      `;
-      modCard.style.display = "flex";
-    } else if (modCard) {
-      modCard.style.display = "none";
-    }
-  }
-
-  async function loadFlowWire(spi, framingClass) {
-    const dissectorPanel = $("hex-dissector-panel");
-    if (dissectorPanel) dissectorPanel.scrollIntoView({ behavior: "smooth", block: "start" });
-
-    const currentCap = state.assessment ? state.assessment.capture : ($("capture") ? $("capture").value : "backbone.pcap");
-    const slug = currentCap.replace(".", "_");
-    const cleanSpi = spi.toLowerCase().replace("0x", "");
-
-    try {
-      let data = null;
-      try {
-        const res = await api(`/api/captures/${encodeURIComponent(currentCap)}/flows/${encodeURIComponent(spi)}/wire?framing=${encodeURIComponent(framingClass || "")}`);
-        if (res.ok) data = await res.json();
-      } catch (e) {}
-
-      if (!data) {
-        // Fallback to static wire data if present
-        try {
-          const sRes = await fetch(`data/wire/${slug}_${cleanSpi}.json`);
-          if (sRes.ok) data = await sRes.json();
-        } catch (e) {}
-      }
-
-      if (data && data.samples && data.samples.length > 0) {
-        const s = data.samples[0];
-        const key = `flow_${cleanSpi}`;
-        PACKET_SAMPLES[key] = {
-          name: `ESP Wire ${spi} (${framingClass || 'RFC 4303'})`,
-          bytes: s.raw_hex.match(/.{1,2}/g).join(" "),
-          segments: s.segments,
-          modulo_proof: s.modulo_proof,
-          layers: [
-            {
-              title: `ESP Security Association (SPI: ${spi}, Frame #${s.frame})`,
-              start: 0,
-              end: s.total_bytes - 1,
-              fields: s.segments.map(seg => ({
-                label: `${seg.label}: ${seg.value} (Bytes ${seg.start}..${seg.end})`,
-                start: seg.start,
-                end: seg.end - 1
-              }))
-            }
-          ]
-        };
-
-        const sel = $("hex-packet-select");
-        if (sel) {
-          if (!sel.querySelector(`option[value="${key}"]`)) {
-            const opt = document.createElement("option");
-            opt.value = key;
-            opt.textContent = PACKET_SAMPLES[key].name;
-            sel.appendChild(opt);
-          }
-          sel.value = key;
-        }
-        render(key);
-        renderAnatomyBar(PACKET_SAMPLES[key]);
-        showToast(`Dissected ESP flow ${spi} (${s.total_bytes} bytes).`, "success");
-        return;
-      }
-    } catch(err) {
-      console.warn("Wire fetch error", err);
-    }
-
-    render("esp_wire");
-  }
-
-  function render(sampleKey) {
-    currentKey = sampleKey || currentKey;
-    const sample = PACKET_SAMPLES[currentKey] || PACKET_SAMPLES.ike_init;
-    const rawTokens = sample.bytes.trim().split(/\s+/);
-    const hexContainer = $("dissector-hex-dump");
-    const treeContainer = $("dissector-tree");
-
-    if (!hexContainer || !treeContainer) return;
-
-    renderAnatomyBar(sample);
-
-    // 1. Render Hex Rows (16 bytes per row)
-    hexContainer.innerHTML = "";
-    for (let i = 0; i < rawTokens.length; i += 16) {
-      const chunk = rawTokens.slice(i, i + 16);
-      const row = document.createElement("div");
-      row.className = "hex-row";
-
-      // Offset (hex)
-      const offsetSpan = document.createElement("span");
-      offsetSpan.className = "hex-offset";
-      offsetSpan.textContent = i.toString(16).padStart(4, "0") + ":";
-      row.appendChild(offsetSpan);
-
-      // Bytes
-      const bytesSpan = document.createElement("div");
-      bytesSpan.className = "hex-bytes";
-      let asciiStr = "";
-
-      for (let j = 0; j < chunk.length; j++) {
-        const byteIdx = i + j;
-        const b = chunk[j];
-        const byteEl = document.createElement("span");
-        byteEl.className = "hex-byte";
-        byteEl.dataset.index = String(byteIdx);
-        byteEl.textContent = b;
-
-        const val = parseInt(b, 16);
-        asciiStr += (val >= 32 && val <= 126) ? String.fromCharCode(val) : ".";
-
-        byteEl.addEventListener("mouseenter", () => highlightSpan(byteIdx, byteIdx));
-        byteEl.addEventListener("mouseleave", clearHighlights);
-        bytesSpan.appendChild(byteEl);
-      }
-      row.appendChild(bytesSpan);
-
-      // ASCII
-      const asciiSpan = document.createElement("span");
-      asciiSpan.className = "hex-ascii";
-      asciiSpan.textContent = asciiStr;
-      row.appendChild(asciiSpan);
-
-      hexContainer.appendChild(row);
-    }
-
-    // 2. Render Protocol Tree
-    treeContainer.innerHTML = "";
-    sample.layers.forEach((layer) => {
-      const node = document.createElement("div");
-      node.className = "tree-node";
-
-      const title = document.createElement("div");
-      title.className = "tree-node-title";
-      title.textContent = `▶ ${layer.title}`;
-      title.addEventListener("mouseenter", () => highlightSpan(layer.start, layer.end));
-      title.addEventListener("mouseleave", clearHighlights);
-      title.addEventListener("click", () => {
-        highlightSpan(layer.start, layer.end, true);
-      });
-      node.appendChild(title);
-
-      const fields = document.createElement("div");
-      fields.className = "tree-fields";
-
-      layer.fields.forEach((field) => {
-        const fieldEl = document.createElement("div");
-        fieldEl.className = "tree-field";
-        fieldEl.textContent = `• ${field.label}`;
-        fieldEl.dataset.start = String(field.start);
-        fieldEl.dataset.end = String(field.end);
-
-        fieldEl.addEventListener("mouseenter", () => highlightSpan(field.start, field.end));
-        fieldEl.addEventListener("mouseleave", clearHighlights);
-        fieldEl.addEventListener("click", () => {
-          highlightSpan(field.start, field.end, true);
-        });
-        fields.appendChild(fieldEl);
-      });
-
-      node.appendChild(fields);
-      treeContainer.appendChild(node);
-    });
-  }
-
-  function highlightSpan(start, end, scrollToFirst) {
-    const hexContainer = $("dissector-hex-dump");
-    if (!hexContainer) return;
-
-    const allBytes = hexContainer.querySelectorAll(".hex-byte");
-    let firstHighlighted = null;
-
-    allBytes.forEach((el) => {
-      const idx = parseInt(el.dataset.index, 10);
-      if (idx >= start && idx <= end) {
-        el.classList.add("highlight");
-        if (!firstHighlighted) firstHighlighted = el;
-      } else {
-        el.classList.remove("highlight");
-      }
-    });
-
-    if (scrollToFirst && firstHighlighted) {
-      firstHighlighted.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-  }
-
-  function clearHighlights() {
-    const hexContainer = $("dissector-hex-dump");
-    if (!hexContainer) return;
-    hexContainer.querySelectorAll(".hex-byte.highlight").forEach((el) => {
-      el.classList.remove("highlight");
-    });
-  }
-
-  function init() {
-    const select = $("hex-packet-select");
-    if (select) {
-      select.addEventListener("change", (e) => {
-        render(e.target.value);
-      });
-    }
-    render("ike_init");
-  }
-
-  return { init, render, loadFlowWire, highlightSpan, clearHighlights };
-})();
-window.HexDissectorEngine = HexDissectorEngine;
 
 
 // --- 2. LIVE WIRE PACKET SNIFFER & SSE STREAMING ENGINE ---
@@ -5562,7 +4373,7 @@ const LiveSnifferEngine = (function() {
       const data = await res.json();
       updateUIState(true);
       connectSSE();
-      showToast("Live wire packet sniffer started.", "info");
+      showToast("Live capture started", "info");
     } catch(err) {
       showToast("Failed to start sniffer: " + err.message, "error");
     }
@@ -5576,7 +4387,7 @@ const LiveSnifferEngine = (function() {
         eventSource.close();
         eventSource = null;
       }
-      showToast("Live wire sniffer stopped.", "info");
+      showToast("Live capture stopped", "info");
     } catch(err) {
       showToast("Failed to stop sniffer: " + err.message, "error");
     }
@@ -5704,13 +4515,13 @@ const LiveSnifferEngine = (function() {
     const btnAnalyze = $("btn-sniffer-analyze");
     if (btnAnalyze) {
       btnAnalyze.disabled = true;
-      btnAnalyze.textContent = "⚡ Analyzing...";
+      btnAnalyze.textContent = "Analyzing...";
     }
 
     try {
       const res = await api("/api/sniff/analyze", { method: "POST" });
       const data = await res.json();
-      showToast("Live capture snapshot successfully assessed!", "success");
+      showToast("Captured packets assessed", "success");
       switchIpsecMode("single");
       renderAssessment(data);
     } catch(err) {
@@ -5718,7 +4529,7 @@ const LiveSnifferEngine = (function() {
     } finally {
       if (btnAnalyze) {
         btnAnalyze.disabled = false;
-        btnAnalyze.innerHTML = "<span>⚡</span> Analyze Live Snapshot";
+        btnAnalyze.innerHTML = "Analyze Live Snapshot";
       }
     }
   }
@@ -5959,14 +4770,14 @@ const CbomEngine = (function() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast("Downloaded CycloneDX v1.6 CBOM JSON", "success");
+    showToast("CBOM downloaded", "success");
   }
 
   function copy() {
     if (!cachedCbom) return;
     const jsonStr = JSON.stringify(cachedCbom, null, 2);
     navigator.clipboard.writeText(jsonStr).then(() => {
-      showToast("CBOM JSON copied to clipboard!", "success");
+      showToast("CBOM copied", "success");
     }).catch(() => {
       showToast("Could not access clipboard", "warn");
     });
@@ -6036,130 +4847,7 @@ window.toggleSocCopilot = () => {};
 
 
 // --- 4. MITRE ATT&CK ENTERPRISE THREAT MATRIX HEATMAP ---
-const MitreHeatmapEngine = (function() {
-  const MITRE_TACTICS = [
-    {
-      name: "Initial Access",
-      cards: [
-        { id: "T1566", name: "Captive Portal Phishing", status: "mitigated", desc: "Forced DNS redirection blocked via Sovereign DNS resolvers." },
-        { id: "T1133", name: "External IPsec Gateways", status: "monitored", desc: "Zero-decryption framing analysis monitors remote boundary endpoints." },
-        { id: "T1200", name: "Rogue AP / Hardware Injection", status: "dynamic-rogue", desc: "Evil Twin BSSID spoofing actively monitored." }
-      ]
-    },
-    {
-      name: "Credential Access",
-      cards: [
-        { id: "T1110.002", name: "WPA 4-Way Handshake Cracking", status: "dynamic-wpa", desc: "Offline PMKID dictionary cracking risk against WPA2 PSK." },
-        { id: "T1556", name: "WPS PIN Reaver Exhaustion", status: "mitigated", desc: "Wi-Fi Protected Setup disabled across sovereign access points." },
-        { id: "T1557.001", name: "LLMNR / NBT-NS Poisoning", status: "mitigated", desc: "Protected Management Frames (PMF) enforce link cryptographic integrity." }
-      ]
-    },
-    {
-      name: "Discovery",
-      cards: [
-        { id: "T1046", name: "ESP SPI & Port 500 Sweeping", status: "monitored", desc: "Reconnaissance against IKE daemons detected by wire framing inspector." },
-        { id: "T1018", name: "802.11 Beacon Reconnaissance", status: "monitored", desc: "Spectral passive scanning logs all surrounding SSID beacons." },
-        { id: "T1082", name: "Crypto Suite Fingerprinting", status: "monitored", desc: "IKE SA transform proposal extraction identifies legacy cipher suites." }
-      ]
-    },
-    {
-      name: "Collection",
-      cards: [
-        { id: "T1040", name: "Store-Now-Decrypt-Later (SNDL)", status: "dynamic-sndl", desc: "Classical Diffie-Hellman traffic archived for quantum cryptanalysis." },
-        { id: "T1005", name: "PSK Harvesting", status: "mitigated", desc: "Automated ephemeral PFS prevents historical key recovery." },
-        { id: "T1119", name: "Automated Traffic Sniffing", status: "monitored", desc: "Wire framing integrity counters anomaly bursts." }
-      ]
-    },
-    {
-      name: "Defense Evasion",
-      cards: [
-        { id: "T1562.001", name: "Deauth / Disassociate Frames", status: "dynamic-pmf", desc: "Adversary injects forged management frames to force re-authentication." },
-        { id: "T1027", name: "ESP Framing Modulo Abuse", status: "mitigated", desc: "RFC 4303 length invariants prevent covert padding side-channels." },
-        { id: "T1036", name: "Masquerading (Evil Twin SSID)", status: "dynamic-rogue", desc: "Clone BSSID mimicking authentic enterprise gateway." }
-      ]
-    }
-  ];
 
-  function render() {
-    const grid = $("mitre-heatmap-grid");
-    if (!grid) return;
-
-    // Check state for dynamic statuses
-    const isRogueActive = Boolean(state.simulatedRogueApActive || state.isRogueSimulated);
-    const wifiAssessment = state.wifiAssessment || {};
-    const grade = (wifiAssessment.score && wifiAssessment.score.letter) ? wifiAssessment.score.letter : "B";
-    const isWeakWifi = (grade === "C" || grade === "D" || grade === "F");
-
-    let mitigatedCount = 0;
-    let vulnerableCount = 0;
-
-    grid.innerHTML = "";
-
-    MITRE_TACTICS.forEach((tactic) => {
-      const col = document.createElement("div");
-      col.className = "mitre-column";
-
-      const title = document.createElement("div");
-      title.className = "mitre-col-title";
-      title.textContent = tactic.name;
-      col.appendChild(title);
-
-      tactic.cards.forEach((c) => {
-        let status = c.status;
-        if (status === "dynamic-rogue") {
-          status = isRogueActive ? "vulnerable" : "mitigated";
-        } else if (status === "dynamic-wpa") {
-          status = isWeakWifi ? "vulnerable" : "mitigated";
-        } else if (status === "dynamic-sndl") {
-          status = "vulnerable"; // High priority advisory for classical DH
-        } else if (status === "dynamic-pmf") {
-          status = isWeakWifi ? "vulnerable" : "mitigated";
-        }
-
-        if (status === "mitigated") mitigatedCount++;
-        if (status === "vulnerable") vulnerableCount++;
-
-        const card = document.createElement("div");
-        card.className = `mitre-card status-${status}`;
-
-        const idSpan = document.createElement("div");
-        idSpan.className = "mitre-card-id";
-        idSpan.textContent = c.id;
-        card.appendChild(idSpan);
-
-        const nameSpan = document.createElement("div");
-        nameSpan.className = "mitre-card-name";
-        nameSpan.textContent = c.name;
-        card.appendChild(nameSpan);
-
-        const badge = document.createElement("div");
-        badge.className = "mitre-status-badge";
-        badge.textContent = status.toUpperCase();
-        card.appendChild(badge);
-
-        card.addEventListener("click", () => {
-          showToast(`[${c.id}] ${c.name}: ${c.desc}`, status === "vulnerable" ? "warn" : "info");
-        });
-
-        col.appendChild(card);
-      });
-
-      grid.appendChild(col);
-    });
-
-    const chipWrap = $("mitre-stats-chip");
-    if (chipWrap) {
-      chipWrap.innerHTML = `
-        <span class="mitre-chip-item mitigated">🛡️ ${mitigatedCount} Mitigated</span>
-        <span class="mitre-chip-item vulnerable" id="mitre-vuln-count">⚠️ ${vulnerableCount} Active Threats</span>
-      `;
-    }
-  }
-
-  return { render };
-})();
-
-window.renderMitreHeatmap = MitreHeatmapEngine.render;
 
 
 const FleetSentinelEngine = { init() {}, openModal() {}, closeModal() {}, renderGrid() {}, batchRemediate() {} };
@@ -6251,49 +4939,7 @@ async function init(){
       if (b) b.style.display = "none";
     });
   }
-  const simEvilTwinBtn = $("wifi-simulate-evil-twin");
-  const simRogueChip = $("sim-rogue-chip");
-  if (simEvilTwinBtn) {
-    simEvilTwinBtn.addEventListener("click", () => {
-      state.simulatedRogueApActive = !state.simulatedRogueApActive;
-      if (simRogueChip) {
-        simRogueChip.textContent = state.simulatedRogueApActive ? "ACTIVE" : "OFF";
-      }
-      simEvilTwinBtn.classList.toggle("active", state.simulatedRogueApActive);
-      if (state.wifiAssessment) {
-        renderWifiDashboard(state.wifiAssessment);
-      }
-      if (typeof MitreHeatmapEngine !== "undefined" && MitreHeatmapEngine.render) {
-        MitreHeatmapEngine.render();
-      }
-    });
-  }
 
-  // VPN Simulation Toggle Button listeners (both bar and card)
-  const btnToggleVpn = $("btn-toggle-sim-vpn");
-  const btnToggleVpnCard = $("btn-toggle-sim-vpn-card");
-  const handleVpnToggle = () => {
-    const currentActive = !!(state.wifiAssessment && state.wifiAssessment.vpn && state.wifiAssessment.vpn.connected);
-    if (state.simulatedVpnActive === null) {
-      state.simulatedVpnActive = !currentActive;
-    } else {
-      state.simulatedVpnActive = !state.simulatedVpnActive;
-    }
-    const simVpnChip = $("sim-vpn-chip");
-    if (simVpnChip) {
-      simVpnChip.textContent = state.simulatedVpnActive ? "SECURE" : "DIRECT";
-    }
-    if (btnToggleVpn) btnToggleVpn.classList.toggle("active", !!state.simulatedVpnActive);
-    if (state.wifiAssessment) {
-      renderWifiDashboard(state.wifiAssessment);
-    }
-  };
-  if (btnToggleVpn) {
-    btnToggleVpn.addEventListener("click", handleVpnToggle);
-  }
-  if (btnToggleVpnCard) {
-    btnToggleVpnCard.addEventListener("click", handleVpnToggle);
-  }
 
   // RF Spectrum Band Switcher Controls
   const btnSpec24 = $("btn-spectrum-24");
@@ -6317,15 +4963,6 @@ async function init(){
     });
   }
 
-  // Compliance Matrix Framework Filter Controls
-  document.querySelectorAll(".compliance-filter-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".compliance-filter-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      state.complianceFilter = btn.dataset.filter || "all";
-      renderComplianceMatrix(state.assessment, state.wifiAssessment);
-    });
-  });
 
   renderRibbon(null);
 
@@ -6354,7 +4991,7 @@ async function init(){
       alert("No active plan to approve.");
       return;
     }
-    const admin = prompt("Enter Administrator Name or Sign-off Badge ID:", "SecOps-Lead");
+    const admin = prompt("Who is approving this plan? The name is recorded in the local plan store.", "");
     if (!admin) return;
     try {
       const res = await api(`/api/remediation/${currentPlan.plan_id}/approve`, {
@@ -6362,7 +4999,7 @@ async function init(){
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
           actor: admin,
-          comment: "Approved via CipherGuard Management Console"
+          comment: "Approved from the dashboard"
         })
       });
       if (res.ok) {
@@ -6374,51 +5011,6 @@ async function init(){
       alert("Approval failed: " + err.message);
     }
   });
-
-  const dryRunBtn = $("btn-playbook-dryrun");
-  if (dryRunBtn) dryRunBtn.addEventListener("click", async () => {
-    const currentPlan = (state.remediationPlans || []).find(p => p.platform === state.platform);
-    if (!currentPlan) {
-      alert("No active plan to validate.");
-      return;
-    }
-    const simBox = $("playbook-sim-box");
-    const simDetail = $("sim-detail");
-    if (simBox) simBox.style.display = "block";
-    if (simDetail) simDetail.textContent = "Executing pre-staging dry-run simulation...";
-    try {
-      const res = await api(`/api/remediation/${currentPlan.plan_id}/apply`, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ dry_run: true })
-      });
-      const data = await res.json();
-      if (simDetail) {
-        simDetail.innerHTML = `
-          <div><strong>Result:</strong> ${data.success ? "<span style='color:#4ade80'>PASSED (Zero Syntax Violations)</span>" : "<span style='color:#f87171'>FAILED</span>"}</div>
-          <div><strong>Mode:</strong> ${esc(data.mode)} | <strong>Commands Staged:</strong> ${data.lines_staged} lines</div>
-          <div><strong>Rollback Verified:</strong> Safe reverse playbook compiled (${(currentPlan.rollback_config || '').split('\n').length} lines)</div>
-          <div style="margin-top:6px; color:#94a3b8;"><strong>Execution Log:</strong></div>
-          <div style="background:#020617; padding:8px; border-radius:4px; margin-top:4px;">
-            ${(data.simulation_log || []).map(l => esc(l)).join("<br>")}
-          </div>
-        `;
-      }
-      if (data.success && currentPlan.status === "APPROVED") {
-        currentPlan.status = "STAGED";
-        renderPlaybookUI();
-      }
-    } catch(err) {
-      if (simDetail) simDetail.textContent = "Dry-run failed: " + err.message;
-    }
-  });
-
-  const simClose = $("sim-close");
-  if (simClose) simClose.addEventListener("click", () => {
-    const simBox = $("playbook-sim-box");
-    if (simBox) simBox.style.display = "none";
-  });
-
 
   // Sticky Mobile CTA Dock Action Bindings
   const mobilePrimaryCta = $("mobile-primary-cta");
@@ -6527,7 +5119,6 @@ async function init(){
       e.preventDefault();
       switchTab("wifi");
       loadWifiAssessment(true);
-      showToast("⌨️ Hotkey: Scanning Live Wi-Fi Spectrum...", "info");
       return;
     }
 
@@ -6538,7 +5129,6 @@ async function init(){
       e.preventDefault();
       switchTab("ipsec");
       runAnalysis();
-      showToast("⌨️ Hotkey: Running IPsec Assessment...", "info");
       return;
     }
 
@@ -6549,7 +5139,6 @@ async function init(){
       e.preventDefault();
       switchTab("ipsec");
       switchIpsecMode("diff");
-      showToast("⌨️ Hotkey: Switched to Diff Comparison Mode", "info");
       return;
     }
 
@@ -6558,32 +5147,11 @@ async function init(){
         (e.altKey && key === "e") ||
         (e.ctrlKey && key === "e")) {
       e.preventDefault();
-      showToast("⌨️ Hotkey: Compiling Security Dossier...", "success");
       exportSecurityAuditReport();
       return;
     }
 
-    // 6. TOGGLE ROGUE AP SIMULATION: 'r'
-    if (!e.ctrlKey && !e.altKey && !e.metaKey && key === "r") {
-      e.preventDefault();
-      const simBtn = $("wifi-simulate-evil-twin");
-      if (simBtn) {
-        simBtn.click();
-        showToast("⌨️ Hotkey: Toggled Rogue AP Simulation", "info");
-      }
-      return;
-    }
 
-    // 7. TOGGLE VPN OVERLAY SIMULATION: 'v'
-    if (!e.ctrlKey && !e.altKey && !e.metaKey && key === "v") {
-      e.preventDefault();
-      const vpnBtn = $("btn-toggle-sim-vpn") || document.querySelector(".sim-btn-vpn");
-      if (vpnBtn) {
-        vpnBtn.click();
-        showToast("⌨️ Hotkey: Toggled Sovereign VPN Simulation", "info");
-      }
-      return;
-    }
 
     // 8. TOGGLE CBOM MODAL: 'c'
     if (!e.ctrlKey && !e.altKey && !e.metaKey && key === "c") {
@@ -6601,12 +5169,11 @@ async function init(){
     });
   }
 
+  Theme.init();
+
   // Initialize Core Assessment Engines
-  initMoscaCalculator();
-  HexDissectorEngine.init();
   LiveSnifferEngine.init();
   CbomEngine.init();
-  MitreHeatmapEngine.render();
 
   await detectStaticMode();
 

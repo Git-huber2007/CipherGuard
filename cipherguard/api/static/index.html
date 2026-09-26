@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CipherGuard — AI-Powered Protocol &amp; Live Wi-Fi Security Analyzer</title>
-<meta name="description" content="CipherGuard is an advanced AI-powered passive network protocol and Wi-Fi security assessment framework for deep cryptographic inspection, rogue AP detection, and compliance auditing.">
-<meta name="keywords" content="IPsec, Wi-Fi Security, Cryptographic Analysis, Rogue AP, Evil Twin, NIST SP 800-77, MITRE ATT&CK, Post-Quantum Cryptography, SIH26160, NTRO">
+<title>CipherGuard — IPsec and Wi-Fi cryptographic assessment</title>
+<meta name="description" content="Passive assessment of IPsec VPN and Wi-Fi cryptography from packet captures: what each link negotiated, what it gets wrong, and how to fix it. Nothing is decrypted.">
+<meta name="keywords" content="IPsec, IKE, ESP, Wi-Fi, cryptographic assessment, post-quantum, NIST SP 800-77, SIH26160">
 <meta name="author" content="CipherGuard Protocol Analysis Group">
 <link rel="canonical" href="/">
 
@@ -13,19 +13,19 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="CipherGuard">
 <meta property="og:url" content="/">
-<meta property="og:title" content="CipherGuard — AI-Powered Protocol &amp; Live Wi-Fi Security Analyzer">
-<meta property="og:description" content="Passive IPsec protocol analyzer and live 802.11 wireless security assessment framework. Inspect wire framing and RF spectrum with zero payload retention.">
+<meta property="og:title" content="CipherGuard — IPsec and Wi-Fi cryptographic assessment">
+<meta property="og:description" content="Passive assessment of IPsec VPN and Wi-Fi cryptography from packet captures: what each link negotiated, what it gets wrong, and how to fix it. Nothing is decrypted.">
 <meta property="og:image" content="/static/img/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="CipherGuard AI-Powered Protocol &amp; Wi-Fi Security Dashboard Overview">
+<meta property="og:image:alt" content="CipherGuard dashboard">
 
 <!-- Twitter Card Tags -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="CipherGuard — AI-Powered Protocol &amp; Live Wi-Fi Security Analyzer">
-<meta name="twitter:description" content="Passive IPsec protocol analyzer and live 802.11 wireless security assessment framework. Deep cryptographic inspection and rogue AP detection.">
+<meta name="twitter:title" content="CipherGuard — IPsec and Wi-Fi cryptographic assessment">
+<meta name="twitter:description" content="Passive assessment of IPsec VPN and Wi-Fi cryptography from packet captures: what each link negotiated, what it gets wrong, and how to fix it. Nothing is decrypted.">
 <meta name="twitter:image" content="/static/img/og-image.png">
-<meta name="twitter:image:alt" content="CipherGuard Platform Dashboard Preview">
+<meta name="twitter:image:alt" content="CipherGuard dashboard">
 
 <!-- Favicon & PWA App Icons -->
 <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
@@ -33,6 +33,7 @@
 <link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
 <link rel="manifest" href="/static/site.webmanifest">
 <meta name="theme-color" content="#1b6e8c">
+<script src="/static/js/theme-init.js"></script>
 
   <link rel="stylesheet" href="/static/css/dashboard.css">
 </head>
@@ -47,38 +48,46 @@
 <header class="masthead">
   <div class="masthead-in">
     <div class="brand">
-      <img src="/static/img/favicon.svg" alt="CipherGuard Cyber Shield Emblem" width="28" height="28" style="vertical-align:middle">
+      <img src="/static/img/favicon.svg" alt="" width="28" height="28" style="vertical-align:middle">
       <h1>CipherGuard</h1>
       <span class="ps">SIH26160 &middot; NTRO</span>
       <button type="button" id="backend-status-pill" class="backend-status-pill online" title="Real-time backend & telemetry status · Click to configure bridge" aria-haspopup="dialog">
         <span class="pulse-dot"></span>
         <span id="backend-status-label">Live Telemetry</span>
       </button>
-      <button type="button" id="btn-shortcuts-help" class="shortcuts-trigger-btn" onclick="openShortcutsModal()" title="Keyboard Shortcuts Cheat Sheet (Press ? or H)" aria-haspopup="dialog">
-        <span>⌨️</span> <span>Hotkeys <kbd>?</kbd> / <kbd>H</kbd></span>
+      <button type="button" id="btn-shortcuts-help" class="shortcuts-trigger-btn" onclick="openShortcutsModal()" title="Keyboard shortcuts (? or H)" aria-haspopup="dialog">
+<span>Hotkeys <kbd>?</kbd> / <kbd>H</kbd></span>
       </button>
-      <button type="button" id="btn-cbom-toggle" class="shortcuts-trigger-btn cbom-trigger-btn" onclick="openCbomModal()" title="View Sovereign Cryptographic Bill of Materials (CBOM)" aria-haspopup="dialog">
-        <span>📜</span> <span>CBOM</span>
+      <button type="button" id="btn-cbom-toggle" class="shortcuts-trigger-btn cbom-trigger-btn" onclick="openCbomModal()" title="Cryptographic bill of materials (CBOM)" aria-haspopup="dialog">
+<span>CBOM</span>
       </button>
       <button type="button" id="btn-present" class="shortcuts-trigger-btn" aria-pressed="false"
               title="Presentation mode: step through the assessment with the arrow keys (or add ?present to the URL)">
         Present
       </button>
+      <label class="theme-pick" for="theme-select">
+        <span>Theme</span>
+        <select id="theme-select" title="Colour theme. System follows your operating system.">
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+          <option value="system">System</option>
+        </select>
+      </label>
     </div>
     <div class="controls" id="header-controls">
       <!-- Dynamic controls according to active tab -->
       <div id="ipsec-controls" class="tab-controls-group">
         <div class="mode-toggle-group" role="group" aria-label="IPsec Analysis Mode">
           <button type="button" id="btn-ipsec-single" class="mode-toggle-btn active">Single Assessment</button>
-          <button type="button" id="btn-ipsec-live" class="mode-toggle-btn">📡 Live Sniffer</button>
-          <button type="button" id="btn-ipsec-diff" class="mode-toggle-btn">⚖️ Compare / Diff Captures</button>
+          <button type="button" id="btn-ipsec-live" class="mode-toggle-btn">Live Sniffer</button>
+          <button type="button" id="btn-ipsec-diff" class="mode-toggle-btn">Compare / Diff Captures</button>
         </div>
         <div id="ipsec-single-controls" class="controls-subgroup">
           <label for="capture" class="visually-hidden">Capture file</label>
           <select id="capture" aria-label="Select PCAP capture file"></select>
           <!-- Prominent CTA Above the Fold for IPsec -->
           <button id="run" class="hero-cta-btn">
-            <span class="cta-icon">⚡</span> Assess capture <span class="cta-badge">Alt + A</span>
+Assess capture <span class="cta-badge">Alt + A</span>
           </button>
         </div>
         <div id="ipsec-diff-controls" class="controls-subgroup" style="display:none;">
@@ -91,13 +100,13 @@
             <label for="diff-capture-b" class="diff-label">Hardened (B):</label>
             <select id="diff-capture-b" class="diff-select" aria-label="Remediated capture B"></select>
           </span>
-          <button id="run-diff" class="primary-btn">Run Diff Comparison</button>
+          <button id="run-diff" class="primary-btn">Compare</button>
         </div>
-        <button id="ipsec-export-report" class="btn btn-secondary" aria-label="Export IPsec security dossier">📥 Export Dossier</button>
+        <button id="ipsec-export-report" class="btn btn-secondary" aria-label="Export the IPsec report">Export report</button>
       </div>
       <div id="wifi-controls" class="tab-controls-group" style="display:none;">
-        <button id="wifi-refresh-btn" class="btn btn-ghost" title="Re-scan Wi-Fi networks (Alt + S)">
-          <span class="cta-icon">🔄</span> Refresh Scan <span class="cta-badge">Alt + S</span>
+        <button id="wifi-refresh-btn" class="btn btn-ghost" title="Scan again (Alt + S)">
+Rescan <span class="cta-badge">Alt + S</span>
         </button>
       </div>
     </div>
@@ -111,10 +120,10 @@
   <!-- Main View Navigation Tabs -->
   <nav class="nav-tabs" role="tablist">
     <button class="tab-btn active" id="tab-ipsec" role="tab" aria-selected="true" aria-controls="view-ipsec">
-      🛡️ IPsec VPN Protocol Analyzer
+      IPsec VPN
     </button>
     <button class="tab-btn" id="tab-wifi" role="tab" aria-selected="false" aria-controls="view-wifi">
-      <span class="live-dot"></span> Live Wi-Fi &amp; Wireless Security
+      Wi-Fi
     </button>
   </nav>
 
@@ -127,15 +136,15 @@
       <div class="evil-twin-banner-main">
         <div class="evil-twin-icon-box">
           <span class="evil-twin-pulse-ring"></span>
-          <span class="evil-twin-icon">🚨</span>
+
         </div>
         <div class="evil-twin-text-block">
           <div class="evil-twin-headline">
-            <span class="evil-twin-title">ROGUE AP / EVIL TWIN ATTACK DETECTED</span>
-            <span class="threat-level-badge">CRITICAL THREAT &middot; SPOOFED AP</span>
+            <span class="evil-twin-title">Possible evil twin</span>
+            <span class="threat-level-badge">critical</span>
           </div>
           <div class="evil-twin-desc" id="evil-twin-desc">
-            An unauthorized rogue access point broadcasting the same SSID as a trusted network with downgraded or open security parameters was discovered within RF range.
+            A second access point is advertising the name of a trusted network with weaker or no security.
           </div>
           <div class="evil-twin-pills" id="evil-twin-pills">
             <!-- Populated dynamically: Target SSID, Rogue BSSID, Downgraded Auth, RSSI -->
@@ -144,9 +153,9 @@
       </div>
       <div class="evil-twin-banner-actions">
         <button type="button" id="btn-inspect-rogue-ap" class="action-btn inspect-rogue-btn">
-          🔍 Inspect Rogue AP in Table
+          Show it in the table
         </button>
-        <button type="button" id="btn-dismiss-rogue-banner" class="ghost-mini" title="Dismiss Alert">&times;</button>
+        <button type="button" id="btn-dismiss-rogue-banner" class="ghost-mini" title="Dismiss" aria-label="Dismiss">&times;</button>
       </div>
     </div>
     
@@ -155,7 +164,7 @@
       <div class="wifi-hero-main">
         <div class="wifi-status-badge" id="wifi-state-badge">
           <span class="pulse-indicator"></span>
-          <span id="wifi-state-text">Detecting Wi-Fi Interface...</span>
+          <span id="wifi-state-text">Reading the Wi-Fi interface&hellip;</span>
         </div>
         <h2 class="wifi-ssid-title" id="wifi-ssid-title">&mdash;</h2>
         <div class="wifi-meta-row" id="wifi-meta-row">
@@ -170,10 +179,10 @@
       </div>
       <div class="wifi-hero-actions">
         <div class="wifi-hero-btns">
-          <button id="wifi-scan-now" class="btn btn-primary" title="Scan all nearby wireless networks">⚡ Scan All Networks</button>
-          <button id="wifi-export-report" class="btn btn-secondary" title="Export comprehensive Wi-Fi security audit dossier">📥 Export Audit Dossier</button>
+          <button id="wifi-scan-now" class="btn btn-primary" title="Scan nearby networks now">Scan now</button>
+          <button id="wifi-export-report" class="btn btn-secondary" title="Export the Wi-Fi report">Export report</button>
         </div>
-        <div class="wifi-time-sub" id="wifi-last-scan">Last scanned: just now</div>
+        <div class="wifi-time-sub" id="wifi-last-scan">&nbsp;</div>
       </div>
     </section>
 
@@ -181,12 +190,12 @@
     <div class="grid cols-2" style="margin-bottom:18px">
       <!-- Score Panel -->
       <section class="panel">
-        <h2>Wireless Cryptographic Posture</h2>
-        <div class="sub" id="wifi-score-sub">Live audit of local link encryption and key management.</div>
+        <h2>Wi-Fi posture</h2>
+        <div class="sub" id="wifi-score-sub">Encryption and key management on the connected network.</div>
         <div class="scoreline">
           <div class="dial">
-            <svg width="118" height="118" viewBox="0 0 118 118" role="img" aria-label="Wireless Cryptographic Posture Score Dial">
-              <title>Wireless Cryptographic Posture Score Dial</title>
+            <svg width="118" height="118" viewBox="0 0 118 118" role="img" aria-label="Wi-Fi posture score">
+              <title>Wi-Fi posture score</title>
               <circle class="dial-track" cx="59" cy="59" r="49" fill="none" stroke="#dfe7ec" stroke-width="11"/>
               <circle id="wifi-arc" cx="59" cy="59" r="49" fill="none" stroke="var(--ok)"
                       stroke-width="11" stroke-linecap="butt"
@@ -198,7 +207,7 @@
           </div>
           <div class="score-meta">
             <div class="score-num" id="wifi-grade">Grade &mdash;</div>
-            <div class="score-sub" id="wifi-gradesub">Analyzing handshake &amp; cipher parameters...</div>
+            <div class="score-sub" id="wifi-gradesub">Reading the connection&hellip;</div>
             <div class="sev-row" id="wifi-sevrow"></div>
           </div>
         </div>
@@ -207,36 +216,36 @@
 
       <!-- Network Quality & Security Badges -->
       <section class="panel">
-        <h2>Link Security &amp; Network Health</h2>
-        <div class="sub">Radio frequency metrics, DNS security, and gateway integrity.</div>
+        <h2>Connection</h2>
+        <div class="sub">Radio, addressing and DNS for the current connection.</div>
         
         <div class="wifi-health-list">
           <div class="health-item">
-            <div class="health-label">Authentication &amp; Cipher</div>
+            <div class="health-label">Authentication and cipher</div>
             <div class="health-val" id="wifi-auth-cipher-val">&mdash;</div>
           </div>
           <div class="health-item">
-            <div class="health-label">Signal Quality &amp; RSSI</div>
+            <div class="health-label">Signal</div>
             <div class="health-val" id="wifi-signal-val">
               <span id="wifi-signal-pct">&mdash;</span>
               <div class="signal-bar-track"><div id="wifi-signal-bar" class="signal-bar-fill"></div></div>
             </div>
           </div>
           <div class="health-item">
-            <div class="health-label">Link Throughput Rate</div>
+            <div class="health-label">Link rate</div>
             <div class="health-val" id="wifi-rates-val">&mdash;</div>
           </div>
           <div class="health-item">
-            <div class="health-label">Configured DNS Resolvers</div>
+            <div class="health-label">DNS resolvers</div>
             <div class="health-val" id="wifi-dns-val">&mdash;</div>
           </div>
           <div class="health-item">
-            <div class="health-label">Default IPv4 Gateway</div>
+            <div class="health-label">Default gateway</div>
             <div class="health-val" id="wifi-gateway-val">&mdash;</div>
           </div>
           <div class="health-item">
-            <div class="health-label">Session Uptime &amp; Stability</div>
-            <div class="health-val" id="wifi-uptime-val" style="color:var(--ok);font-weight:600">● 100% Stable &middot; Continuous RF Lock</div>
+            <div class="health-label">Egress</div>
+            <div class="health-val" id="wifi-uptime-val">&mdash;</div>
           </div>
         </div>
       </section>
@@ -246,49 +255,37 @@
     <section class="panel vpn-overlay-panel" style="margin-bottom:18px">
       <div class="vpn-panel-header">
         <div>
-          <h2>VPN Tunnel &amp; Transport Overlay Security <span class="domain-tag obs" id="vpn-badge">Direct ISP</span></h2>
-          <div class="sub">Encrypted overlay status, route redirection, and DNS leak inspection.</div>
+          <h2>VPN and egress <span class="domain-tag obs" id="vpn-badge">Direct ISP</span></h2>
+          <div class="sub">Whether traffic leaves through a VPN, the public address it leaves from, and where DNS queries go.</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button id="btn-toggle-sim-vpn-card" type="button" class="btn btn-secondary btn-sm sim-btn-vpn" aria-pressed="false" title="Toggle encrypted VPN tunnel to audit DNS leaks and egress protection">
-            <span class="sim-btn-icon">🛡️</span>
-            <span class="sim-btn-text">Toggle Encrypted VPN Tunnel</span>
-            <span class="sim-status-chip" id="sim-vpn-card-chip">AUTO</span>
-          </button>
           <div id="vpn-status-indicator" class="vpn-status-badge vpn-status-inactive">
-            <span class="vpn-dot"></span> <span id="vpn-status-text">No VPN Active</span>
+            <span class="vpn-dot"></span> <span id="vpn-status-text">No VPN</span>
           </div>
         </div>
       </div>
       
       <div class="vpn-detail-grid">
         <div class="vpn-metric-box">
-          <div class="vpn-metric-title">Overlay Protocol</div>
+          <div class="vpn-metric-title">Tunnel</div>
           <div class="vpn-metric-value" id="vpn-proto-val">Direct (None)</div>
           <div class="vpn-metric-sub" id="vpn-adapter-val">Physical Wi-Fi link</div>
         </div>
         <div class="vpn-metric-box">
-          <div class="vpn-metric-title">Public Egress IP &amp; ISP</div>
+          <div class="vpn-metric-title">Public address</div>
           <div class="vpn-metric-value" id="vpn-egress-val">&mdash;</div>
-          <div class="vpn-metric-sub" id="vpn-location-val">Detecting geolocation...</div>
+          <div class="vpn-metric-sub" id="vpn-location-val">&mdash;</div>
         </div>
         <div class="vpn-metric-box">
-          <div class="vpn-metric-title">Route Ownership</div>
+          <div class="vpn-metric-title">Default route</div>
           <div class="vpn-metric-value" id="vpn-route-val">Wi-Fi Gateway</div>
           <div class="vpn-metric-sub" id="vpn-route-sub">0.0.0.0/0 on physical NIC</div>
         </div>
         <div class="vpn-metric-box">
-          <div class="vpn-metric-title">DNS Leak Protection</div>
+          <div class="vpn-metric-title">DNS leak</div>
           <div class="vpn-metric-value" id="vpn-leak-val">&mdash;</div>
-          <div class="vpn-metric-sub" id="vpn-leak-sub">Checking resolver isolation...</div>
+          <div class="vpn-metric-sub" id="vpn-leak-sub">&mdash;</div>
         </div>
-      </div>
-      <div class="vpn-architecture-note">
-        <span class="vpn-info-icon">&#9432;</span>
-        <strong>Layered Security Architecture:</strong>
-        The Wi-Fi panel above audits your physical 802.11 RF association with your router.
-        When connected to a VPN, your traffic payload is encapsulated inside an encrypted tunnel
-        (WireGuard / OpenVPN / IPsec), securing data even on untrusted or compromised Wi-Fi networks.
       </div>
     </section>
 
@@ -296,53 +293,24 @@
 
     <!-- Wi-Fi Findings -->
     <section class="panel" style="margin-bottom:18px">
-      <h2>Wi-Fi Security Findings</h2>
-      <div class="sub" id="wifi-findsub">Vulnerabilities, protocol weaknesses, and rogue AP alerts.</div>
-      <div id="wifi-findings"><div class="empty">Running wireless security audit...</div></div>
-    </section>
-
-    <!-- Evaluator Threat Simulation Control Panel (Secondary Tooling) -->
-    <section class="panel simulation-panel" style="margin-bottom:18px">
-      <div class="simulation-control-bar" role="region" aria-label="Interactive Threat Simulator">
-        <div class="sim-bar-label">
-          <span class="sim-flask-icon">🧪</span>
-          <div class="sim-label-text">
-            <span class="sim-label-title">Evaluator Threat Simulator</span>
-            <span class="sim-label-desc">Inject active RF and routing attack vectors in real-time</span>
-          </div>
-        </div>
-        <div class="sim-bar-buttons">
-          <button type="button" id="wifi-simulate-evil-twin" class="sim-btn sim-btn-rogue" aria-pressed="false" title="Simulate an active Evil Twin / Rogue AP attack broadcasting spoofed BSSID">
-            <span class="sim-btn-icon">🧪</span>
-            <span class="sim-btn-text">Simulate Rogue AP Attack</span>
-            <span class="sim-status-chip" id="sim-rogue-chip">OFF</span>
-          </button>
-          <button type="button" id="btn-toggle-sim-vpn" class="sim-btn sim-btn-vpn" title="Toggle VPN tunnel state to audit DNS leaks and egress protection">
-            <span class="sim-btn-icon">🛡️</span>
-            <span class="sim-btn-text">Toggle Encrypted VPN Tunnel</span>
-            <span class="sim-status-chip" id="sim-vpn-chip">AUTO</span>
-          </button>
-          <button type="button" id="wifi-scan-now-sim" class="sim-btn sim-btn-scan" title="Force fresh physical wireless hardware scan">
-            <span class="sim-btn-icon">🔄</span>
-            <span class="sim-btn-text">Force RF Re-scan</span>
-          </button>
-        </div>
-      </div>
+      <h2>Wi-Fi findings</h2>
+      <div class="sub" id="wifi-findsub">Weaknesses in the current connection and in networks nearby.</div>
+      <div id="wifi-findings"><div class="empty">Waiting for the first scan&hellip;</div></div>
     </section>
 
     <!-- In-Range Access Points Table -->
     <section class="panel" style="margin-bottom:18px">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:10px">
         <div>
-          <h2 style="margin-bottom:2px">Visible Wi-Fi Networks in Range <span class="domain-tag obs" data-gl="observed">observed</span></h2>
-          <div class="sub" id="wifi-networks-subtitle">Nearby access points discovered across 2.4 GHz, 5 GHz, and 6 GHz spectrum.</div>
+          <h2 style="margin-bottom:2px">Networks in range <span class="domain-tag obs" data-gl="observed">observed</span></h2>
+          <div class="sub" id="wifi-networks-subtitle">Access points this machine can hear.</div>
         </div>
         <div class="wifi-view-toggle-group">
           <button type="button" class="btn-toggle active" id="btn-wifi-group" aria-pressed="true" title="Group multiple access points of the same network together">
-            🏢 Group by Network (SSID)
+            By network
           </button>
           <button type="button" class="btn-toggle" id="btn-wifi-all" aria-pressed="false" title="Show every physical access point BSSID individually">
-            📡 Show All APs (BSSIDs)
+            Every access point
           </button>
         </div>
       </div>
@@ -369,12 +337,12 @@
     <section class="panel" id="wifi-spectrum-panel" style="margin-top:18px">
       <div class="spectrum-panel-header">
         <div>
-          <h2>RF Spectrum &amp; Channel Congestion Visualizer <span class="domain-tag obs">Passive 802.11 Spectral Density</span></h2>
-          <div class="sub">Dynamic channel allocation, non-overlapping boundary analysis (802.11b/g/n/ac/ax), and automated co-channel interference (CCI) advisory.</div>
+          <h2>Channel use</h2>
+          <div class="sub">Networks in range by channel, and the least crowded of the non-overlapping channels.</div>
         </div>
         <div class="spectrum-band-toggle">
-          <button id="btn-spectrum-24" class="spectrum-band-btn active" type="button" aria-pressed="true">2.4 GHz ISM Band</button>
-          <button id="btn-spectrum-5" class="spectrum-band-btn" type="button" aria-pressed="false">5 GHz UNII Band</button>
+          <button id="btn-spectrum-24" class="spectrum-band-btn active" type="button" aria-pressed="true">2.4 GHz</button>
+          <button id="btn-spectrum-5" class="spectrum-band-btn" type="button" aria-pressed="false">5 GHz</button>
         </div>
       </div>
 
@@ -390,11 +358,11 @@
           <div id="spectrum-tooltip" class="spectrum-tooltip" style="display:none"></div>
         </div>
         <div class="spectrum-legend">
-          <span><i class="spec-swatch spec-curr"></i> Associated / Target AP</span>
-          <span><i class="spec-swatch spec-rogue"></i> Rogue / Evil Twin AP</span>
-          <span><i class="spec-swatch spec-safe"></i> Secure Neighbor AP</span>
-          <span><i class="spec-swatch spec-legacy"></i> Legacy / Weak (WEP/WPA1)</span>
-          <span><i class="spec-swatch spec-nonoverlap"></i> Non-overlapping Best Channels (1, 6, 11)</span>
+          <span><i class="spec-swatch spec-curr"></i> Connected</span>
+          <span><i class="spec-swatch spec-rogue"></i> Possible evil twin</span>
+          <span><i class="spec-swatch spec-safe"></i> Other network</span>
+          <span><i class="spec-swatch spec-legacy"></i> Weak or no security</span>
+          <span><i class="spec-swatch spec-nonoverlap"></i> Non-overlapping channels (1, 6, 11)</span>
         </div>
       </div>
     </section>
@@ -542,170 +510,11 @@
         <div class="empty" id="replay-empty">Loading the baseline store&hellip;</div>
         <div class="sub replay-source" id="replay-source"></div>
       </section>
-      <!-- Interactive Q-Day Post-Quantum Mosca Cockpit -->
-      <section class="panel pqc-mosca-cockpit" id="pqc-mosca-cockpit" style="margin-bottom:18px">
-        <div class="pqc-cockpit-header">
-          <div>
-            <h2>Interactive "Q-Day" Mosca Calculator &amp; PQC Readiness Cockpit <span class="domain-tag obs">NIST FIPS 203/204/205</span></h2>
-            <div class="sub">Dynamic calculation of Mosca's Theorem (X + Y &gt; Z) and NSA CNSA 2.0 Post-Quantum migration risk assessment.</div>
-          </div>
-        </div>
-
-        <div class="mosca-calculator-grid">
-          <div class="mosca-controls-card">
-            <div class="mosca-slider-group">
-              <div class="slider-label-row">
-                <label for="slider-data-shelf">Data Shelf-Life (X): <strong id="val-data-shelf">10 yrs</strong></label>
-                <span class="slider-hint">How long classified data must remain secret</span>
-              </div>
-              <input type="range" id="slider-data-shelf" min="1" max="30" value="10" step="1" class="mosca-slider">
-            </div>
-
-            <div class="mosca-slider-group">
-              <div class="slider-label-row">
-                <label for="slider-migration-time">Migration Timeline (Y): <strong id="val-migration-time">5 yrs</strong></label>
-                <span class="slider-hint">Time to deploy post-quantum algorithms across fleet</span>
-              </div>
-              <input type="range" id="slider-migration-time" min="1" max="15" value="5" step="1" class="mosca-slider">
-            </div>
-
-            <div class="mosca-equation-banner">
-              <span class="mosca-eq-text">Mosca's Theorem: <code>X + Y = <span id="eq-xy-val">15</span> yrs</code> vs. Quantum Horizon <code>Z = 8 yrs (2034)</code></span>
-            </div>
-          </div>
-
-          <div class="mosca-result-card" id="mosca-result-card">
-            <div class="mosca-risk-title">STORE NOW, DECRYPT LATER (SNDL) RISK</div>
-            <div class="mosca-risk-badge" id="mosca-risk-badge">🚨 CRITICAL SNDL HAZARD</div>
-            <div class="mosca-risk-desc" id="mosca-risk-desc">
-              Adversaries recording encrypted traffic today will be able to decrypt it before the data's security value expires. Immediate PQC transition required.
-            </div>
-            <div class="pqc-fips-chips">
-              <div class="pqc-chip">
-                <span class="pqc-chip-code">FIPS 203</span>
-                <strong>ML-KEM-1024</strong>
-                <span>Kyber Lattice KEM</span>
-              </div>
-              <div class="pqc-chip">
-                <span class="pqc-chip-code">FIPS 204</span>
-                <strong>ML-DSA-87</strong>
-                <span>Dilithium Signatures</span>
-              </div>
-              <div class="pqc-chip">
-                <span class="pqc-chip-code">FIPS 205</span>
-                <strong>SLH-DSA</strong>
-                <span>SPHINCS+ Stateless</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- In-Browser Hex Packet Dissector & Protocol Inspector (Wireshark-Style) -->
-      <section class="panel hex-dissector-panel" id="hex-dissector-panel" style="margin-bottom:18px">
-        <div class="hex-dissector-header">
-          <div>
-            <h2>Passive Framing Dissector &amp; Raw Byte Inspector <span class="domain-tag obs">Zero-Decryption Wire Analysis</span></h2>
-            <div class="sub">Inspect RFC 4303 packet framing, IKEv2 security associations, and ESP padding modulo residues directly at the byte level.</div>
-          </div>
-          <div class="hex-sample-selector-wrap">
-            <label for="hex-packet-select">Sample Packet:</label>
-            <select id="hex-packet-select" class="hex-packet-select">
-              <option value="ike_init">IKE_SA_INIT (Exchange 34, Transform Neg)</option>
-              <option value="ike_auth">IKE_AUTH (Exchange 35, Encrypted SA)</option>
-              <option value="esp_wire">ESP Wire Framing (RFC 4303, Seq #142)</option>
-            </select>
-          </div>
-        </div>
-
-        <div id="dissector-anatomy-bar" class="dissector-anatomy-bar"></div>
-        <div id="dissector-modulo-card" class="dissector-modulo-card"></div>
-
-        <div class="hex-dissector-grid">
-          <!-- Protocol Dissection Tree -->
-          <div class="dissector-tree-card">
-            <div class="dissector-tree-title">PROTOCOL TREE DISSECTION</div>
-            <div id="dissector-tree" class="dissector-tree">
-              <!-- Dynamically populated -->
-            </div>
-          </div>
-
-          <!-- Hex Matrix & ASCII Dump -->
-          <div class="dissector-hex-card">
-            <div class="dissector-hex-header">
-              <span>OFFSET</span>
-              <span>RAW HEXADECIMAL FRAMING (16 BYTES / LINE)</span>
-              <span>ASCII</span>
-            </div>
-            <div id="dissector-hex-dump" class="dissector-hex-dump">
-              <!-- Dynamically populated -->
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- MITRE ATT&CK Enterprise Threat Matrix Heatmap -->
-      <section class="panel mitre-heatmap-panel" id="mitre-heatmap-panel" style="margin-bottom:18px">
-        <div class="mitre-header">
-          <div>
-            <h2>MITRE ATT&amp;CK&reg; Enterprise Threat Heatmap <span class="domain-tag obs">Tactical Adversary TTP Matrix</span></h2>
-            <div class="sub">Real-time mapping of detected wireless and cryptographic vulnerabilities against standardized cyber kill-chain adversary techniques.</div>
-          </div>
-          <div class="mitre-stats-chip" id="mitre-stats-chip">
-            <span class="mitre-chip-item mitigated">🛡️ 4 Mitigated</span>
-            <span class="mitre-chip-item vulnerable" id="mitre-vuln-count">⚠️ 2 Active Threats</span>
-          </div>
-        </div>
-        <div class="mitre-heatmap-grid" id="mitre-heatmap-grid">
-          <!-- Injected dynamically via JS -->
-        </div>
-      </section>
-
-      <!-- MITRE ATT&CK & NIST SP 800-77 Compliance Matrix Panel -->
-      <section class="panel compliance-panel" id="ipsec-compliance-panel" style="margin-bottom:18px">
-        <div class="compliance-header">
-          <div>
-            <h2>Regulatory &amp; Threat Intelligence Compliance Matrix <span class="domain-tag obs">NIST SP 800-77 &bull; MITRE ATT&amp;CK</span></h2>
-            <div class="sub">Cross-framework verification mapping observed IKE/ESP crypto suites and Wi-Fi postures against federal standards and adversary techniques.</div>
-          </div>
-          <div class="compliance-filter-bar">
-            <button class="compliance-filter-btn active" data-filter="all" type="button">All Frameworks</button>
-            <button class="compliance-filter-btn" data-filter="nist" type="button">NIST SP 800-77 Rev. 1</button>
-            <button class="compliance-filter-btn" data-filter="mitre" type="button">MITRE ATT&amp;CK</button>
-            <button class="compliance-filter-btn" data-filter="cnsa" type="button">NSA CNSA 2.0</button>
-          </div>
-        </div>
-
-        <div class="compliance-stats-row" id="compliance-stats-row">
-          <!-- Injected via JS -->
-        </div>
-
-        <div class="table-wrap" style="margin-top:14px">
-          <table class="compliance-matrix-table" id="compliance-matrix-table">
-            <thead>
-              <tr>
-                <th style="width:15%">Framework / Ref</th>
-                <th style="width:20%">Control / Technique</th>
-                <th style="width:11%">Status</th>
-                <th style="width:27%">Observed Telemetry &amp; Impact</th>
-                <th style="width:27%">Required Hardening / Defense</th>
-              </tr>
-            </thead>
-            <tbody id="compliance-matrix-tbody">
-              <tr><td colspan="5" class="empty">Run an assessment to generate compliance findings.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
       <section class="panel remediation-panel" id="remediation-panel">
         <div class="remediation-header">
           <div>
-            <h2>Automated Hardening &amp; Remediation Playbooks <span class="domain-tag obs" id="remediation-count-tag">4 Vendors</span></h2>
-            <div class="sub">
-              Passive Defence Architecture: <strong>Detect &rarr; Assess &rarr; Generate Fix &rarr; Admin Review &rarr; Dry-Run Staging</strong>.<br>
-              Deterministic forward configurations paired with instant rollback playbooks. Live gateway configurations never mutate without explicit administrator sign-off.
-            </div>
+            <h2>Hardening plan <span class="domain-tag obs" id="remediation-count-tag">4 vendors</span></h2>
+            <div class="sub">Configuration that fixes these findings on each detected gateway platform, with a matching rollback. Review it before applying it; nothing is sent to a gateway from this page.</div>
           </div>
         </div>
 
@@ -713,28 +522,19 @@
 
         <div class="playbook-toolbar">
           <div class="playbook-view-tabs">
-            <button id="btn-playbook-forward" class="playbook-tab active" type="button">Forward Hardening Playbook</button>
-            <button id="btn-playbook-rollback" class="playbook-tab" type="button">Rollback / Undo Playbook</button>
+            <button id="btn-playbook-forward" class="playbook-tab active" type="button">Hardening</button>
+            <button id="btn-playbook-rollback" class="playbook-tab" type="button">Rollback</button>
           </div>
           <div class="playbook-meta-chips">
-            <span id="playbook-syntax-badge" class="playbook-chip chip-ok">&#10004; Syntax Valid</span>
-            <span id="playbook-status-badge" class="playbook-chip chip-status">Status: DRAFTED</span>
+            <span id="playbook-syntax-badge" class="playbook-chip chip-ok" hidden></span>
+            <span id="playbook-status-badge" class="playbook-chip chip-status" hidden></span>
           </div>
           <div class="playbook-actions">
-            <button id="btn-playbook-copy" class="ghost" type="button">&#128203; Copy</button>
+            <button id="btn-playbook-copy" class="ghost" type="button">Copy</button>
             <button id="btn-playbook-download" class="ghost" type="button">Download .conf</button>
             <span class="copy-status" id="playbook-copy-status" role="status" aria-live="polite"></span>
-            <button id="btn-playbook-dryrun" class="ghost" type="button">&#9874; Dry-Run Validate</button>
-            <button id="btn-playbook-approve" class="solid-btn" type="button">&#9997; Approve Plan</button>
+            <button id="btn-playbook-approve" class="solid-btn" type="button" title="Record who signed this plan off, in the local plan store">Record approval</button>
           </div>
-        </div>
-
-        <div id="playbook-sim-box" class="playbook-sim-box" style="display:none">
-          <div class="sim-header">
-            <strong id="sim-title">Dry-Run Simulation Report</strong>
-            <button id="sim-close" class="ghost-mini" type="button">&times;</button>
-          </div>
-          <div id="sim-detail" class="sim-content"></div>
         </div>
 
         <pre id="remediation" class="playbook-pre">Run an assessment to generate a hardening plan.</pre>
@@ -773,20 +573,20 @@
       <section class="panel diff-hero-panel" style="margin-bottom:18px">
         <div class="diff-hero-header">
           <div>
-            <h2>Before vs. After Differential Audit <span class="domain-tag obs">Comparative Security Posture</span></h2>
-            <div class="sub">Side-by-side assessment of security upgrades, score deltas, and vulnerability remediation.</div>
+            <h2>Before and after</h2>
+            <div class="sub">Capture A against capture B: score, findings and negotiated suites.</div>
           </div>
           <div id="diff-delta-badge" class="diff-delta-badge positive">
             <span class="diff-delta-arrow">&#9650;</span>
             <span class="diff-delta-num" id="diff-delta-num">+0</span>
-            <span class="diff-delta-label">Pts Delta</span>
+            <span class="diff-delta-label">points</span>
           </div>
         </div>
 
         <div class="diff-summary-grid">
           <!-- Baseline A Card -->
           <div class="diff-capture-card baseline" id="diff-card-a">
-            <div class="diff-card-pill baseline-pill">BASELINE CAPTURE (A)</div>
+            <div class="diff-card-pill baseline-pill">Capture A</div>
             <div class="diff-capture-name" id="diff-name-a">&mdash;</div>
             <div class="diff-score-row">
               <div class="diff-big-score" id="diff-score-a">&mdash;</div>
@@ -801,13 +601,13 @@
           <!-- Delta Arrow & Transformation Column -->
           <div class="diff-transformation-col">
             <div class="diff-arrow-circle">&rarr;</div>
-            <div class="diff-transform-verdict" id="diff-transform-verdict">Remediation Delta</div>
+            <div class="diff-transform-verdict" id="diff-transform-verdict">Change</div>
             <div class="diff-stat-delta" id="diff-stat-delta">Select captures to compare</div>
           </div>
 
           <!-- Hardened B Card -->
           <div class="diff-capture-card hardened" id="diff-card-b">
-            <div class="diff-card-pill hardened-pill">REMEDIATED CAPTURE (B)</div>
+            <div class="diff-card-pill hardened-pill">Capture B</div>
             <div class="diff-capture-name" id="diff-name-b">&mdash;</div>
             <div class="diff-score-row">
               <div class="diff-big-score" id="diff-score-b">&mdash;</div>
@@ -840,8 +640,8 @@
 
       <!-- Side-by-Side Wire Framing Ribbons -->
       <section class="panel" style="margin-bottom:18px">
-        <h2>Wire Framing Comparison</h2>
-        <div class="sub">Direct comparison of cleartext header bytes vs encrypted packet framing.</div>
+        <h2>Wire framing, A against B</h2>
+        <div class="sub">Cleartext headers and encrypted framing, capture A above capture B.</div>
         <div class="diff-ribbons-container">
           <div class="diff-ribbon-col">
             <div class="diff-ribbon-title"><span class="baseline-dot">&#9679;</span> Baseline (A): <b id="diff-ribbon-title-a">&mdash;</b></div>
@@ -860,20 +660,20 @@
 
       <!-- Cryptographic Suite Upgrade Matrix -->
       <section class="panel" style="margin-bottom:18px">
-        <h2>Cryptographic Suite Upgrade Matrix <span class="domain-tag obs">negotiated transforms</span></h2>
-        <div class="sub">Side-by-side transform evolution between baseline and hardened network traffic.</div>
+        <h2>Negotiated suites</h2>
+        <div class="sub">Transforms in capture A and capture B.</div>
         <div class="table-responsive">
           <table class="data-table diff-matrix-table" id="diff-matrix-table">
             <thead>
               <tr>
-                <th style="width:22%">Security Parameter</th>
-                <th style="width:33%">Baseline (A) Configuration</th>
-                <th style="width:33%">Remediated (B) Configuration</th>
-                <th style="width:12%;text-align:center">Evolution Status</th>
+                <th style="width:22%">Parameter</th>
+                <th style="width:33%">A</th>
+                <th style="width:33%">B</th>
+                <th style="width:12%;text-align:center">Change</th>
               </tr>
             </thead>
             <tbody id="diff-matrix-tbody">
-              <tr><td colspan="4" class="empty">Select captures and run diff comparison.</td></tr>
+              <tr><td colspan="4" class="empty">Choose two captures and select Compare.</td></tr>
             </tbody>
           </table>
         </div>
@@ -881,14 +681,14 @@
 
       <!-- Vulnerability Resolution & Risk Elimination -->
       <section class="panel" style="margin-bottom:18px">
-        <h2>Vulnerability Resolution &amp; Remediation Impact</h2>
-        <div class="sub">Specific CVE-class weaknesses eliminated by transitioning from Capture A to Capture B.</div>
+        <h2>Findings, A against B</h2>
+        <div class="sub">What capture B no longer raises, and what it still does.</div>
         
         <div class="diff-findings-grid">
           <!-- Resolved Findings (in A but eliminated in B) -->
           <div class="diff-finding-col">
             <div class="diff-col-header resolved-header">
-              <span>&#10004; Resolved Findings (Eliminated in B)</span>
+              <span>Resolved in B</span>
               <span class="diff-count-badge resolved" id="diff-resolved-count">0</span>
             </div>
             <div id="diff-resolved-list" class="diff-findings-list">
@@ -899,7 +699,7 @@
           <!-- Persisting / Remaining Findings in B -->
           <div class="diff-finding-col">
             <div class="diff-col-header persisting-header">
-              <span>&#9888; Persisting / Remaining In Hardened B</span>
+              <span>Still present in B</span>
               <span class="diff-count-badge persisting" id="diff-persisting-count">0</span>
             </div>
             <div id="diff-persisting-list" class="diff-findings-list">
@@ -916,21 +716,21 @@
       <section class="panel live-sniffer-panel" style="margin-bottom:18px">
         <div class="sniffer-panel-header">
           <div>
-            <h2>Live Network Interface Packet Sniffer <span class="domain-tag live">Real-Time Ingestion</span></h2>
-            <div class="sub">Stream live IPsec/ESP and IKE packets in real-time. Inspect active security associations as they traverse the wire.</div>
+            <h2>Live capture</h2>
+            <div class="sub">IKE and ESP packets from a network interface as they arrive, grouped into security associations.</div>
           </div>
           <div class="sniffer-controls-wrap">
             <select id="sniffer-iface-select" class="sniffer-iface-select" aria-label="Select network interface">
-              <option value="All Interfaces">All Active Interfaces (Promiscuous)</option>
+              <option value="All Interfaces">All interfaces</option>
             </select>
             <button type="button" id="btn-sniffer-start" class="btn btn-primary">
-              <span>▶</span> Start Live Sniffing
+Start
             </button>
             <button type="button" id="btn-sniffer-stop" class="btn btn-subtle" disabled>
-              <span>⏹</span> Stop
+Stop
             </button>
             <button type="button" id="btn-sniffer-analyze" class="btn btn-accent" disabled title="Analyze captured packet buffer">
-              <span>⚡</span> Analyze Live Snapshot
+Assess what was captured
             </button>
           </div>
         </div>
@@ -938,23 +738,23 @@
         <!-- Live Sniffer HUD Ticker Strip -->
         <div class="sniffer-hud-grid">
           <div class="sniffer-metric-card">
-            <div class="hud-label">SENSOR STATUS</div>
+            <div class="hud-label">Status</div>
             <div class="hud-val" id="sniffer-status-val"><span class="hud-dot idle"></span> IDLE</div>
           </div>
           <div class="sniffer-metric-card">
-            <div class="hud-label">PACKET RATE</div>
+            <div class="hud-label">Packet rate</div>
             <div class="hud-val" id="sniffer-rate-pps">0.0 <small>pps</small></div>
           </div>
           <div class="sniffer-metric-card">
-            <div class="hud-label">THROUGHPUT</div>
+            <div class="hud-label">Throughput</div>
             <div class="hud-val" id="sniffer-rate-kbps">0.0 <small>kbps</small></div>
           </div>
           <div class="sniffer-metric-card">
-            <div class="hud-label">BUFFERED PACKETS</div>
+            <div class="hud-label">Buffered</div>
             <div class="hud-val" id="sniffer-total-pkts">0</div>
           </div>
           <div class="sniffer-metric-card">
-            <div class="hud-label">ACTIVE SPIS</div>
+            <div class="hud-label">SPIs</div>
             <div class="hud-val" id="sniffer-active-spis">0</div>
           </div>
         </div>
@@ -962,20 +762,20 @@
         <!-- Live Streaming Packet Terminal Feed -->
         <div class="sniffer-feed-card">
           <div class="sniffer-feed-header">
-            <strong>LIVE PACKET STREAM FEED (SSE)</strong>
-            <span class="sniffer-feed-status">Auto-scrolling wire telemetry</span>
+            <strong>Packets</strong>
+            <span class="sniffer-feed-status">newest last</span>
           </div>
           <div class="sniffer-live-feed" id="sniffer-live-feed">
-            <div class="feed-placeholder">Standby. Click &quot;Start Live Sniffing&quot; to begin capturing wire telemetry.</div>
+            <div class="feed-placeholder">Select Start to capture from the chosen interface.</div>
           </div>
         </div>
 
         <!-- Active Security Associations Discovered Grid -->
         <div class="sniffer-spis-section">
-          <h3>Discovered Security Associations (Active SAs)</h3>
-          <div class="sub">Dynamically grouped by ESP SPI and IKE peer pairs detected on the wire.</div>
+          <h3>Security associations</h3>
+          <div class="sub">Grouped by ESP SPI and IKE peer pair.</div>
           <div class="sniffer-spis-grid" id="sniffer-spis-grid">
-            <div class="empty">No active security associations observed yet.</div>
+            <div class="empty">None seen yet.</div>
           </div>
         </div>
       </section>
@@ -991,10 +791,10 @@
 <aside class="mobile-sticky-cta" id="mobile-sticky-cta" aria-label="Mobile Quick Actions">
   <div class="mobile-sticky-cta-inner">
     <button type="button" id="mobile-primary-cta" class="mobile-cta-main">
-      <span>⚡</span> <span id="mobile-cta-label">Assess IPsec Capture</span>
+<span id="mobile-cta-label">Assess capture</span>
     </button>
-    <button type="button" id="mobile-secondary-cta" class="mobile-cta-sub" title="Export Security Dossier">
-      📥 Export
+    <button type="button" id="mobile-secondary-cta" class="mobile-cta-sub" title="Export report">
+      Export
     </button>
   </div>
 </aside>
@@ -1004,9 +804,9 @@
   <div class="backend-modal-card" role="document">
     <div class="backend-modal-header">
       <div class="backend-modal-title-group">
-        <span class="backend-modal-icon">🛡️</span>
+
         <div>
-          <h2 id="backend-modal-title">CipherGuard Engine Bridge</h2>
+          <h2 id="backend-modal-title">Local server</h2>
           <div class="backend-modal-subtitle">Direct Kernel Telemetry &amp; REST API Connection</div>
         </div>
       </div>
@@ -1048,7 +848,7 @@
       <!-- Action 1: Launch Direct Local Dashboard -->
       <div class="backend-action-card highlight">
         <div class="backend-action-header">
-          <span class="action-icon">🚀</span>
+
           <div class="action-meta">
             <strong>Launch Local Live Server Dashboard</strong>
             <p>Access the dashboard directly from your local Python server on <code>http://127.0.0.1:8000/</code> with unrestricted kernel access and real-time physical Wi-Fi scanning.</p>
@@ -1064,7 +864,7 @@
       <!-- Action 2: Custom API Endpoint -->
       <div class="backend-action-card">
         <div class="backend-action-header">
-          <span class="action-icon">🔌</span>
+
           <div class="action-meta">
             <strong>Configure Backend API URL</strong>
             <p>If hosting the backend on another port, cloud server, or HTTPS tunnel (e.g. Cloudflare Tunnel, ngrok):</p>
@@ -1081,7 +881,7 @@
       <!-- Action 3: Start Command Helper -->
       <div class="backend-action-card">
         <div class="backend-action-header">
-          <span class="action-icon">💻</span>
+
           <div class="action-meta">
             <strong>Start Backend Engine from Terminal</strong>
             <p>Run this command on your machine to start the live FastAPI telemetry server:</p>
@@ -1101,9 +901,9 @@
   <div class="shortcuts-modal-card" role="document">
     <div class="backend-modal-header">
       <div class="backend-modal-title-group">
-        <span class="backend-modal-icon">⌨️</span>
+
         <div>
-          <h2 id="shortcuts-modal-title">Analyst Keyboard Shortcuts</h2>
+          <h2 id="shortcuts-modal-title">Keyboard shortcuts</h2>
           <div class="backend-modal-subtitle">Fast keyboard control for security audits</div>
         </div>
       </div>
@@ -1142,22 +942,8 @@
         <div class="shortcut-item">
           <div class="shortcut-keys"><kbd>E</kbd> or <kbd>P</kbd></div>
           <div class="shortcut-desc">
-            <strong>Export Security Dossier</strong>
+            <strong>Export report</strong>
             <span>Generate and print executive compliance audit dossier</span>
-          </div>
-        </div>
-        <div class="shortcut-item">
-          <div class="shortcut-keys"><kbd>R</kbd></div>
-          <div class="shortcut-desc">
-            <strong>Simulate Rogue AP Attack</strong>
-            <span>Toggle active Evil Twin spoofed BSSID threat vector</span>
-          </div>
-        </div>
-        <div class="shortcut-item">
-          <div class="shortcut-keys"><kbd>V</kbd></div>
-          <div class="shortcut-desc">
-            <strong>Toggle Sovereign VPN</strong>
-            <span>Switch between encrypted VPN tunnel and direct ISP route</span>
           </div>
         </div>
         <div class="shortcut-item">
@@ -1176,7 +962,7 @@
         </div>
       </div>
       <div class="shortcuts-footer-note">
-        💡 <em>Pro-tip for Evaluators: Press <kbd>1</kbd> or <kbd>A</kbd> for IPsec analysis, <kbd>2</kbd> or <kbd>W</kbd> to sweep Wi-Fi, <kbd>3</kbd> or <kbd>D</kbd> for Diff mode, or <kbd>?</kbd> / <kbd>H</kbd> to open this guide anytime. Modifier combos (<kbd>Alt+A</kbd>, <kbd>Alt+S</kbd>, <kbd>Alt+D</kbd>, <kbd>Alt+E</kbd>) are also fully supported.</em>
+        <em>Pro-tip for Evaluators: Press <kbd>1</kbd> or <kbd>A</kbd> for IPsec analysis, <kbd>2</kbd> or <kbd>W</kbd> to sweep Wi-Fi, <kbd>3</kbd> or <kbd>D</kbd> for Diff mode, or <kbd>?</kbd> / <kbd>H</kbd> to open this guide anytime. Modifier combos (<kbd>Alt+A</kbd>, <kbd>Alt+S</kbd>, <kbd>Alt+D</kbd>, <kbd>Alt+E</kbd>) are also fully supported.</em>
       </div>
     </div>
   </div>
@@ -1189,7 +975,7 @@
   <div class="cbom-modal-card" role="document">
     <div class="backend-modal-header">
       <div class="backend-modal-title-group">
-        <span class="backend-modal-icon">📜</span>
+
         <div>
           <h2 id="cbom-modal-title">Cryptographic Bill of Materials (CBOM)</h2>
           <div class="backend-modal-subtitle">CycloneDX v1.6 &bull; NIST SP 800-161 Supply Chain Inventory</div>
@@ -1203,8 +989,8 @@
           <input type="text" id="cbom-search-input" class="cbom-search-input" placeholder="Filter algorithms, ciphers, key sizes...">
         </div>
         <div class="cbom-btn-group">
-          <button type="button" id="btn-copy-cbom" class="btn-cbom-action">📋 Copy JSON</button>
-          <button type="button" id="btn-download-cbom" class="btn-cbom-action btn-cbom-primary">📥 Download CycloneDX 1.6</button>
+          <button type="button" id="btn-copy-cbom" class="btn-cbom-action">Copy JSON</button>
+          <button type="button" id="btn-download-cbom" class="btn-cbom-action btn-cbom-primary">Download CycloneDX 1.6</button>
         </div>
       </div>
       <div class="cbom-content-wrap">
