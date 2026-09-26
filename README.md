@@ -550,6 +550,45 @@ CipherGuard assessment: backbone.pcap
     CRITICAL  ESP-001  ESP tunnel using 64-bit block cipher [inferred]
 ```
 
+### Dashboard
+
+`serve` runs it against the API; `export-demo` writes the same page as a static
+site (the GitHub Pages build), with every analysis precomputed. The server does
+the data work; the page renders what it is given.
+
+- **Works offline.** IBM Plex is bundled under `static/fonts/` (SIL Open Font
+  License alongside) instead of loaded from Google Fonts, so the page renders
+  on an isolated network or from a static export opened with no internet
+  connection. A test fails if `index.html` references any external domain.
+- **Readable.** Every text colour clears WCAG AA (4.5:1) against its actual
+  background, in light mode and in a dark mode that follows
+  `prefers-color-scheme`. `tests/test_contrast.py` checks the colour tokens.
+  Motion is limited to what `prefers-reduced-motion` allows.
+- **Plain language.** Terms such as IKE, ESP, AEAD, Sweet32 and CRQC are marked
+  with a dotted underline. Their definitions come from `static/glossary.json`
+  and show on hover, keyboard focus or tap. Every finding group also carries a
+  one-sentence "why this matters", written server-side per rule
+  (`audit/plain.py`).
+- **Compare two captures** side by side: score, grade, severity counts, and
+  each link's strength, with every difference marked. It defaults to
+  `legacy.pcap` against `hardened.pcap`, and works in the static build.
+- **Presentation mode** (the *Present* button, or `?present` in the URL). It
+  uses larger type, shows one step at a time, and steps with ← / →: posture
+  score, wire ribbon, worst link, top finding group, hardening plan. Esc exits.
+- **Downloads and provenance.** Download the JSON report, the CycloneDX CBOM
+  and the hardening config, and copy the config with a confirmation that says
+  whether the copy worked. A provenance panel shows the capture's SHA-256, the
+  model manifest's hash and training date, and the report digest, all computed
+  on the server.
+- **Upload** a capture by file picker or by dropping it on the page. The control
+  appears only when the server reports uploads enabled (never in the static
+  build), and errors show the server's own reason, such as the size limit or a
+  duplicate name.
+- **Demo-safe.** If a request fails, the last good result stays on screen,
+  labelled as the previous result, with one calm line and a Retry button. The
+  full error goes to the browser console. Panels show placeholder blocks while
+  an assessment runs; they are static when reduced motion is requested.
+
 ---
 
 ## Architecture
@@ -655,7 +694,7 @@ python -m cipherguard.cli analyze docker/captures/weak.pcap
 ## Tests
 
 ```bash
-python -m pytest tests/ -q                 # 289 passed, 14 skipped without real captures
+python -m pytest tests/ -q                 # 346 passed, 14 skipped without real captures
 python -m pytest tests/ -q -m "not soak"   # skip the ~90 s of soak tests
 ```
 

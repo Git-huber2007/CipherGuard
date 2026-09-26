@@ -69,22 +69,30 @@ def _worst(severities: list[str]) -> str | None:
 
 
 def group_findings(findings: list["Finding"]) -> list[dict[str, Any]]:
-    """Collapse repeated findings into one entry per (rule_id, title)."""
+    """Collapse repeated findings into one entry per (rule_id, title).
+
+    Each group carries `why_it_matters`, the rule's one-sentence explanation
+    for a non-specialist reader, so every client shows the same words.
+    """
+    from ..audit.plain import why_it_matters
+
     groups: dict[tuple[str, str], dict[str, Any]] = {}
     for i, f in enumerate(findings):
         key = (f.rule_id, f.title)
         g: dict[str, Any] | None = groups.get(key)
         if g is None:
-            g = groups[key] = {
+            g = {
                 "key": f"{f.rule_id}|{f.title}",
                 "rule_id": f.rule_id,
                 "title": f.title,
+                "why_it_matters": why_it_matters(f.rule_id),
                 "severity": f.severity.value,
                 "count": 0,
                 "subjects": [],
                 "inferred": False,
                 "findings": [],
             }
+            groups[key] = g
         g["count"] += 1
         g["findings"].append(i)
         if f.subject not in g["subjects"]:

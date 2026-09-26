@@ -1,0 +1,40 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:c15ba8b4-afb0-49d3-974d-5e455538c82e",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-09-26T10:20:16+00:00",
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "name": "CipherGuard",
+          "version": "1.0.0",
+          "description": "Passive IPsec cryptographic inventory derived from observed network traffic"
+        }
+      ]
+    },
+    "component": {
+      "type": "application",
+      "bom-ref": "crypto:2c35af0d5c3e7217",
+      "name": "IPsec deployment observed in live_snapshot.pcap"
+    },
+    "properties": [
+      {
+        "name": "cipherguard:postureScore",
+        "value": "100"
+      },
+      {
+        "name": "cipherguard:grade",
+        "value": "A"
+      },
+      {
+        "name": "cipherguard:derivation",
+        "value": "passive-traffic"
+      }
+    ]
+  },
+  "components": [],
+  "vulnerabilities": []
+}

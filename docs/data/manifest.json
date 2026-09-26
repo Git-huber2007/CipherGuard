@@ -5,6 +5,8 @@
     {
       "name": "backbone.pcap",
       "file": "data/backbone_pcap.json",
+      "cbom": "data/cbom/backbone_pcap.cdx.json",
+      "size_bytes": 1238022,
       "size_kb": 1209.0,
       "score": 4,
       "grade": "E"
@@ -12,6 +14,8 @@
     {
       "name": "downgrade.pcap",
       "file": "data/downgrade_pcap.json",
+      "cbom": "data/cbom/downgrade_pcap.cdx.json",
+      "size_bytes": 290802,
       "size_kb": 284.0,
       "score": 27,
       "grade": "E"
@@ -19,6 +23,8 @@
     {
       "name": "hardened.pcap",
       "file": "data/hardened_pcap.json",
+      "cbom": "data/cbom/hardened_pcap.cdx.json",
+      "size_bytes": 507118,
       "size_kb": 495.2,
       "score": 85,
       "grade": "B"
@@ -26,6 +32,8 @@
     {
       "name": "legacy.pcap",
       "file": "data/legacy_pcap.json",
+      "cbom": "data/cbom/legacy_pcap.cdx.json",
+      "size_bytes": 346348,
       "size_kb": 338.2,
       "score": 10,
       "grade": "E"
@@ -33,13 +41,17 @@
     {
       "name": "live_snapshot.pcap",
       "file": "data/live_snapshot_pcap.json",
-      "size_kb": 5.4,
+      "cbom": "data/cbom/live_snapshot_pcap.cdx.json",
+      "size_bytes": 71612,
+      "size_kb": 69.9,
       "score": 100,
       "grade": "A"
     },
     {
       "name": "transitional.pcap",
       "file": "data/transitional_pcap.json",
+      "cbom": "data/cbom/transitional_pcap.cdx.json",
+      "size_bytes": 776900,
       "size_kb": 758.7,
       "score": 48,
       "grade": "D"

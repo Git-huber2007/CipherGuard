@@ -38,6 +38,206 @@ function esc(s){
     c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 
+/* Every number a person reads goes through here, so a figure means the same
+ * thing in every panel. (SVG coordinates are geometry, not figures, and are
+ * not formatted here.)
+ *
+ *  - Bytes are decimal: 1 KB = 1,000 B, one decimal place above bytes. The
+ *    Python side divides by 1e6 for MB throughout, and two conventions on one
+ *    page is how "1.1 MB" and "1.0 MB" end up describing the same capture.
+ *  - Grouping uses a fixed en-US locale so a demo reads identically on every
+ *    machine it is shown on.
+ *  - Negative values use a true minus sign (U+2212), which lines up with "+".
+ *  - Missing values render as an em dash rather than "NaN" or "undefined". */
+const Fmt = (() => {
+  const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB"];
+  const grouped = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+  const NONE = "—";
+  const ok = n => typeof n === "number" && Number.isFinite(n);
+
+  function count(n){ return ok(n) ? grouped.format(Math.round(n)) : NONE; }
+
+  function bytes(n){
+    if (!ok(n)) return NONE;
+    let v = Math.max(n, 0), u = 0;
+    while (v >= 1000 && u < BYTE_UNITS.length - 1){ v /= 1000; u++; }
+    // 999.96 KB would print as "1000.0 KB"; carry it into the next unit
+    if (u > 0 && Number(v.toFixed(1)) >= 1000 && u < BYTE_UNITS.length - 1){ v /= 1000; u++; }
+    return u === 0 ? `${Math.round(v)} B` : `${v.toFixed(1)} ${BYTE_UNITS[u]}`;
+  }
+
+  function bits(n){ return ok(n) ? `${count(n)} bits` : NONE; }
+
+  function signed(n){
+    if (!ok(n)) return NONE;
+    const r = Math.round(n);
+    return `${r > 0 ? "+" : r < 0 ? "−" : ""}${count(Math.abs(r))}`;
+  }
+
+  // ratio is 0..1; digits are decimal places of the percentage
+  function percent(ratio, digits = 0){
+    if (!ok(ratio)) return NONE;
+    return `${(ratio * 100).toFixed(digits)}%`;
+  }
+
+  function duration(seconds){
+    if (!ok(seconds)) return NONE;
+    const s = Math.max(seconds, 0);
+    if (s < 1) return `${Math.round(s * 1000)} ms`;
+    if (s < 60) return `${s.toFixed(1)} s`;
+    const whole = Math.round(s);
+    if (whole < 3600) return `${Math.floor(whole / 60)} min ${String(whole % 60).padStart(2, "0")} s`;
+    return `${Math.floor(whole / 3600)} h ${String(Math.floor(whole % 3600 / 60)).padStart(2, "0")} min`;
+  }
+
+  // megabits per second, as the Python side reports link rates
+  function mbps(n){ return ok(n) ? `${n.toFixed(1)} Mb/s` : NONE; }
+
+  return { count, bytes, bits, signed, percent, duration, mbps };
+})();
+window.Fmt = Fmt;
+
+/* Plain-language glossary. Definitions live in glossary.json beside the
+ * static assets (so the static export ships them); terms are marked with a
+ * dotted underline and are focusable, and one tooltip follows hover, keyboard
+ * focus and tap alike, so nothing is hover-only. Escape closes it.
+ *
+ * TERMS maps text as it appears on screen to a glossary key. mark() marks the
+ * first occurrence of each in already-escaped text; a test checks that every
+ * key used here or as data-gl="..." in the markup exists in glossary.json. */
+const Glossary = (() => {
+  const TERMS = [
+    ["IKE_SA_INIT", "ike-sa-init"], ["IKE_AUTH", "ike-auth"],
+    ["Diffie-Hellman group", "dh-group"], ["DH group", "dh-group"],
+    ["framing class", "framing-class"], ["Framing class", "framing-class"],
+    ["harvest-now-decrypt-later", "hndl"], ["Harvest-now-decrypt-later", "hndl"],
+    ["harvest now, decrypt later", "hndl"], ["Mosca's inequality", "mosca"],
+    ["Sweet32", "sweet32"], ["AEAD", "aead"], ["CRQC", "crqc"], ["CBOM", "cbom"],
+    ["IKE", "ike"], ["ESP", "esp"], ["SPI", "spi"],
+  ];
+  // glossary.json sits beside js/ in both the served app (/static/) and the
+  // static export (the site root), so resolve it from this script's own URL
+  const here = (typeof document !== "undefined" && document.currentScript
+    && document.currentScript.src) || "";
+  const url = here ? here.replace(/js\/dashboard\.js(\?.*)?$/, "glossary.json") : "glossary.json";
+  let defs = {};
+  let tip = null, current = null, pinned = false;
+
+  const byLength = [...TERMS].sort((a, b) => b[0].length - a[0].length);
+  const pattern = new RegExp(
+    "\\b(" + byLength.map(([t]) => esc(t).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")\\b", "g");
+  const keyOf = Object.fromEntries(TERMS.map(([t, k]) => [esc(t), k]));
+
+  function term(key, text){
+    return `<span class="gl" data-gl="${esc(key)}" tabindex="0" role="button" `
+      + `aria-describedby="gl-tip">${esc(text)}</span>`;
+  }
+
+  // escapedHtml must be plain escaped text (no tags); first occurrence per term
+  function mark(escapedHtml){
+    const seen = new Set();
+    return String(escapedHtml).replace(pattern, m => {
+      const key = keyOf[m];
+      if (!key || seen.has(key)) return m;
+      seen.add(key);
+      return `<span class="gl" data-gl="${key}" tabindex="0" role="button" aria-describedby="gl-tip">${m}</span>`;
+    });
+  }
+
+  function ensureTip(){
+    if (tip) return tip;
+    tip = document.createElement("div");
+    tip.id = "gl-tip";
+    tip.className = "gl-tip";
+    tip.setAttribute("role", "tooltip");
+    tip.hidden = true;
+    document.body.appendChild(tip);
+    return tip;
+  }
+
+  function show(el){
+    const d = defs[el.dataset.gl];
+    const t = ensureTip();
+    t.innerHTML = d ? `<b>${esc(d.term)}</b>${esc(d.definition)}`
+                    : `<b>${esc(el.textContent)}</b>Definition not available.`;
+    t.hidden = false;
+    current = el;
+    const r = el.getBoundingClientRect();
+    const width = t.offsetWidth, vw = document.documentElement.clientWidth;
+    const left = Math.min(Math.max(r.left, 16), Math.max(vw - width - 16, 16));
+    t.style.left = `${left + window.scrollX}px`;
+    t.style.top = `${r.bottom + window.scrollY + 6}px`;
+  }
+
+  function hide(){
+    if (tip) tip.hidden = true;
+    current = null;
+    pinned = false;
+  }
+
+  function enhance(root){
+    (root || document).querySelectorAll("[data-gl]:not(.gl)").forEach(el => {
+      el.classList.add("gl");
+      if (!el.hasAttribute("tabindex")) el.setAttribute("tabindex", "0");
+      if (!el.hasAttribute("role")) el.setAttribute("role", "button");
+      el.setAttribute("aria-describedby", "gl-tip");
+    });
+  }
+
+  function bind(){
+    ensureTip();
+    enhance(document);
+    document.addEventListener("mouseover", e => {
+      const el = e.target.closest && e.target.closest(".gl");
+      if (el && !pinned) show(el);
+    });
+    document.addEventListener("mouseout", e => {
+      const el = e.target.closest && e.target.closest(".gl");
+      if (el && !pinned && !el.contains(e.relatedTarget)) hide();
+    });
+    document.addEventListener("focusin", e => {
+      const el = e.target.closest && e.target.closest(".gl");
+      if (el) show(el);
+    });
+    document.addEventListener("focusout", e => {
+      if (e.target.closest && e.target.closest(".gl")) hide();
+    });
+    // tap (and click) pins the definition open; tapping again or elsewhere closes it
+    document.addEventListener("click", e => {
+      const el = e.target.closest && e.target.closest(".gl");
+      if (el){
+        e.preventDefault();
+        if (pinned && current === el){ hide(); return; }
+        show(el);
+        pinned = true;
+      } else if (pinned){
+        hide();
+      }
+    });
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape" && tip && !tip.hidden) hide();
+      const el = e.target.closest && e.target.closest(".gl");
+      if (el && (e.key === "Enter" || e.key === " ")){
+        e.preventDefault();
+        if (pinned && current === el) hide(); else { show(el); pinned = true; }
+      }
+    });
+  }
+
+  async function init(){
+    bind();
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (res.ok) defs = (await res.json()).terms || {};
+    } catch (e){
+      console.warn("Glossary unavailable:", e);
+    }
+  }
+
+  return { TERMS, term, mark, enhance, init, get url(){ return url; } };
+})();
+if (typeof window !== "undefined") window.Glossary = Glossary;
+
 
 function pickIkeProposal(s){
   // Prefer the responder's selection: that is what was actually agreed, as
@@ -381,6 +581,40 @@ function handleCopyBackendCmd(){
   }
 }
 
+/* A failed request becomes an error carrying the status and the server's own
+ * message (FastAPI's {"detail": "..."}), never the raw response body: a body
+ * can be an HTML error page or a traceback, and neither belongs on screen.
+ * The full body stays on the error object for the console. */
+async function apiError(res){
+  const body = await res.text().catch(() => "");
+  let detail = null;
+  try {
+    const parsed = JSON.parse(body);
+    if (typeof parsed.detail === "string") detail = parsed.detail;
+  } catch (e) { /* not JSON: keep no detail rather than show markup */ }
+  const err = new Error(detail || `HTTP ${res.status}`);
+  err.status = res.status;
+  err.detail = detail;
+  err.body = body;
+  return err;
+}
+
+/* One calm sentence for a failed request, chosen by what failed. The server's
+ * detail is only shown where it is written for the user (upload rules). */
+function explainFailure(err){
+  if (typeof staticMode !== "undefined" && staticMode.active){
+    return "The saved analysis for this capture could not be loaded.";
+  }
+  if (!err || err.status === undefined){
+    return "The analysis server is not responding.";
+  }
+  if (err.status === 401 || err.status === 403) return "The server needs a valid access token.";
+  if (err.status === 404) return "That capture is no longer available on the server.";
+  if (err.status === 413) return "That file is larger than the server accepts.";
+  if (err.status >= 500) return "The server could not complete the analysis.";
+  return "The request could not be completed.";
+}
+
 async function api(path, options){
   const isSilent = !!(options && options.silent);
   if (!isSilent) setProgressBar(true);
@@ -410,7 +644,7 @@ async function api(path, options){
       opts.headers = authHeaders(options && options.headers);
       res = await fetch(url, opts);
     }
-    if (!res.ok) throw new Error((await res.text()) || res.statusText);
+    if (!res.ok) throw await apiError(res);
     CipherGuardTelemetry.recordEvent("api_success", { path });
     return res;
   } catch(err) {
@@ -421,10 +655,19 @@ async function api(path, options){
   }
 }
 
-function showBanner(message, kind){
+function showBanner(message, kind, action){
   const el = $("banner");
-  if (!message){ el.hidden = true; return; }
+  if (!message){ el.hidden = true; el.textContent = ""; return; }
   el.textContent = message;
+  // an optional button, e.g. Retry; built as a node, never from markup
+  if (action){
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ghost banner-retry";
+    btn.textContent = action.label;
+    btn.addEventListener("click", action.onClick);
+    el.appendChild(btn);
+  }
   // an informational banner must not look like the error banner, or a working
   // static demo reads as a broken deployment
   el.className = kind === "info" ? "banner info" : "banner";
@@ -476,10 +719,10 @@ function renderRibbonTo(targetId, a, link){
     }
     if (f){
       if (f.encapsulated) parts[1].v = "UDP 4500 · ESP in NAT-T";
-      parts[7].v = `SPI ${f.spi} · ${f.packets} packets`
+      parts[7].v = `SPI ${f.spi} · ${Fmt.count(f.packets)} packets`
         + (link && link.tunnels > 1 ? ` · 1 of ${link.tunnels} tunnels` : "");
       parts[8].v = `${f.framing_class || f.predicted_suite || "unresolved"} `
-        + `(${Math.round((f.framing_confidence ?? f.confidence ?? 0) * 100)}%)`;
+        + `(${Fmt.percent(f.framing_confidence ?? f.confidence ?? 0)})`;
     } else if (link){
       parts[7].v = parts[8].v = "no ESP observed on this link";
     }
@@ -489,7 +732,7 @@ function renderRibbonTo(targetId, a, link){
       ? `<div class="seam" role="separator" aria-label="Key boundary: fields after this are encrypted">`
         + `<span class="seam-label">key boundary</span></div>`
       : `<div class="field ${f.d}">`
-      + `<div class="fname">${esc(f.n)}</div>`
+      + `<div class="fname">${Glossary.mark(esc(f.n))}</div>`
       + `<div class="fval">${esc(f.v)}</div></div>`
   ).join("");
 }
@@ -543,7 +786,7 @@ function linkMeta(l){
     l.worst_severity ? `worst ${l.worst_severity}` : "no findings",
     `${n} finding${n === 1 ? "" : "s"}`,
     `${l.tunnels} tunnel${l.tunnels === 1 ? "" : "s"}`,
-    st ? `${st.classical_bits}/${st.quantum_bits} bits` : "no IKE observed"
+    st ? `${st.classical_bits}/${Fmt.bits(st.quantum_bits)}` : "no IKE observed"
   ].join(" · ");
 }
 
@@ -631,13 +874,13 @@ function renderLinkDetail(a, link){
 
   const tunnel = flows.length
     ? flows.map(({f, i}) => {
-        const pct = Math.round((f.framing_confidence ?? f.confidence ?? 0) * 100);
+        const conf = Fmt.percent(f.framing_confidence ?? f.confidence ?? 0);
         const label = f.framing_class || f.predicted_suite || "unresolved";
         return `<div class="ld-rec">
-          <div class="meta">${esc(f.src)} &rarr; ${esc(f.dst)} · ${f.packets} packets${f.encapsulated ? " · NAT-T" : ""}</div>
+          <div class="meta">${esc(f.src)} &rarr; ${esc(f.dst)} · ${Fmt.count(f.packets)} packets${f.encapsulated ? " · NAT-T" : ""}</div>
           <div class="ld-spi mono">SPI ${esc(f.spi)}</div>
           <div class="algs"><span class="alg ${suiteClass(label)}">${esc(label)}</span>
-            <span class="ld-conf">${pct}% confidence in the framing class</span></div>
+            <span class="ld-conf">${conf} confidence in the ${Glossary.term("framing-class", "framing class")}</span></div>
           ${f.ambiguous ? `<div class="cand">${esc(f.framing_candidates.join(" or "))}</div>` : ""}
           <button type="button" class="linkish ld-evidence" data-evidence="${i}" aria-haspopup="dialog">Show the framing arithmetic</button>
         </div>`;
@@ -713,14 +956,14 @@ function renderScore(a){
   const measurable = tp.measurable === true && tp.packets_per_second != null;
   const processing = tp.processing_seconds ?? s.processing_seconds;
   $("stats").innerHTML = [
-    [Number(s.packets_read).toLocaleString(), "packets read"],
-    [s.ike_sessions, "IKE sessions"],
-    [s.esp_flows_assessed, "ESP tunnels"],
+    [Fmt.count(s.packets_read), "packets read"],
+    [Fmt.count(s.ike_sessions), "IKE sessions"],
+    [Fmt.count(s.esp_flows_assessed), "ESP tunnels"],
     measurable
-      ? [Math.round(tp.packets_per_second).toLocaleString(), "packets/sec, model load excluded"]
-      : [processing != null ? processing + "s" : s.analysis_seconds + "s", "processing time"],
-    [s.analysis_seconds + "s", "total, incl. model load"],
-    [s.parse_errors, "parse errors"]
+      ? [Fmt.count(tp.packets_per_second), "packets/sec, model load excluded"]
+      : [Fmt.duration(processing ?? s.analysis_seconds), "processing time"],
+    [Fmt.duration(s.analysis_seconds), "total, incl. model load"],
+    [Fmt.count(s.parse_errors), "parse errors"]
   ].map(([k, l]) =>
     `<div class="stat"><div class="k">${esc(k)}</div>`
     + `<div class="l">${esc(l)}</div></div>`).join("");
@@ -778,7 +1021,8 @@ function renderFlows(a){
     // member at its exact-suite score. Naming one suite out of a set the wire
     // cannot separate reads as a wrong answer to anyone who checks it against
     // the negotiated IKE proposal shown alongside.
-    const pct = Math.round((f.framing_confidence ?? f.confidence ?? 0) * 100);
+    const ratio = f.framing_confidence ?? f.confidence ?? 0;
+    const pct = Math.round(ratio * 100);          // bar width only
     const label = f.framing_class || f.predicted_suite || "unresolved";
     const candidates = f.ambiguous
       ? `<div class="cand">${esc(f.framing_candidates.join(" or "))}</div>`
@@ -796,7 +1040,7 @@ function renderFlows(a){
         <span class="flow-open-hint">Show the framing arithmetic${warn}</span>
       </button>
       <div class="confbar"><i style="width:${pct}%"></i></div>
-      <div class="cand">${pct}% confidence in the framing class</div>
+      <div class="cand">${Fmt.percent(ratio)} confidence in the ${Glossary.term("framing-class", "framing class")}</div>
       ${candidates}
       <div style="margin-top:8px">
         <button type="button" class="btn-wire-inspect" onclick="HexDissectorEngine.loadFlowWire('${esc(f.spi)}', '${esc(f.framing_class || '')}')">
@@ -827,7 +1071,7 @@ const EvidencePanel = (() => {
   };
   const VERDICT_CLASS = { prohibited: "bad", legacy: "warn", acceptable: "good" };
 
-  function pct(n, d){ return d ? Math.round((n / d) * 100) : 0; }
+  function pct(n, d){ return Fmt.percent(d ? n / d : 0); }
 
   /* One residue histogram as inline SVG. Surviving suites whose padding
      boundary equals this modulus mark the residue they require. */
@@ -856,25 +1100,25 @@ const EvidencePanel = (() => {
       }
       body += `<rect class="ev-bar${marked ? " is-expected" : ""}" x="${x.toFixed(1)}" `
             + `y="${(BASE - h).toFixed(1)}" width="${(bw - gap).toFixed(1)}" height="${h.toFixed(1)}">`
-            + `<title>residue ${r}: ${c} of ${total} lengths (${pct(c, total)}%)</title></rect>`
+            + `<title>residue ${r}: ${c} of ${total} lengths (${pct(c, total)})</title></rect>`
             + `<text class="ev-axis" x="${cx.toFixed(1)}" y="${BASE + 15}" text-anchor="middle">${r}</text>`;
     });
     body += `<line class="ev-base" x1="0" y1="${BASE}" x2="${W}" y2="${BASE}"/>`;
 
     const peak = counts.indexOf(Math.max(...counts));
     const peakText = total
-      ? `${pct(counts[peak], total)}% of lengths fall at residue ${peak}.`
+      ? `${pct(counts[peak], total)} of lengths fall at residue ${peak}.`
       : "No lengths observed.";
     const marks = Object.keys(expected).map(r =>
       `residue ${r} required by ${expected[r].join(", ")} `
-      + `(${pct(counts[r], total)}% of lengths comply)`);
+      + `(${pct(counts[r], total)} of lengths comply)`);
     const aria = `Ciphertext length mod ${mod}. ${peakText} `
       + (marks.length ? `Marked: ${marks.join("; ")}.` : "No surviving suite pads to this boundary.");
 
     const caption = marks.length
       ? Object.keys(expected).map(r =>
           `<li><span class="ev-tri" aria-hidden="true">&#9660;</span> residue ${esc(r)}: `
-          + `${esc(expected[r].join(", "))} <span class="ev-dim">(${pct(counts[r], total)}% comply)</span></li>`).join("")
+          + `${esc(expected[r].join(", "))} <span class="ev-dim">(${pct(counts[r], total)} comply)</span></li>`).join("")
       : `<li class="ev-dim">No surviving suite pads to ${mod === 8 ? "an" : "a"} ${mod}-byte boundary.</li>`;
 
     return `<figure class="ev-hist">
@@ -971,7 +1215,7 @@ const EvidencePanel = (() => {
     const ranked = (f.ranked || []).map(([name, p]) => `<li>
         <span>${esc(name)}</span>
         <span class="ev-model-bar" aria-hidden="true"><i style="width:${Math.round(p * 100)}%"></i></span>
-        <span class="ev-model-p">${Math.round(p * 100)}%</span></li>`).join("");
+        <span class="ev-model-p">${Fmt.percent(p)}</span></li>`).join("");
     return `<section class="ev-model" aria-labelledby="ev-model-h">
       <h3 id="ev-model-h">Learned models' ranking <span class="domain-tag inf">not arithmetic</span></h3>
       <p class="ev-dim">Random Forest and 1D-CNN probabilities, after the mask above. They
@@ -1083,6 +1327,8 @@ function renderFindings(a){
   }
   const inferred = a.findings.filter(f => f.inferred).length;
   const groups = a.finding_groups || [];
+  whyByRule = Object.fromEntries(groups.filter(g => g.why_it_matters)
+    .map(g => [g.rule_id, g.why_it_matters]));
   $("findsub").textContent =
     `${a.findings.length} findings`
     + (groups.length ? ` in ${groups.length} distinct problems` : "")
@@ -1126,8 +1372,18 @@ function toggleDisclosure(e){
 
 let disclosureSeq = 0;
 
+// rule_id -> the server's plain-language sentence, from a.finding_groups
+let whyByRule = {};
+
+function whyHTML(ruleId){
+  const why = whyByRule[ruleId];
+  return why ? `<p class="fwhy"><b>Why this matters:</b> ${esc(why)}</p>` : "";
+}
+
 function findingHTML(f, i, prefix){
   const id = `${prefix}-${i}-${++disclosureSeq}`;
+  // members of an expanded group don't repeat the sentence the group shows
+  const why = prefix === "gm" ? "" : whyHTML(f.rule_id);
   return `<div class="finding" data-i="${i}">
       <button type="button" class="fhead" aria-expanded="false" aria-controls="${id}">
         <span class="sev-mark ${esc(f.severity)}">${esc(f.severity)}</span>
@@ -1139,7 +1395,8 @@ function findingHTML(f, i, prefix){
         <span class="chev" aria-hidden="true">&#9662;</span>
       </button>
       <div class="fbody" id="${id}" hidden>
-        <p>${esc(f.detail)}</p>
+        ${why}
+        <p>${Glossary.mark(esc(f.detail))}</p>
         <div class="ref">${esc(f.reference)}</div>
         <div class="fix"><b>Fix:</b> ${esc(f.remediation)}</div>
       </div>
@@ -1168,6 +1425,7 @@ function groupHTML(g, a){
         <span class="chev" aria-hidden="true">&#9662;</span>
       </button>
       <div class="gbody" id="${id}" hidden>
+        ${whyHTML(g.rule_id)}
         ${g.findings.map(i => findingHTML(a.findings[i], i, "gm")).join("")}
       </div>
     </div>`;
@@ -1213,7 +1471,6 @@ function findingsByLinkHTML(a){
  * paused or throttled tab never drifts. */
 const HarvestClock = (() => {
   const STEP_MS = { smooth: 100, reduced: 5000 };
-  const UNITS = ["B", "kB", "MB", "GB", "TB", "PB"];
   let timer = null;
   let teardown = [];
 
@@ -1242,12 +1499,6 @@ const HarvestClock = (() => {
   // observed bytes plus rate x elapsed; the rate is megabits per second
   function harvested(baseBytes, rateMbps, elapsedMs){
     return baseBytes + rateMbps * 1e6 / 8 * (Math.max(elapsedMs, 0) / 1000);
-  }
-
-  function formatBytes(n){
-    let v = Math.max(n, 0), u = 0;
-    while (v >= 1000 && u < UNITS.length - 1){ v /= 1000; u++; }
-    return u === 0 ? `${Math.floor(v)} B` : `${v.toFixed(3)} ${UNITS[u]}`;
   }
 
   function stepMs(reducedMotion){ return reducedMotion ? STEP_MS.reduced : STEP_MS.smooth; }
@@ -1308,21 +1559,21 @@ const HarvestClock = (() => {
     const arrival = new Date();
     arrival.setMonth(arrival.getMonth() + Math.round(as.crqc_years * 12));
     $("hclock-note").innerHTML =
-      `Quantum arrival in ${as.crqc_years} years (${arrival.getFullYear()}) is a `
+      `${Glossary.term("crqc", "Quantum arrival")} in ${as.crqc_years} years (${arrival.getFullYear()}) is a `
       + `<b>planning assumption, not a forecast</b>. Substitute your agency's figure `
-      + `with <code>cipherguard roadmap --crqc-years N</code>. Exposure index values `
+      + `with <code>cipherguard roadmap --crqc-years N</code>. The deadline is `
       + `below are for the <b>${esc(as.data_class)}</b> class this capture was `
       + `analysed under; the ranking order does not depend on the class.`;
 
     // -- counter -------------------------------------------------------------
     const bytesEl = $("hclock-bytes"), rateEl = $("hclock-rate");
     if (!exposed.length){
-      bytesEl.textContent = formatBytes(0);
+      bytesEl.textContent = Fmt.bytes(0);
       rateEl.textContent = "No quantum-exposed links observed.";
       return;
     }
     if (!(rate > 0)){
-      bytesEl.textContent = formatBytes(base);
+      bytesEl.textContent = Fmt.bytes(base);
       rateEl.textContent = "Observed in the capture. No ESP rate measured on "
         + "exposed links, so nothing to extrapolate.";
       return;
@@ -1331,10 +1582,10 @@ const HarvestClock = (() => {
     const opened = Date.now();
     const mq = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
     const reduced = () => !!(mq && mq.matches);
-    const tick = () => { bytesEl.textContent = formatBytes(harvested(base, rate, Date.now() - opened)); };
+    const tick = () => { bytesEl.textContent = Fmt.bytes(harvested(base, rate, Date.now() - opened)); };
     const describeRate = () => {
-      rateEl.textContent = `${formatBytes(base)} observed in the capture, then `
-        + `extrapolated at the ${rate} Mb/s observed on exposed links since this `
+      rateEl.textContent = `${Fmt.bytes(base)} observed in the capture, then `
+        + `extrapolated at the ${Fmt.mbps(rate)} observed on exposed links since this `
         + `view opened` + (reduced() ? " · updates every 5 s" : "");
     };
     const schedule = () => {
@@ -1354,7 +1605,7 @@ const HarvestClock = (() => {
     schedule();
   }
 
-  return { moscaGap, isLate, splitYears, describeDeadline, harvested, formatBytes,
+  return { moscaGap, isLate, splitYears, describeDeadline, harvested,
            stepMs, mount, stop };
 })();
 window.HarvestClock = HarvestClock;
@@ -1371,7 +1622,7 @@ function renderPQ(a){
   const sm = plan.summary;
   $("pqsub").textContent =
     `${sm.quantum_exposed} of ${sm.links_assessed} links are quantum-exposed, `
-    + `carrying ${(sm.total_bytes_harvestable / 1e6).toFixed(1)} MB of observed traffic.`;
+    + `carrying ${Fmt.bytes(sm.total_bytes_harvestable)} of observed traffic.`;
 
   const links = plan.links.map(l => `
     <div class="pql ${l.quantum_safe ? "" : "exposed"}">
@@ -1380,8 +1631,8 @@ function renderPQ(a){
         <div class="pqpeer">${esc(l.peer)}</div>
         <div class="pqbits">${l.classical_bits} classical / ${l.quantum_bits} `
       + `quantum bits · ${esc(l.kex_family.toUpperCase())} · `
-      + `${(l.bytes_observed / 1e6).toFixed(1)} MB at ${l.harvest_rate_mbps} Mbps</div>
-        <div class="pqwhy">${esc(l.rationale)}</div>
+      + `${Fmt.bytes(l.bytes_observed)} at ${Fmt.mbps(l.harvest_rate_mbps)}</div>
+        <div class="pqwhy">${Glossary.mark(esc(l.rationale))}</div>
       </span>
       <span class="pqidx ${l.quantum_safe ? "safe" : "exposed"}">`
       + `${l.quantum_safe ? "PQ-safe" : "exposure " + l.exposure_index}</span>
@@ -1418,7 +1669,7 @@ const PostureReplay = (() => {
   const LABEL_DOWNGRADES_UP_TO = 4;   // beyond this the table carries the deltas
   let hist = null, index = 0, timer = null, loader = null, bound = false, request = 0;
 
-  const signedBits = x => `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x)}`;
+  const signedBits = Fmt.signed;
   const stamp = iso => iso ? String(iso).replace("T", " ").replace(/(\+00:00|Z)$/, " UTC") : "";
 
   // What each observation was judged against. A "new" observation set the
@@ -1547,9 +1798,9 @@ const PostureReplay = (() => {
 
   const VERDICT_TEXT = {
     new: () => "Baseline established",
-    steady: o => `Matches the baseline (${o.baseline_bits} bits)`,
+    steady: o => `Matches the baseline (${Fmt.bits(o.baseline_bits)})`,
     unconfirmed: o => `Stronger than the ${o.baseline_bits}-bit baseline, not yet promoted`,
-    improvement: o => `Baseline promoted: ${o.baseline_bits} → ${o.classical_bits} bits`,
+    improvement: o => `Baseline promoted: ${o.baseline_bits} → ${Fmt.bits(o.classical_bits)}`,
     withheld: () => "Baseline withheld: new-peer limit reached",
   };
 
@@ -1565,11 +1816,11 @@ const PostureReplay = (() => {
       const d = diffTransforms(o.baseline_transforms, o.transforms);
       return head
         + `<div class="rp-verdict is-down"><span aria-hidden="true">▼ </span>Downgrade: `
-        + `${o.baseline_bits} → ${o.classical_bits} bits (${signedBits(o.delta_bits)})</div>`
+        + `${o.baseline_bits} → ${Fmt.bits(o.classical_bits)} (${signedBits(o.delta_bits)})</div>`
         + `<div class="rp-compare">`
-        + `<div class="rp-col"><div class="rp-col-h">Baseline · ${o.baseline_bits} bits</div>`
+        + `<div class="rp-col"><div class="rp-col-h">Baseline · ${Fmt.bits(o.baseline_bits)}</div>`
         + txList(o.baseline_transforms, t => d.removed.includes(t) ? "gone" : "") + `</div>`
-        + `<div class="rp-col"><div class="rp-col-h">Negotiated here · ${o.classical_bits} bits</div>`
+        + `<div class="rp-col"><div class="rp-col-h">Negotiated here · ${Fmt.bits(o.classical_bits)}</div>`
         + txList(o.transforms, t => d.added.includes(t) ? "new" : "") + `</div>`
         + `</div>` + strength;
     }
@@ -1605,7 +1856,7 @@ const PostureReplay = (() => {
     const scrub = $("replay-scrub");
     scrub.value = String(index);
     scrub.setAttribute("aria-valuetext", `Observation ${index + 1} of ${obs.length}: `
-      + `${o.classical_bits} bits` + (o.verdict === "downgrade" ? `, downgrade ${signedBits(o.delta_bits)}` : ""));
+      + `${Fmt.bits(o.classical_bits)}` + (o.verdict === "downgrade" ? `, downgrade ${signedBits(o.delta_bits)}` : ""));
     $("replay-pos").textContent = `${index + 1} / ${obs.length}`;
     $("replay-detail").innerHTML = detailHTML(obs, index, hist.verdicts);
 
@@ -1662,7 +1913,7 @@ const PostureReplay = (() => {
       const i = nearest(ev), o = hist.observations[i];
       const g = geometry(hist.observations, Number(svg.getAttribute("width")));
       tip.hidden = false;
-      tip.textContent = `${i + 1}: ${o.classical_bits} bits`
+      tip.textContent = `${i + 1}: ${Fmt.bits(o.classical_bits)}`
         + (o.verdict ? ` · ${o.verdict}` : "")
         + (o.verdict === "downgrade" ? ` ${signedBits(o.delta_bits)}` : "");
       tip.style.left = `${Math.min(g.x(i) + 10, g.width - 150)}px`;
@@ -1721,7 +1972,7 @@ const PostureReplay = (() => {
     // "a|b" is the storage form of a peer pair; the value stays the real key
     sel.innerHTML = fleet.links.map(l =>
       `<option value="${esc(l.peer_key)}">${esc(l.peer_key.split("|").join(" ↔ "))}`
-      + ` · ${l.current_bits} bits`
+      + ` · ${Fmt.bits(l.current_bits)}`
       + `${l.degraded ? " · degraded" : ""}</option>`).join("");
     const first = fleet.links.find(l => l.degraded) || fleet.links[0];
     sel.value = first.peer_key;
@@ -2207,6 +2458,8 @@ async function detectStaticMode(){
     const healthRes = await fetch(probeUrl, { method: "GET", cache: "no-store" });
     if (healthRes.ok) {
       staticMode.active = false;
+      // kept for controls that depend on server capability (upload)
+      try { state.health = await healthRes.json(); } catch (e) { state.health = null; }
       return false; // Live backend is ACTIVE and ready!
     }
   } catch(e) {}
@@ -2229,7 +2482,9 @@ function populateCaptureSelects(items){
   const selB = $("diff-capture-b");
 
   const optsHtml = items.map(c =>
-    `<option value="${esc(c.name)}">${esc(c.name)} — ${c.size_kb} KB</option>`
+    // size_kb (1024-based) is what payloads carried before size_bytes existed
+    `<option value="${esc(c.name)}">${esc(c.name)} — `
+    + `${Fmt.bytes(c.size_bytes ?? (c.size_kb != null ? c.size_kb * 1024 : null))}</option>`
   ).join("");
 
   if (sel) sel.innerHTML = optsHtml;
@@ -2238,11 +2493,14 @@ function populateCaptureSelects(items){
 
   // Set smart default diff selection
   if (selA && selB && items.length >= 2){
-    const downgrade = items.find(c => /downgrade|legacy/i.test(c.name));
-    if (downgrade) selA.value = downgrade.name;
+    // The demo pairing is legacy.pcap against hardened.pcap. A pattern alone
+    // picked downgrade.pcap, which sorts first and matched /legacy|downgrade/.
+    const byName = n => items.find(c => c.name === n);
+    const before = byName("legacy.pcap") || items.find(c => /legacy|downgrade/i.test(c.name));
+    if (before) selA.value = before.name;
     else selA.selectedIndex = 0;
 
-    const hardened = items.find(c => /hardened|backbone/i.test(c.name));
+    const hardened = byName("hardened.pcap") || items.find(c => /hardened|backbone/i.test(c.name));
     if (hardened) selB.value = hardened.name;
     else selB.selectedIndex = Math.min(items.length - 1, 1);
   }
@@ -2274,9 +2532,13 @@ async function loadCaptures(){
     populateCaptureSelects(captures);
     showBanner(null);
   }catch(err){
+    console.error("Loading the capture list failed:", err, err && err.body ? err.body : "");
     if ($("capture")) $("capture").innerHTML = `<option value="">Backend unreachable</option>`;
     if ($("run")) $("run").disabled = true;
-    showBanner("Could not reach the CipherGuard API: " + err.message);
+    showBanner(explainFailure(err), "error", { label: "Retry", onClick: async () => {
+      await loadCaptures();
+      if ($("run") && !$("run").disabled && !state.assessment) runAnalysis();
+    }});
   }
 }
 
@@ -2298,6 +2560,424 @@ async function fetchAssessment(name){
   }
 }
 
+/* Loading placeholders, drawn in each panel's own layout so the page keeps its
+ * shape while a request runs. The hardening plan's text is snapshotted rather
+ * than re-requested if the request fails: the server that just failed is the
+ * one that would have to regenerate it. */
+const Skeleton = (() => {
+  const line = w => `<span class="skeleton sk-line ${w}"></span>`;
+  const rep = (n, f) => Array.from({ length: n }, (_, i) => f(i)).join("");
+  let remediationSnapshot = null;
+  const FILL = {
+    ribbon: () => rep(6, () => `<div class="field">${line("w50")}${line("w90")}</div>`),
+    stats: () => rep(6, () => `<div class="stat"><div class="k">${line("w50")}</div><div class="l">${line("w70")}</div></div>`),
+    "link-list": () => rep(4, () => `<li class="link-item">${line("w90")}${line("w50")}</li>`),
+    "link-detail": () => `<span class="skeleton sk-block"></span><span class="skeleton sk-block"></span>`,
+    findings: () => rep(5, () => `<div class="finding">${line("w90")}${line("w30")}</div>`),
+    sessions: () => `<span class="skeleton sk-block"></span>`,
+    flows: () => `<span class="skeleton sk-block"></span>`,
+    pqlinks: () => rep(3, () => line("w90")),
+    sevrow: () => `${line("w30")}`,
+  };
+
+  function show(){
+    const view = $("view-ipsec");
+    if (view) view.setAttribute("aria-busy", "true");
+    for (const [id, fill] of Object.entries(FILL)){
+      const el = $(id);
+      if (el) el.innerHTML = fill();
+    }
+    const pre = $("remediation");
+    if (pre){
+      remediationSnapshot = pre.innerHTML;
+      pre.innerHTML = rep(8, i => line(["w90", "w70", "w50", "w90"][i % 4])).replace(/<\/span>/g, "</span>\n");
+    }
+  }
+
+  function done(){
+    const view = $("view-ipsec");
+    if (view) view.removeAttribute("aria-busy");
+  }
+
+  function restoreRemediation(){
+    const pre = $("remediation");
+    if (pre && remediationSnapshot !== null) pre.innerHTML = remediationSnapshot;
+  }
+
+  function clearTo(message){
+    for (const id of Object.keys(FILL)){
+      const el = $(id);
+      if (el) el.innerHTML = id === "findings" || id === "link-list"
+        ? `<div class="empty">${esc(message)}</div>` : "";
+    }
+    restoreRemediation();
+  }
+
+  return { show, done, restoreRemediation, clearTo };
+})();
+
+/* Downloads, copy-to-clipboard and the provenance panel. Everything shown here
+ * comes from the server's payload; the page computes no hash of its own. */
+const Report = (() => {
+  let current = null;
+
+  async function copyText(text){
+    try {
+      if (navigator.clipboard && window.isSecureContext){
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (e) { /* fall through to the selection copy */ }
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    ta.remove();
+    return ok;
+  }
+
+  // visible confirmation that says what actually happened
+  function flash(statusId, message){
+    const el = $(statusId);
+    if (!el) return;
+    el.textContent = message;
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.textContent = ""; }, 5000);
+  }
+
+  function downloadText(filename, text, mime){
+    const url = URL.createObjectURL(new Blob([text], { type: mime }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  const base = name => String(name || "capture").replace(/\.[^.]+$/, "");
+
+  function manifestEntry(name){
+    return staticMode.active && staticMode.manifest
+      ? (staticMode.manifest.captures || []).find(c => c.name === name) : null;
+  }
+
+  function configText(){
+    const pre = $("remediation");
+    const text = pre ? pre.textContent.trim() : "";
+    return /^(Run an assessment|No hardening plan|Synthesizing|Could not generate)/.test(text) ? "" : text;
+  }
+
+  function configName(){
+    const mode = state.playbookMode === "rollback" ? "rollback" : "harden";
+    return `${base(current && current.capture)}-${mode}-${state.platform || "config"}.conf`;
+  }
+
+  function setLink(id, href, filename){
+    const a = $(id);
+    if (!a) return;
+    a.hidden = false;
+    a.href = href;
+    a.setAttribute("download", filename);
+  }
+
+  function update(a){
+    current = a;
+    const entry = manifestEntry(a.capture);
+    // JSON report: the baked file in static mode, the server's payload otherwise
+    if (entry) setLink("dl-report", entry.file, `${base(a.capture)}-report.json`);
+    else setLink("dl-report", "#", `${base(a.capture)}-report.json`);
+    // CBOM: offered only where it exists — a static build without one hides it
+    const cbom = $("dl-cbom");
+    if (staticMode.active){
+      if (entry && entry.cbom) setLink("dl-cbom", entry.cbom, `${base(a.capture)}-cbom.cdx.json`);
+      else if (cbom) cbom.hidden = true;
+    } else {
+      setLink("dl-cbom", "#", `${base(a.capture)}-cbom.cdx.json`);
+    }
+    setLink("dl-config", "#", configName());
+    renderProvenance(a);
+  }
+
+  function renderProvenance(a){
+    const p = a.provenance || {};
+    const set = (id, value, fallback) => {
+      const el = $(id);
+      if (el) el.textContent = value || fallback;
+      const btn = document.querySelector(`[data-copy="${id}"]`);
+      if (btn) btn.hidden = !value;
+    };
+    set("prov-capture", p.capture_sha256, "not recorded for this report");
+    set("prov-model", p.model && p.model.manifest_sha256,
+        "no model was loaded for this analysis");
+    set("prov-digest", p.report_digest || a.digest, "not recorded");
+    const date = $("prov-model-date");
+    if (date) date.textContent = p.model && p.model.trained_at
+      ? `trained ${String(p.model.trained_at).replace("T", " ").replace(/\+00:00$/, " UTC")}` : "";
+    const note = $("prov-digest-note");
+    if (note) note.textContent = p.report_digest_covers || "";
+  }
+
+  async function onReport(ev){
+    if (!current || manifestEntry(current.capture)) return;   // static: real file link
+    ev.preventDefault();
+    downloadText(`${base(current.capture)}-report.json`, JSON.stringify(current, null, 2),
+                 "application/json");
+    flash("dl-status", "JSON report downloaded.");
+  }
+
+  async function onCbom(ev){
+    if (!current || staticMode.active) return;                 // static: real file link
+    ev.preventDefault();
+    try {
+      const res = await api(`/api/cbom?capture=${encodeURIComponent(current.capture)}`, { silent: true });
+      downloadText(`${base(current.capture)}-cbom.cdx.json`, await res.text(), "application/json");
+      flash("dl-status", "CBOM downloaded.");
+    } catch (err){
+      console.error("CBOM download failed:", err, err && err.body);
+      flash("dl-status", `CBOM not downloaded: ${explainFailure(err)}`);
+    }
+  }
+
+  function onConfig(ev){
+    ev.preventDefault();
+    const text = configText();
+    if (!text){ flash("dl-status", "No hardening plan to download yet."); return; }
+    downloadText(configName(), text + "\n", "text/plain");
+    flash("dl-status", `Saved ${configName()}.`);
+  }
+
+  async function onCopyConfig(){
+    const text = configText();
+    if (!text){ flash("playbook-copy-status", "Nothing to copy yet."); return; }
+    const ok = await copyText(text);
+    flash("playbook-copy-status", ok
+      ? `Copied ${Fmt.count(text.split("\n").length)} lines to the clipboard.`
+      : "Copy was blocked by the browser. Select the text and press Ctrl+C.");
+  }
+
+  async function onCopyProvenance(ev){
+    const id = ev.currentTarget.dataset.copy;
+    const text = ($(id) || {}).textContent || "";
+    const ok = await copyText(text);
+    const label = ev.currentTarget.closest(".prov-row").querySelector("dt").textContent;
+    flash("prov-status", ok ? `${label} copied.` : "Copy was blocked by the browser. Select the value and press Ctrl+C.");
+  }
+
+  function bind(){
+    const on = (id, fn) => { const el = $(id); if (el) el.addEventListener("click", fn); };
+    on("dl-report", onReport);
+    on("dl-cbom", onCbom);
+    on("dl-config", onConfig);
+    on("btn-playbook-download", onConfig);
+    document.querySelectorAll(".prov-copy").forEach(b => b.addEventListener("click", onCopyProvenance));
+  }
+
+  return { update, bind, copyText, onCopyConfig, renderProvenance };
+})();
+window.Report = Report;
+
+/* Upload: file picker plus drop-anywhere, posted to /api/upload, then assessed.
+ * The control exists only where it can work: never in the static build, and
+ * only when /api/health reports uploads enabled. Errors show the endpoint's
+ * own message (size limit, duplicate name, invalid filename). Any token goes
+ * through api(), which prompts once and keeps it in sessionStorage only. */
+const Upload = (() => {
+  let bound = false, dragDepth = 0;
+
+  const available = () =>
+    !staticMode.active && !!(state.health && state.health.uploads === true);
+
+  function status(msg){ const el = $("upload-status"); if (el) el.textContent = msg; }
+
+  async function send(file){
+    if (!file) return;
+    status(`Uploading ${file.name} (${Fmt.bytes(file.size)})…`);
+    const body = new FormData();
+    body.append("file", file, file.name);
+    try {
+      const info = await (await api("/api/upload", { method: "POST", body })).json();
+      status(`Uploaded ${info.name}. Assessing…`);
+      await loadCaptures();
+      const sel = $("capture");
+      if (sel) sel.value = info.name;
+      await runAnalysis();
+      status(`Assessed ${info.name}.`);
+    } catch (err){
+      console.error("Upload failed:", err, err && err.body ? err.body : "");
+      // the endpoint's own words where it gave them: they name the rule broken
+      status(`Not uploaded: ${err && err.detail ? err.detail : explainFailure(err)}`);
+    } finally {
+      const input = $("upload-input");
+      if (input) input.value = "";
+    }
+  }
+
+  const hasFiles = ev => ev.dataTransfer && [...(ev.dataTransfer.types || [])].includes("Files");
+
+  function init(){
+    const zone = $("upload-zone");
+    if (!zone) return;
+    zone.hidden = !available();
+    if (zone.hidden || bound) return;
+    bound = true;
+    const limit = state.health.max_upload_bytes;
+    if (limit && $("upload-limit")) $("upload-limit").textContent = Fmt.bytes(limit);
+    $("upload-pick").addEventListener("click", () => $("upload-input").click());
+    $("upload-input").addEventListener("change", e => send(e.target.files[0]));
+    window.addEventListener("dragenter", e => {
+      if (!hasFiles(e)) return;
+      dragDepth++;
+      zone.classList.add("is-drag");
+    });
+    window.addEventListener("dragleave", e => {
+      if (!hasFiles(e)) return;
+      dragDepth = Math.max(dragDepth - 1, 0);
+      if (!dragDepth) zone.classList.remove("is-drag");
+    });
+    window.addEventListener("dragover", e => { if (hasFiles(e)) e.preventDefault(); });
+    window.addEventListener("drop", e => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragDepth = 0;
+      zone.classList.remove("is-drag");
+      send(e.dataTransfer.files[0]);
+    });
+  }
+
+  return { init, available, send };
+})();
+window.Upload = Upload;
+
+/* Presentation mode: for a projector or a judging panel. Larger type, no
+ * masthead controls or secondary panels, and one step on screen at a time in
+ * a fixed order that tells the story of a capture. Left/Right (or Page
+ * Up/Down) step, Escape exits, and ?present in the URL starts it. The only
+ * motion is the scroll to each step, and that is instant under
+ * prefers-reduced-motion. */
+const Present = (() => {
+  const STEPS = [
+    { id: "score-panel",       label: "Posture score" },
+    { id: "ribbon-block",      label: "Wire ribbon", prepare: showWorstLink },
+    { id: "links-panel",       label: "Worst link", prepare: showWorstLink },
+    { id: "findings-panel",    label: "Top finding group", prepare: openTopFinding },
+    { id: "remediation-panel", label: "Hardening plan" },
+  ];
+  let active = false, step = 0, wanted = false;
+
+  function showWorstLink(){
+    const a = state.assessment;
+    const worst = a && worstLink(a);
+    if (worst && state.selectedLink !== worst.id) selectLink(worst.id, { updateHash: false });
+  }
+
+  function openTopFinding(){
+    const head = document.querySelector("#findings .fhead");
+    if (head && head.getAttribute("aria-expanded") === "false") head.click();
+  }
+
+  const reduced = () => window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function show(i){
+    step = Math.min(Math.max(i, 0), STEPS.length - 1);
+    const s = STEPS[step];
+    if (s.prepare) s.prepare();
+    const view = $("ipsec-single-view");
+    view.querySelectorAll(".present-current").forEach(el => el.classList.remove("present-current"));
+    const el = $(s.id);
+    if (el){
+      el.classList.add("present-current");
+      if (!el.hasAttribute("tabindex")) el.setAttribute("tabindex", "-1");
+      el.focus({ preventScroll: true });
+      el.scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "start" });
+    }
+    $("present-step").textContent = `${step + 1} / ${STEPS.length} · ${s.label}`;
+    $("present-prev").disabled = step === 0;
+    $("present-next").disabled = step === STEPS.length - 1;
+  }
+
+  function setUrl(on){
+    const url = new URL(location.href);
+    if (on) url.searchParams.set("present", ""); else url.searchParams.delete("present");
+    history.replaceState(null, "", url.pathname + (url.search === "?present=" ? "?present" : url.search) + url.hash);
+  }
+
+  function enter(){
+    if (!state.assessment){ wanted = true; return; }     // starts once one is loaded
+    active = true;
+    wanted = false;
+    if (typeof switchTab === "function") switchTab("ipsec");
+    if (typeof switchIpsecMode === "function" && state.ipsecMode && state.ipsecMode !== "single"){
+      switchIpsecMode("single");
+    }
+    document.documentElement.classList.add("presenting");
+    $("present-bar").hidden = false;
+    $("btn-present").setAttribute("aria-pressed", "true");
+    setUrl(true);
+    show(0);
+  }
+
+  function exit(){
+    active = false;
+    wanted = false;
+    document.documentElement.classList.remove("presenting");
+    document.querySelectorAll(".present-current").forEach(el => el.classList.remove("present-current"));
+    $("present-bar").hidden = true;
+    $("btn-present").setAttribute("aria-pressed", "false");
+    setUrl(false);
+    $("btn-present").focus();
+  }
+
+  function onKey(e){
+    if (!active) return;
+    const t = e.target;
+    if (t && (/^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName) || t.isContentEditable)) return;
+    if (e.key === "ArrowRight" || e.key === "PageDown"){ e.preventDefault(); show(step + 1); }
+    else if (e.key === "ArrowLeft" || e.key === "PageUp"){ e.preventDefault(); show(step - 1); }
+    else if (e.key === "Escape"){
+      // a dialog or an open definition closes first
+      const openDialog = document.querySelector("[role=dialog]:not([hidden])");
+      const openTip = document.querySelector("#gl-tip:not([hidden])");
+      if (!openDialog && !openTip) exit();
+    }
+  }
+
+  function init(){
+    $("btn-present").addEventListener("click", () => (active ? exit() : enter()));
+    $("present-prev").addEventListener("click", () => show(step - 1));
+    $("present-next").addEventListener("click", () => show(step + 1));
+    $("present-exit").addEventListener("click", exit);
+    document.addEventListener("keydown", onKey);
+    if (new URLSearchParams(location.search).has("present")) enter();
+  }
+
+  // called after every successful assessment
+  function onAssessment(){ if (wanted) enter(); }
+
+  return { init, enter, exit, onAssessment, STEPS, get active(){ return active; }, get step(){ return step; } };
+})();
+window.Present = Present;
+
+async function renderAssessment(a, opts = {}){
+  renderScore(a);
+  renderSessions(a);
+  renderFlows(a);
+  renderLinks(a);
+  renderFindings(a);
+  renderRibbon(a);
+  renderPQ(a);
+  renderComplianceMatrix(a, state.wifiAssessment);
+  renderPlatforms(a);
+  Report.update(a);
+  if (!opts.keepRemediation) await loadRemediation();
+}
+
 async function runAnalysis(){
   const sel = $("capture");
   const name = sel ? sel.value : "";
@@ -2309,40 +2989,50 @@ async function runAnalysis(){
   }
   if (sel) clearFieldError(sel);
   setButtonLoading(btn, true, "Assessing capture...");
+  const previous = state.lastGood || null;
+  Skeleton.show();
   try{
-    state.assessment = await fetchAssessment(name);
+    const a = await fetchAssessment(name);
+    state.assessment = a;
     // A link named in the URL wins if it belongs to this capture; otherwise
     // the worst link, which the server already put first.
     const wanted = readHash();
-    const fromHash = (!wanted.capture || wanted.capture === state.assessment.capture)
-      ? linkById(state.assessment, wanted.link) : null;
-    state.selectedLink = (fromHash || worstLink(state.assessment) || {}).id || null;
-    if (wanted.capture && wanted.capture !== state.assessment.capture) writeHash(null, null);
-    renderScore(state.assessment);
-    renderSessions(state.assessment);
-    renderFlows(state.assessment);
-    renderLinks(state.assessment);
-    renderFindings(state.assessment);
-    renderRibbon(state.assessment);
-    renderPQ(state.assessment);
-    renderComplianceMatrix(state.assessment, state.wifiAssessment);
-    renderPlatforms(state.assessment);
-    await loadRemediation();
+    const fromHash = (!wanted.capture || wanted.capture === a.capture)
+      ? linkById(a, wanted.link) : null;
+    state.selectedLink = (fromHash || worstLink(a) || {}).id || null;
+    if (wanted.capture && wanted.capture !== a.capture) writeHash(null, null);
+    await renderAssessment(a);
+    state.lastGood = { assessment: a, link: state.selectedLink };
+    Skeleton.done();
     showBanner(null);
-    showToast(`Assessment complete: Score ${state.assessment.score}/100 (Grade ${state.assessment.grade})`, "success");
+    Present.onAssessment();
+    showToast(`Assessment complete: Score ${a.score}/100 (Grade ${a.grade})`, "success");
     CipherGuardTelemetry.recordEvent("ipsec_assessment_run", {
-      capture: name,
-      score: state.assessment.score,
-      grade: state.assessment.grade
+      capture: name, score: a.score, grade: a.grade
     });
     if (typeof MitreHeatmapEngine !== "undefined" && MitreHeatmapEngine.render) {
       MitreHeatmapEngine.render();
     }
   }catch(err){
-    $("capmeta").textContent = "Assessment failed: " + err.message;
-    if (sel) showFieldError(sel, "Capture dissection failed: " + err.message);
-    showToast("Assessment failed: " + err.message, "error");
-    CipherGuardTelemetry.recordEvent("ipsec_assessment_failed", { capture: name, error: err.message });
+    // The whole error, body included, is for the console; the page gets one
+    // calm sentence and keeps the last good result on screen.
+    console.error(`Assessment of ${name} failed:`, err, err && err.body ? err.body : "");
+    const why = explainFailure(err);
+    Skeleton.done();
+    const retry = { label: "Retry", onClick: () => runAnalysis() };
+    if (previous){
+      state.assessment = previous.assessment;
+      state.selectedLink = previous.link;
+      await renderAssessment(previous.assessment, { keepRemediation: true });
+      Skeleton.restoreRemediation();
+      const meta = $("capmeta");
+      if (meta) meta.insertAdjacentHTML("beforeend", ` <span class="prev-tag">previous result</span>`);
+      showBanner(`${why} Showing the previous result, ${previous.assessment.capture}.`, "error", retry);
+    } else {
+      Skeleton.clearTo(why);
+      showBanner(why, "error", retry);
+    }
+    CipherGuardTelemetry.recordEvent("ipsec_assessment_failed", { capture: name, status: err && err.status });
   }finally{
     setButtonLoading(btn, false);
   }
@@ -2457,8 +3147,84 @@ async function runDiffAnalysis(){
   }
 }
 
+/* Compare mode: two server payloads side by side. Nothing is re-derived here;
+ * the rows line up fields the server already computed (links, strength,
+ * worst_severity, counts), matched by link id, which is the sorted address
+ * pair. Every difference is marked in text as well as style. */
+const CompareView = (() => {
+  const SEVS = ["critical", "high", "medium", "low", "info"];
+
+  function rows(a, b){
+    const byId = new Map();
+    for (const l of (a.links || [])) byId.set(l.id, { id: l.id, a: l, b: null });
+    for (const l of (b.links || [])){
+      const r = byId.get(l.id) || { id: l.id, a: null, b: null };
+      r.b = l;
+      byId.set(l.id, r);
+    }
+    return [...byId.values()].map(r => {
+      const sa = r.a && r.a.strength, sb = r.b && r.b.strength;
+      let kind = "same", change = "no change";
+      if (!r.a){ kind = "only-b"; change = "only in B"; }
+      else if (!r.b){ kind = "only-a"; change = "only in A"; }
+      else if (sa && sb && sa.classical_bits !== sb.classical_bits){
+        kind = sb.classical_bits > sa.classical_bits ? "stronger" : "weaker";
+        change = `${Fmt.signed(sb.classical_bits - sa.classical_bits)} classical bits`;
+      } else if (sa && sb && sa.quantum_bits !== sb.quantum_bits){
+        kind = sb.quantum_bits > sa.quantum_bits ? "stronger" : "weaker";
+        change = `${Fmt.signed(sb.quantum_bits - sa.quantum_bits)} quantum bits`;
+      } else if (r.a.worst_severity !== r.b.worst_severity){
+        kind = "severity";
+        change = `worst finding ${r.a.worst_severity || "none"} → ${r.b.worst_severity || "none"}`;
+      }
+      return { ...r, kind, change, differs: kind !== "same" };
+    }).sort((x, y) => (y.differs - x.differs) || x.id.localeCompare(y.id));
+  }
+
+  function strengthCell(link){
+    if (!link) return `<span class="cmp-absent">not in this capture</span>`;
+    const s = link.strength;
+    const bits = s ? `${Fmt.count(s.classical_bits)} / ${Fmt.count(s.quantum_bits)}` : "no IKE observed";
+    const sev = link.worst_severity
+      ? ` <span class="sev-chip ${esc(link.worst_severity)}">${esc(link.worst_severity)}</span>` : "";
+    return `<span class="cmp-bits">${bits}</span>${sev}`;
+  }
+
+  function rowsHTML(list){
+    if (!list.length) return `<tr><td colspan="4" class="empty">Neither capture has a link.</td></tr>`;
+    return list.map(r => {
+      const label = linkLabel(r.a || r.b);
+      const mark = r.differs ? `<span class="cmp-mark" aria-hidden="true">●</span> ` : "";
+      return `<tr class="cmp-row cmp-${r.kind}">`
+        + `<th scope="row" class="mono">${mark}${esc(label)}</th>`
+        + `<td>${strengthCell(r.a)}</td><td>${strengthCell(r.b)}</td>`
+        + `<td class="cmp-change">${r.differs ? "<b>" + esc(r.change) + "</b>" : esc(r.change)}</td></tr>`;
+    }).join("");
+  }
+
+  // B's chips carry their change from A, so a count that moved says so
+  function sevChips(counts, other){
+    const out = SEVS.filter(k => (counts && counts[k]) || (other && other[k])).map(k => {
+      const n = (counts && counts[k]) || 0, was = other ? ((other[k]) || 0) : n;
+      const delta = other && n !== was ? ` (${Fmt.signed(n - was)})` : "";
+      return `<span class="sev-chip ${k}${delta ? " cmp-diff" : ""}">${Fmt.count(n)} ${k}${delta}</span>`;
+    });
+    return out.join(" ") || `<span class="sev-chip info">clean</span>`;
+  }
+
+  return { rows, rowsHTML, sevChips };
+})();
+window.CompareView = CompareView;
+
 function renderDiffView(a, b){
   if (!a || !b) return;
+
+  const cmp = CompareView.rows(a, b);
+  const differing = cmp.filter(r => r.differs).length;
+  if ($("diff-links-tbody")) $("diff-links-tbody").innerHTML = CompareView.rowsHTML(cmp);
+  if ($("diff-links-sub")) $("diff-links-sub").textContent =
+    `${cmp.length} gateway pair${cmp.length === 1 ? "" : "s"} across both captures; `
+    + `${differing} differ${differing === 1 ? "s" : ""}. Links are matched by address pair.`;
 
   const scoreA = a.score ?? 0;
   const scoreB = b.score ?? 0;
@@ -2488,12 +3254,7 @@ function renderDiffView(a, b){
     gradeAEl.textContent = `Grade ${a.grade || "—"}`;
     gradeAEl.className = `diff-grade-pill grade-badge ${a.grade ? a.grade.replace("+", "") : "B"}`;
   }
-  if ($("diff-sevs-a")){
-    $("diff-sevs-a").innerHTML = ["critical", "high", "medium", "low"]
-      .filter(k => a.counts && a.counts[k])
-      .map(k => `<span class="sev-chip ${k}" style="font-size:0.68rem;padding:1px 5px">${a.counts[k]} ${k}</span>`)
-      .join(" ") || `<span class="sev-chip info" style="font-size:0.68rem">Clean</span>`;
-  }
+  if ($("diff-sevs-a")) $("diff-sevs-a").innerHTML = CompareView.sevChips(a.counts, null);
   if ($("diff-meta-a")){
     $("diff-meta-a").innerHTML = `
       <div style="font-size:0.75rem;color:var(--muted)">
@@ -2509,12 +3270,7 @@ function renderDiffView(a, b){
     gradeBEl.textContent = `Grade ${b.grade || "—"}`;
     gradeBEl.className = `diff-grade-pill grade-badge ${b.grade ? b.grade.replace("+", "") : "B"}`;
   }
-  if ($("diff-sevs-b")){
-    $("diff-sevs-b").innerHTML = ["critical", "high", "medium", "low"]
-      .filter(k => b.counts && b.counts[k])
-      .map(k => `<span class="sev-chip ${k}" style="font-size:0.68rem;padding:1px 5px">${b.counts[k]} ${k}</span>`)
-      .join(" ") || `<span class="sev-chip info" style="font-size:0.68rem">Clean</span>`;
-  }
+  if ($("diff-sevs-b")) $("diff-sevs-b").innerHTML = CompareView.sevChips(b.counts, a.counts);
   if ($("diff-meta-b")){
     $("diff-meta-b").innerHTML = `
       <div style="font-size:0.75rem;color:var(--muted)">
@@ -2527,7 +3283,7 @@ function renderDiffView(a, b){
   const statDeltaEl = $("diff-stat-delta");
   if (verdictEl && statDeltaEl){
     if (delta > 0){
-      verdictEl.innerHTML = `<span style="color:#059669">&#9650; Hardened (+${delta} Pts)</span>`;
+      verdictEl.innerHTML = `<span style="color:var(--text-success)">&#9650; Hardened (+${delta} Pts)</span>`;
       statDeltaEl.textContent = `Security posture upgraded from Grade ${a.grade} to ${b.grade}`;
     } else if (delta < 0){
       verdictEl.innerHTML = `<span style="color:#dc2626">&#9660; Degraded (${delta} Pts)</span>`;
@@ -2645,7 +3401,7 @@ function renderDiffView(a, b){
       resList.innerHTML = resolved.map(f => `
         <div class="diff-finding-card resolved">
           <div class="title">
-            <span style="color:#059669">&#10004;</span>
+            <span style="color:var(--text-success)">&#10004;</span>
             <span>${esc(f.title)}</span>
             <span class="sev-chip ${f.severity.toLowerCase()}" style="font-size:0.65rem;padding:0 5px">${esc(f.severity)}</span>
           </div>
@@ -2660,7 +3416,7 @@ function renderDiffView(a, b){
   if (persistList){
     const remaining = [...persisting, ...newInB];
     if (remaining.length === 0){
-      persistList.innerHTML = `<div class="empty" style="color:#059669;font-weight:600">&#10004; Zero security vulnerabilities remaining in hardened capture!</div>`;
+      persistList.innerHTML = `<div class="empty" style="color:var(--text-success);font-weight:600">&#10004; Zero security vulnerabilities remaining in hardened capture!</div>`;
     } else {
       persistList.innerHTML = remaining.map(f => `
         <div class="diff-finding-card persisting">
@@ -3491,7 +4247,7 @@ function renderWifiFindings(findings){
         <span class="chev" aria-hidden="true">&#9662;</span>
       </div>
       <div class="fbody">
-        <p>${esc(f.detail)}</p>
+        <p>${Glossary.mark(esc(f.detail))}</p>
         ${f.reference ? `<div class="ref">${esc(f.reference)}</div>` : ``}
         <div class="fix"><b>Fix:</b> ${esc(f.remediation)}</div>
       </div>
@@ -3837,7 +4593,7 @@ function renderRfSpectrum(networks) {
     advisoryEl.innerHTML = `
       <div class="spectrum-advisory-card recommended">
         <div class="spectrum-advisory-label">Optimal Cleanest Channel</div>
-        <div class="spectrum-advisory-value" style="color:#059669">★ Channel ${cleanestCh}</div>
+        <div class="spectrum-advisory-value" style="color:var(--text-success)">★ Channel ${cleanestCh}</div>
         <div class="spectrum-advisory-desc">${cleanestCci} Co-Channel APs detected. Minimal interference boundary &amp; high SNR headroom.</div>
       </div>
       <div class="spectrum-advisory-card ${connCardClass}">
@@ -3911,7 +4667,7 @@ function renderRfSpectrum(networks) {
     const y = dbmToY(lvl);
     svgContent += `
       <line x1="${marginLeft}" y1="${y.toFixed(1)}" x2="${(marginLeft + plotW).toFixed(1)}" y2="${y.toFixed(1)}" stroke="#1e293b" stroke-dasharray="2 4"/>
-      <text x="${marginLeft - 8}" y="${(y + 4).toFixed(1)}" fill="#64748b" text-anchor="end" font-size="10">${lvl} dBm</text>
+      <text x="${marginLeft - 8}" y="${(y + 4).toFixed(1)}" fill="#76869d" text-anchor="end" font-size="10">${lvl} dBm</text>
     `;
   });
 
@@ -3939,7 +4695,7 @@ function renderRfSpectrum(networks) {
       } else {
         svgContent += `
           <line x1="${x.toFixed(1)}" y1="${yBase}" x2="${x.toFixed(1)}" y2="${yBase + 5}" stroke="#475569"/>
-          <text x="${x.toFixed(1)}" y="${yBase + 18}" fill="#64748b" text-anchor="middle" font-size="10">${ch}</text>
+          <text x="${x.toFixed(1)}" y="${yBase + 18}" fill="#76869d" text-anchor="middle" font-size="10">${ch}</text>
         `;
       }
     }
@@ -3956,7 +4712,7 @@ function renderRfSpectrum(networks) {
 
       svgContent += `
         <line x1="${x.toFixed(1)}" y1="${yBase}" x2="${x.toFixed(1)}" y2="${yBase + 5}" stroke="${isClean ? '#06b6d4' : '#475569'}"/>
-        <text x="${x.toFixed(1)}" y="${yBase + 18}" fill="${isClean ? '#06b6d4' : '#64748b'}" text-anchor="middle" font-size="9">${ch}</text>
+        <text x="${x.toFixed(1)}" y="${yBase + 18}" fill="${isClean ? '#06b6d4' : '#76869d'}" text-anchor="middle" font-size="9">${ch}</text>
       `;
     });
 
@@ -5585,19 +6341,11 @@ async function init(){
     renderPlaybookUI();
   });
 
+  // Copies exactly the plan on screen, which is the same text in live and
+  // static mode. The previous handler read state.remediationPlans (live only,
+  // so static copied nothing) and announced "Copied" when the copy failed.
   const copyBtn = $("btn-playbook-copy");
-  if (copyBtn) copyBtn.addEventListener("click", () => {
-    const currentPlan = (state.remediationPlans || []).find(p => p.platform === state.platform);
-    if (!currentPlan) return;
-    const content = state.playbookMode === "rollback" ? currentPlan.rollback_config : currentPlan.forward_config;
-    navigator.clipboard.writeText(content).then(() => {
-      const old = copyBtn.textContent;
-      copyBtn.textContent = "✔ Copied!";
-      setTimeout(() => copyBtn.textContent = old, 1500);
-    }).catch(() => {
-      alert("Copied to clipboard.");
-    });
-  });
+  if (copyBtn) copyBtn.addEventListener("click", Report.onCopyConfig);
 
   const approveBtn = $("btn-playbook-approve");
   if (approveBtn) approveBtn.addEventListener("click", async () => {
@@ -5864,7 +6612,11 @@ async function init(){
 
   // Reads the baseline store (or the baked demo) independently of the capture
   // selection; not awaited, so a slow store cannot hold up the rest of the page.
+  Glossary.init();
   PostureReplay.init();
+  Report.bind();
+  Upload.init();
+  Present.init();
 
   // Primary Default: IPsec VPN Protocol Analyzer
   switchTab("ipsec");

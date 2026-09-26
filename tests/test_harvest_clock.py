@@ -21,6 +21,7 @@ import pytest
 from cipherguard.api.server import STATIC_DIR
 from cipherguard.core.models import Assessment
 from cipherguard.intel.pqc import SECRECY_LIFETIME, mosca_gap, roadmap
+from tests.jsmodules import module
 
 needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
 
@@ -71,7 +72,9 @@ const out = (x) => process.stdout.write(JSON.stringify(x));
 
 
 def _node(body: str, data) -> Any:
-    script = _PRELUDE + _clock_source() + "\n" + body
+    # the clock formats through Fmt and marks terms through Glossary
+    script = (_PRELUDE + module("Fmt") + "\n" + module("Glossary") + "\n"
+              + _clock_source() + "\n" + body)
     proc = subprocess.run(["node", "-e", script], input=json.dumps(data),
                           capture_output=True, text=True, encoding="utf-8", timeout=30)
     assert proc.returncode == 0, proc.stderr
@@ -156,14 +159,14 @@ def test_counter_arithmetic_and_units():
       one_second: HarvestClock.harvested(1e6, 8, 1000),
       no_rate: HarvestClock.harvested(1234, 0, 60000),
       clock_skew: HarvestClock.harvested(500, 100, -5000),
-      units: [0, 999, 1000, 1146388, 2.5e12, 5e18].map(HarvestClock.formatBytes),
+      units: [0, 999, 1000, 1146388, 2.5e12, 5e18].map(Fmt.bytes),
       steps: [HarvestClock.stepMs(true), HarvestClock.stepMs(false)],
     });""", None)
     assert got["one_second"] == 2_000_000      # 8 Mb/s is 1 MB/s
     assert got["no_rate"] == 1234
     assert got["clock_skew"] == 500            # a clock stepped back never un-harvests
-    assert got["units"] == ["0 B", "999 B", "1.000 kB", "1.146 MB", "2.500 TB",
-                            "5000.000 PB"]
+    assert got["units"] == ["0 B", "999 B", "1.0 KB", "1.1 MB", "2.5 TB",
+                            "5000000.0 TB"]
     reduced, smooth = got["steps"]
     assert reduced >= 1000 > smooth
 
@@ -233,8 +236,8 @@ def test_mounted_clock_steps_under_reduced_motion(reduced):
         assert "updates every" not in first["rate"]
         assert got["flipped"] == 5000
     # only the quantum-exposed link's rate drives the counter
-    assert "50.55 Mb/s" in first["rate"] and "398.376 kB observed" in first["rate"]
-    assert first["bytes"].endswith("kB") or first["bytes"].endswith("MB")
+    assert "50.5 Mb/s" in first["rate"] and "398.4 KB observed" in first["rate"]
+    assert first["bytes"].endswith("KB") or first["bytes"].endswith("MB")
 
 
 @pytest.mark.no_model
@@ -285,7 +288,7 @@ def test_an_old_static_export_without_the_class_table_still_renders():
     assert got["first"]["disabled"] is True
     assert re.findall(r'value="(\w+)"', got["first"]["options"]) == ["official"]
     assert got["first"]["deadline"] == "1 yr 00 mo"
-    assert "50.55 Mb/s" in got["first"]["rate"]    # summed from the links instead
+    assert "50.5 Mb/s" in got["first"]["rate"]     # summed from the links instead
 
 
 @pytest.mark.no_model

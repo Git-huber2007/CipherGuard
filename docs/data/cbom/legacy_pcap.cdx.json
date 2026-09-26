@@ -1,0 +1,513 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:0614d750-1a96-4b00-af79-ba111c3c339d",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-09-26T10:20:16+00:00",
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "name": "CipherGuard",
+          "version": "1.0.0",
+          "description": "Passive IPsec cryptographic inventory derived from observed network traffic"
+        }
+      ]
+    },
+    "component": {
+      "type": "application",
+      "bom-ref": "crypto:4a7cb526ff0a6498",
+      "name": "IPsec deployment observed in legacy.pcap"
+    },
+    "properties": [
+      {
+        "name": "cipherguard:postureScore",
+        "value": "10"
+      },
+      {
+        "name": "cipherguard:grade",
+        "value": "E"
+      },
+      {
+        "name": "cipherguard:derivation",
+        "value": "passive-traffic"
+      }
+    ]
+  },
+  "components": [
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "crypto:fd478b64da1c7d45",
+      "name": "IPsec IKEv1 \u2014 203.0.113.7 <-> 198.51.100.4",
+      "cryptoProperties": {
+        "assetType": "protocol",
+        "protocolProperties": {
+          "type": "ipsec",
+          "version": "1.0",
+          "cryptoRefArray": [
+            "crypto:daaed641ae7a5051",
+            "crypto:1db6461047c6ac10",
+            "crypto:977cae9eaf505904",
+            "crypto:b55fc0ca53bc7a72"
+          ]
+        }
+      },
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "observed"
+        },
+        {
+          "name": "cipherguard:vendorFamily",
+          "value": "cisco"
+        },
+        {
+          "name": "cipherguard:peer",
+          "value": "203.0.113.7 <-> 198.51.100.4"
+        },
+        {
+          "name": "cipherguard:classicalSecurityBits",
+          "value": "64"
+        },
+        {
+          "name": "cipherguard:quantumSecurityBits",
+          "value": "0"
+        },
+        {
+          "name": "cipherguard:quantumSafe",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "crypto:daaed641ae7a5051",
+      "name": "3DES_CBC",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "block-cipher",
+          "executionEnvironment": "hardware",
+          "implementationPlatform": "generic",
+          "cryptoFunctions": [
+            "encrypt",
+            "decrypt"
+          ]
+        },
+        "oid": null
+      },
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "observed"
+        },
+        {
+          "name": "cipherguard:source",
+          "value": "IKE cleartext header"
+        },
+        {
+          "name": "cipherguard:peer",
+          "value": "203.0.113.7 <-> 198.51.100.4"
+        },
+        {
+          "name": "cipherguard:transformType",
+          "value": "ENCR"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "crypto:1db6461047c6ac10",
+      "name": "PRF_HMAC_MD5",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "prf",
+          "executionEnvironment": "hardware",
+          "implementationPlatform": "generic",
+          "cryptoFunctions": [
+            "generate"
+          ]
+        },
+        "oid": null
+      },
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "observed"
+        },
+        {
+          "name": "cipherguard:source",
+          "value": "IKE cleartext header"
+        },
+        {
+          "name": "cipherguard:peer",
+          "value": "203.0.113.7 <-> 198.51.100.4"
+        },
+        {
+          "name": "cipherguard:transformType",
+          "value": "PRF"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "crypto:977cae9eaf505904",
+      "name": "AUTH_HMAC_MD5",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "mac",
+          "executionEnvironment": "hardware",
+          "implementationPlatform": "generic",
+          "cryptoFunctions": [
+            "tag",
+            "verify"
+          ]
+        },
+        "oid": null
+      },
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "observed"
+        },
+        {
+          "name": "cipherguard:source",
+          "value": "IKE cleartext header"
+        },
+        {
+          "name": "cipherguard:peer",
+          "value": "203.0.113.7 <-> 198.51.100.4"
+        },
+        {
+          "name": "cipherguard:transformType",
+          "value": "INTEG"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "crypto:b55fc0ca53bc7a72",
+      "name": "1024-bit MODP",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "key-agree",
+          "executionEnvironment": "hardware",
+          "implementationPlatform": "generic",
+          "cryptoFunctions": [
+            "keygen",
+            "key-derive"
+          ],
+          "parameterSetIdentifier": "1024-bit MODP",
+          "nistQuantumSecurityLevel": 0,
+          "classicalSecurityLevel": 80
+        },
+        "oid": null
+      },
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "observed"
+        },
+        {
+          "name": "cipherguard:source",
+          "value": "IKE cleartext header"
+        },
+        {
+          "name": "cipherguard:peer",
+          "value": "203.0.113.7 <-> 198.51.100.4"
+        },
+        {
+          "name": "cipherguard:transformType",
+          "value": "DH"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "crypto:a4a1eb238c4c6257",
+      "name": "ESP SA 0x73cf256d \u2014 64-bit block cipher",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "ae",
+          "executionEnvironment": "unknown",
+          "implementationPlatform": "generic",
+          "cryptoFunctions": [
+            "encrypt",
+            "decrypt"
+          ]
+        }
+      },
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "inferred"
+        },
+        {
+          "name": "cipherguard:source",
+          "value": "RFC 4303 framing analysis"
+        },
+        {
+          "name": "cipherguard:confidence",
+          "value": "0.579"
+        },
+        {
+          "name": "cipherguard:candidates",
+          "value": "3DES-CBC / HMAC-MD5-96, DES-CBC / HMAC-SHA1-96"
+        },
+        {
+          "name": "cipherguard:framingSignature",
+          "value": "block 8, IV 8, ICV 12"
+        },
+        {
+          "name": "cipherguard:packetsObserved",
+          "value": "520"
+        },
+        {
+          "name": "cipherguard:peer",
+          "value": "203.0.113.7 -> 198.51.100.4"
+        }
+      ]
+    }
+  ],
+  "vulnerabilities": [
+    {
+      "bom-ref": "crypto:6b102a526e1b865a",
+      "id": "ESP-001",
+      "source": {
+        "name": "CipherGuard"
+      },
+      "ratings": [
+        {
+          "severity": "critical",
+          "method": "other"
+        }
+      ],
+      "description": "ESP tunnel using 64-bit block cipher",
+      "detail": "Packet framing on this SA matches block 8, IV 8, ICV 12, which identifies 3DES-CBC / HMAC-MD5-96 or DES-CBC / HMAC-SHA1-96 (framing-identical, not separable passively). 64-bit block size is vulnerable to Sweet32 birthday collisions on long-lived tunnels; both DES and 3DES are withdrawn. Inferred from 520 packets at 100% confidence in the framing class.",
+      "recommendation": "Reconfigure the child SA proposal to AES-GCM-256 and confirm from the gateway's own SA table.",
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "inferred"
+        },
+        {
+          "name": "cipherguard:reference",
+          "value": "RFC 4303 s2; RFC 8221; NIST SP 800-77 Rev. 1 s4.1"
+        }
+      ]
+    },
+    {
+      "bom-ref": "crypto:4d22fdc2709ef809",
+      "id": "IKE-002",
+      "source": {
+        "name": "CipherGuard"
+      },
+      "ratings": [
+        {
+          "severity": "critical",
+          "method": "other"
+        }
+      ],
+      "description": "IKEv1 Aggressive Mode",
+      "detail": "Aggressive Mode transmits the responder's identity and a hash derived from the pre-shared key in the clear, in the first two messages. Anyone who can capture the handshake can mount an offline dictionary attack against the PSK without touching the gateway.",
+      "recommendation": "Disable Aggressive Mode. Use IKEv2 with certificate authentication, or at minimum IKEv1 Main Mode with a high-entropy PSK.",
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "observed"
+        },
+        {
+          "name": "cipherguard:reference",
+          "value": "NIST SP 800-77 Rev. 1 s3.2.1; RFC 2409 s5.4"
+        }
+      ]
+    },
+    {
+      "bom-ref": "crypto:24e107ca1b584503",
+      "id": "IKE-004",
+      "source": {
+        "name": "CipherGuard"
+      },
+      "ratings": [
+        {
+          "severity": "critical",
+          "method": "other"
+        }
+      ],
+      "description": "Prohibited IKE encryption algorithm: 3DES_CBC",
+      "detail": "64-bit block invites Sweet32 birthday collisions; MUST NOT per RFC 8247. This protects the IKE control channel itself, so a break exposes the negotiated child SA keys.",
+      "recommendation": "Configure AES-GCM-256, or AES-CBC-256 where AEAD is unavailable.",
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "observed"
+        },
+        {
+          "name": "cipherguard:reference",
+          "value": "RFC 8247 s2.1; NIST SP 800-131A Rev. 2"
+        }
+      ]
+    },
+    {
+      "bom-ref": "crypto:aff9982251ffa0b1",
+      "id": "IKE-006",
+      "source": {
+        "name": "CipherGuard"
+      },
+      "ratings": [
+        {
+          "severity": "critical",
+          "method": "other"
+        }
+      ],
+      "description": "Prohibited Diffie-Hellman group 2 (1024-bit MODP)",
+      "detail": "1024-bit MODP: within reach of nation-state precomputation (Logjam). A single precomputation against a standard modulus breaks every session that ever used it, including traffic already recorded.",
+      "recommendation": "Configure Group 19 (256-bit ECP) or Group 14 at minimum.",
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "observed"
+        },
+        {
+          "name": "cipherguard:reference",
+          "value": "RFC 8247 s2.4; NIST SP 800-77 Rev. 1 s3.3"
+        }
+      ]
+    },
+    {
+      "bom-ref": "crypto:2a8b96c1cf031738",
+      "id": "IKE-012",
+      "source": {
+        "name": "CipherGuard"
+      },
+      "ratings": [
+        {
+          "severity": "critical",
+          "method": "other"
+        }
+      ],
+      "description": "Association provides only 64-bit security",
+      "detail": "Component strengths: encryption 112 bits, prf 64 bits, integrity 64 bits, key_exchange 80 bits. The association is bounded by its prf at 64 bits, which is graded 'broken'. A strong cipher does not compensate for a weak key exchange: an attacker who recovers the session key never has to attack the cipher at all.",
+      "recommendation": "Raise the prf to at least the 128-bit level. The whole suite should be re-specified together rather than patched component by component.",
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "observed"
+        },
+        {
+          "name": "cipherguard:reference",
+          "value": "NIST SP 800-57 Part 1 Rev. 5, Table 2"
+        }
+      ]
+    },
+    {
+      "bom-ref": "crypto:121d86969ae0aee7",
+      "id": "IKE-013",
+      "source": {
+        "name": "CipherGuard"
+      },
+      "ratings": [
+        {
+          "severity": "critical",
+          "method": "other"
+        }
+      ],
+      "description": "64-bit block cipher already exceeds the Sweet32 birthday bound",
+      "detail": "The negotiated cipher has a 64-bit block, so ciphertext blocks begin colliding after roughly 34.4 GB under a single key. With a 48-hour rekey interval this SA processes about 1029.01 GB per key, which is 29.948x the bound. At the observed 47.64 Mbps this SA reaches the bound 96 minutes after each rekey.",
+      "recommendation": "Move to a 128-bit block cipher (AES-GCM-256). If that cannot be scheduled immediately, cut the rekey interval so that less than 34.4 GB passes under any single key \u2014 that is mitigation, not a fix.",
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "observed"
+        },
+        {
+          "name": "cipherguard:reference",
+          "value": "Bhargavan & Leurent, Sweet32 (CCS 2016); RFC 8247 s2.1"
+        }
+      ]
+    },
+    {
+      "bom-ref": "crypto:6269624f4be53dc9",
+      "id": "IKE-001",
+      "source": {
+        "name": "CipherGuard"
+      },
+      "ratings": [
+        {
+          "severity": "high",
+          "method": "other"
+        }
+      ],
+      "description": "IKEv1 in use",
+      "detail": "The gateway negotiated IKEv1, which has been formally deprecated. It has no built-in DoS cookie mechanism, no reliable fragmentation, and no path to the RFC 8784 post-quantum pre-shared key extension.",
+      "recommendation": "Migrate the tunnel to IKEv2 and disable IKEv1 on the gateway.",
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "observed"
+        },
+        {
+          "name": "cipherguard:reference",
+          "value": "RFC 9395 (IKEv1 deprecation); NIST SP 800-77 Rev. 1 s3.2"
+        }
+      ]
+    },
+    {
+      "bom-ref": "crypto:ae0f91030c9d4be4",
+      "id": "IKE-005",
+      "source": {
+        "name": "CipherGuard"
+      },
+      "ratings": [
+        {
+          "severity": "high",
+          "method": "other"
+        }
+      ],
+      "description": "Prohibited integrity algorithm: AUTH_HMAC_MD5",
+      "detail": "MD5 is collision-broken; MUST NOT per RFC 8247",
+      "recommendation": "Configure AUTH_HMAC_SHA2_256_128 or stronger.",
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "observed"
+        },
+        {
+          "name": "cipherguard:reference",
+          "value": "RFC 8247 s2.2"
+        }
+      ]
+    },
+    {
+      "bom-ref": "crypto:ae0f91030c9d4be4",
+      "id": "IKE-005",
+      "source": {
+        "name": "CipherGuard"
+      },
+      "ratings": [
+        {
+          "severity": "high",
+          "method": "other"
+        }
+      ],
+      "description": "Prohibited PRF: PRF_HMAC_MD5",
+      "detail": "MD5-based PRF, MUST NOT per RFC 8247",
+      "recommendation": "Configure PRF_HMAC_SHA2_256 or stronger.",
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "observed"
+        },
+        {
+          "name": "cipherguard:reference",
+          "value": "RFC 8247 s2.3"
+        }
+      ]
+    }
+  ]
+}

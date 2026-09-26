@@ -279,4 +279,7 @@ def test_renderer_reads_server_structures_and_never_truncates_spis():
     html = _read("index.html")
     assert 'data-fview="rule"' in html and 'data-fview="link"' in html
     lede = re.search(r'<p class="ribbon-lede">(.*?)</p>', html, re.S).group(1)
-    assert len(re.sub(r"<[^>]+>|\s+", " ", lede).strip()) <= 120
+    # the visible text: tags removed (not turned into spaces, which counted
+    # inline markup such as glossary terms as extra characters), spaces collapsed
+    visible = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", lede)).strip()
+    assert len(visible) <= 120, visible

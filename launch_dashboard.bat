@@ -3,6 +3,11 @@ setlocal enabledelayedexpansion
 title CipherGuard - Dual-Layer Wireless and VPN Security Platform
 cls
 
+REM Force UTF-8 console output for Unicode SSIDs, symbols, and telemetry
+chcp 65001 >nul 2>nul
+set "PYTHONIOENCODING=utf-8"
+set "PYTHONUTF8=1"
+
 REM Ensure we are running from the project directory containing cipherguard
 if exist "%~dp0cipherguard\cli.py" (
     cd /d "%~dp0"

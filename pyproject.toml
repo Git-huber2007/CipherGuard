@@ -29,7 +29,11 @@ cipherguard = "cipherguard.cli:main"
 include = ["cipherguard*"]
 
 [tool.setuptools.package-data]
-"cipherguard.api" = ["static/*.html", "static/css/*.css", "static/js/*.js"]
+"cipherguard.api" = [
+    "static/*.html", "static/*.json", "static/*.ico", "static/site.webmanifest",
+    "static/css/*.css", "static/js/*.js", "static/img/*",
+    "static/fonts/*.woff2", "static/fonts/*.txt",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

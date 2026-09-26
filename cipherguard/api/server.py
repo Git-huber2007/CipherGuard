@@ -26,9 +26,9 @@ from ..core.audit_log import AuditLog
 
 from ..audit.engine import rule_catalogue
 from ..ml.classifier import SuiteClassifier
-from ..pipeline import analyze, throughput_estimate
+from ..pipeline import analyze
 from ..remediation import PlanStore, apply_plan, build_all_plans
-from ..remediation.synth import PLATFORM_NAMES, detect_platforms, synthesize
+from ..remediation.synth import detect_platforms, synthesize
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 ALLOWED_SUFFIXES = (".pcap", ".pcapng", ".cap")
@@ -195,27 +195,21 @@ def create_app(
         for name in sorted(os.listdir(capture_dir)):
             if name.endswith(ALLOWED_SUFFIXES):
                 full = os.path.join(capture_dir, name)
-                items.append(
-                    {
-                        "name": name,
-                        "size_kb": round(os.path.getsize(full) / 1024, 1),
-                    }
-                )
+                size = os.path.getsize(full)
+                # size_kb (1024-based) is kept for older clients; the dashboard
+                # formats size_bytes itself, in the one unit convention it uses
+                items.append({"name": name, "size_bytes": size,
+                              "size_kb": round(size / 1024, 1)})
         return {"captures": items, "directory": capture_dir}
 
     @app.post("/api/analyze", dependencies=guard)
     def run_analysis(req: AnalyzeRequest) -> JSONResponse:
-        assessment = _run(req.capture, req.min_packets, tuple(sorted(req.disabled)))
-        log.assessment(assessment, _resolve(req.capture), source="api")
-        payload = assessment.to_dict()
-        payload["throughput"] = throughput_estimate(assessment)
-        payload["platforms"] = [
-            {"id": p, "name": PLATFORM_NAMES[p]} for p in detect_platforms(assessment)
-        ]
-        from ..intel.pqc import roadmap as _roadmap
+        from ..export.payload import build_payload
 
-        payload["roadmap"] = _roadmap(assessment)
-        return JSONResponse(payload)
+        path = _resolve(req.capture)
+        assessment = _run(req.capture, req.min_packets, tuple(sorted(req.disabled)))
+        log.assessment(assessment, path, source="api")
+        return JSONResponse(build_payload(assessment, path, model_dir))
 
     @app.post("/api/remediate", response_class=PlainTextResponse, dependencies=guard)
     def remediate(req: RemediateRequest) -> str:
@@ -229,6 +223,9 @@ def create_app(
     # Uploads need python-multipart. It is an optional extra, and a missing
     # optional dependency should cost one endpoint, not the whole dashboard —
     # registering it unguarded takes the entire app down at import time.
+    # /api/health reports the outcome, so the dashboard never shows an upload
+    # control that cannot work.
+    uploads_enabled = False
     try:
         if not allow_upload:
             raise ImportError("uploads disabled by configuration")
@@ -274,7 +271,9 @@ def create_app(
                 if os.path.exists(dest):
                     os.unlink(dest)  # never leave a partial capture to be analysed
                 raise
-            return {"name": name, "size_kb": round(written / 1024, 1)}
+            return {"name": name, "size_bytes": written, "size_kb": round(written / 1024, 1)}
+
+        uploads_enabled = True
 
     except ImportError:  # pragma: no cover
 
@@ -608,15 +607,10 @@ def create_app(
         snapshot_path = os.path.join(capture_dir, snapshot_name)
         global_sniffer.snapshot_to_pcap(snapshot_path)
 
+        from ..export.payload import build_payload
+
         a = analyze(snapshot_path, model_dir=model_dir, min_esp_packets=1)
-        payload = a.to_dict()
-        payload["throughput"] = throughput_estimate(a)
-        payload["platforms"] = [
-            {"id": p, "name": PLATFORM_NAMES[p]} for p in detect_platforms(a)
-        ]
-        from ..intel.pqc import roadmap as pqc_roadmap
-        payload["roadmap"] = pqc_roadmap(a)
-        return payload
+        return build_payload(a, snapshot_path, model_dir)
 
 
 
@@ -637,6 +631,8 @@ def create_app(
             "model_trained": SuiteClassifier.is_trained(model_dir),
             "auth_required": auth_token is not None,
             "audit_log": audit_log is not None,
+            "uploads": uploads_enabled,
+            "max_upload_bytes": MAX_UPLOAD_BYTES if uploads_enabled else None,
         }
 
     return app

@@ -1,0 +1,278 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:55480012-7d3d-429c-99b7-3e2d1437c318",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-09-26T10:20:16+00:00",
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "name": "CipherGuard",
+          "version": "1.0.0",
+          "description": "Passive IPsec cryptographic inventory derived from observed network traffic"
+        }
+      ]
+    },
+    "component": {
+      "type": "application",
+      "bom-ref": "crypto:8e660d64577a9f52",
+      "name": "IPsec deployment observed in hardened.pcap"
+    },
+    "properties": [
+      {
+        "name": "cipherguard:postureScore",
+        "value": "85"
+      },
+      {
+        "name": "cipherguard:grade",
+        "value": "B"
+      },
+      {
+        "name": "cipherguard:derivation",
+        "value": "passive-traffic"
+      }
+    ]
+  },
+  "components": [
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "crypto:697461b43cc1fb3b",
+      "name": "IPsec IKEv2 \u2014 203.0.113.55 <-> 198.51.100.77",
+      "cryptoProperties": {
+        "assetType": "protocol",
+        "protocolProperties": {
+          "type": "ipsec",
+          "version": "2.0",
+          "cryptoRefArray": [
+            "crypto:416bdd4e3c9f2bda",
+            "crypto:ef1c47fa146702a0",
+            "crypto:2dfd5e0c74c906de",
+            "crypto:f7a563eea48402e8"
+          ]
+        }
+      },
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "observed"
+        },
+        {
+          "name": "cipherguard:vendorFamily",
+          "value": "strongswan"
+        },
+        {
+          "name": "cipherguard:peer",
+          "value": "203.0.113.55 <-> 198.51.100.77"
+        },
+        {
+          "name": "cipherguard:classicalSecurityBits",
+          "value": "128"
+        },
+        {
+          "name": "cipherguard:quantumSecurityBits",
+          "value": "0"
+        },
+        {
+          "name": "cipherguard:quantumSafe",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "crypto:416bdd4e3c9f2bda",
+      "name": "ENCR_AES_GCM_16-256",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "block-cipher",
+          "executionEnvironment": "software",
+          "implementationPlatform": "generic",
+          "cryptoFunctions": [
+            "encrypt",
+            "decrypt"
+          ],
+          "parameterSetIdentifier": "256"
+        },
+        "oid": null
+      },
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "observed"
+        },
+        {
+          "name": "cipherguard:source",
+          "value": "IKE cleartext header"
+        },
+        {
+          "name": "cipherguard:peer",
+          "value": "203.0.113.55 <-> 198.51.100.77"
+        },
+        {
+          "name": "cipherguard:transformType",
+          "value": "ENCR"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "crypto:ef1c47fa146702a0",
+      "name": "PRF_HMAC_SHA2_256",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "prf",
+          "executionEnvironment": "software",
+          "implementationPlatform": "generic",
+          "cryptoFunctions": [
+            "generate"
+          ]
+        },
+        "oid": "1.2.840.113549.2.9"
+      },
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "observed"
+        },
+        {
+          "name": "cipherguard:source",
+          "value": "IKE cleartext header"
+        },
+        {
+          "name": "cipherguard:peer",
+          "value": "203.0.113.55 <-> 198.51.100.77"
+        },
+        {
+          "name": "cipherguard:transformType",
+          "value": "PRF"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "crypto:2dfd5e0c74c906de",
+      "name": "Curve25519",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "key-agree",
+          "executionEnvironment": "software",
+          "implementationPlatform": "generic",
+          "cryptoFunctions": [
+            "keygen",
+            "key-derive"
+          ],
+          "parameterSetIdentifier": "Curve25519",
+          "nistQuantumSecurityLevel": 0,
+          "classicalSecurityLevel": 128
+        },
+        "oid": null
+      },
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "observed"
+        },
+        {
+          "name": "cipherguard:source",
+          "value": "IKE cleartext header"
+        },
+        {
+          "name": "cipherguard:peer",
+          "value": "203.0.113.55 <-> 198.51.100.77"
+        },
+        {
+          "name": "cipherguard:transformType",
+          "value": "DH"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "crypto:f7a563eea48402e8",
+      "name": "ESN",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "other",
+          "executionEnvironment": "software",
+          "implementationPlatform": "generic",
+          "cryptoFunctions": [
+            "other"
+          ]
+        },
+        "oid": null
+      },
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "observed"
+        },
+        {
+          "name": "cipherguard:source",
+          "value": "IKE cleartext header"
+        },
+        {
+          "name": "cipherguard:peer",
+          "value": "203.0.113.55 <-> 198.51.100.77"
+        },
+        {
+          "name": "cipherguard:transformType",
+          "value": "ESN"
+        }
+      ]
+    },
+    {
+      "type": "cryptographic-asset",
+      "bom-ref": "crypto:c0d9f01b1c71a4a1",
+      "name": "ESP SA 0xae97d9db \u2014 AEAD or counter mode",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "ae",
+          "executionEnvironment": "unknown",
+          "implementationPlatform": "generic",
+          "cryptoFunctions": [
+            "encrypt",
+            "decrypt"
+          ]
+        }
+      },
+      "properties": [
+        {
+          "name": "cipherguard:provenance",
+          "value": "inferred"
+        },
+        {
+          "name": "cipherguard:source",
+          "value": "RFC 4303 framing analysis"
+        },
+        {
+          "name": "cipherguard:confidence",
+          "value": "0.311"
+        },
+        {
+          "name": "cipherguard:candidates",
+          "value": "AES-CTR-128 / HMAC-SHA2-256-128, AES-GCM-128 (ICV 16), AES-GCM-256 (ICV 16), ChaCha20-Poly1305"
+        },
+        {
+          "name": "cipherguard:framingSignature",
+          "value": "block 1 (4-byte aligned), IV 8, ICV 16"
+        },
+        {
+          "name": "cipherguard:packetsObserved",
+          "value": "740"
+        },
+        {
+          "name": "cipherguard:peer",
+          "value": "203.0.113.55 -> 198.51.100.77"
+        }
+      ]
+    }
+  ],
+  "vulnerabilities": []
+}

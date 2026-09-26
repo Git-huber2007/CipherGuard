@@ -18,6 +18,7 @@ import shutil
 import subprocess
 
 import pytest
+from tests.jsmodules import module
 
 from cipherguard.core import framing
 from cipherguard.core.constants import ESP_SUITES
@@ -292,6 +293,7 @@ def test_panel_renders_the_working_in_order():
         "const esc = s => String(s == null ? '' : s).replace(/[&<>\"']/g, "
         "c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\n"
         "const $ = () => null; const window = {};\n"
+        + module("Fmt") + "\n"   # the panel formats percentages through Fmt
         + _panel_source()
         + "\nprocess.stdout.write(EvidencePanel.render(JSON.parse(require('fs')"
           ".readFileSync(0, 'utf8'))));\n"

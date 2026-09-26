@@ -34,9 +34,6 @@
 <link rel="manifest" href="/static/site.webmanifest">
 <meta name="theme-color" content="#1b6e8c">
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/dashboard.css">
 </head>
 <body>
@@ -62,6 +59,10 @@
       </button>
       <button type="button" id="btn-cbom-toggle" class="shortcuts-trigger-btn cbom-trigger-btn" onclick="openCbomModal()" title="View Sovereign Cryptographic Bill of Materials (CBOM)" aria-haspopup="dialog">
         <span>📜</span> <span>CBOM</span>
+      </button>
+      <button type="button" id="btn-present" class="shortcuts-trigger-btn" aria-pressed="false"
+              title="Presentation mode: step through the assessment with the arrow keys (or add ?present to the URL)">
+        Present
       </button>
     </div>
     <div class="controls" id="header-controls">
@@ -186,13 +187,13 @@
           <div class="dial">
             <svg width="118" height="118" viewBox="0 0 118 118" role="img" aria-label="Wireless Cryptographic Posture Score Dial">
               <title>Wireless Cryptographic Posture Score Dial</title>
-              <circle cx="59" cy="59" r="49" fill="none" stroke="#dfe7ec" stroke-width="11"/>
+              <circle class="dial-track" cx="59" cy="59" r="49" fill="none" stroke="#dfe7ec" stroke-width="11"/>
               <circle id="wifi-arc" cx="59" cy="59" r="49" fill="none" stroke="var(--ok)"
                       stroke-width="11" stroke-linecap="butt"
                       stroke-dasharray="0 999" transform="rotate(-90 59 59)"/>
               <text id="wifi-dialnum" x="59" y="65" text-anchor="middle"
                     font-family="IBM Plex Mono, monospace" font-size="26"
-                    font-weight="600" fill="#14212b">&mdash;</text>
+                    font-weight="600" fill="#14212b" class="dial-num">&mdash;</text>
             </svg>
           </div>
           <div class="score-meta">
@@ -333,7 +334,7 @@
     <section class="panel" style="margin-bottom:18px">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:10px">
         <div>
-          <h2 style="margin-bottom:2px">Visible Wi-Fi Networks in Range <span class="domain-tag obs">observed</span></h2>
+          <h2 style="margin-bottom:2px">Visible Wi-Fi Networks in Range <span class="domain-tag obs" data-gl="observed">observed</span></h2>
           <div class="sub" id="wifi-networks-subtitle">Nearby access points discovered across 2.4 GHz, 5 GHz, and 6 GHz spectrum.</div>
         </div>
         <div class="wifi-view-toggle-group">
@@ -404,10 +405,10 @@
 
     <!-- IPsec Single Capture Analysis Mode -->
     <div id="ipsec-single-view">
-      <section class="ribbon-block" aria-labelledby="ribbon-title">
+      <section class="ribbon-block" id="ribbon-block" aria-labelledby="ribbon-title">
         <p class="ribbon-lede">
-          <strong>Left of the key boundary is parsed</strong> from cleartext.
-          <strong>Right of it is encrypted</strong>: inferred from framing, never decrypted.
+          <strong>Left of the key boundary is <span data-gl="observed">parsed</span></strong> from cleartext.
+          <strong>Right of it is encrypted</strong>: <span data-gl="inferred">inferred</span> from framing, never decrypted.
         </p>
         <div class="ribbon-head">
           <h2 id="ribbon-title" class="ribbon-title">One link on the wire</h2>
@@ -420,21 +421,33 @@
         </div>
       </section>
 
+      <!-- Shown only when the server reports uploads enabled; never in the static build -->
+      <section class="upload-zone" id="upload-zone" aria-labelledby="upload-title" hidden>
+        <div class="upload-text">
+          <h2 id="upload-title" class="upload-title">Assess your own capture</h2>
+          <p class="upload-hint">Drop a .pcap, .pcapng or .cap file anywhere on this page, or choose one.
+            Up to <span id="upload-limit">512 MB</span>.</p>
+        </div>
+        <button type="button" class="btn btn-secondary" id="upload-pick">Choose capture file&hellip;</button>
+        <input type="file" id="upload-input" accept=".pcap,.pcapng,.cap" class="visually-hidden" tabindex="-1" aria-hidden="true">
+        <div class="upload-status" id="upload-status" role="status" aria-live="polite"></div>
+      </section>
+
       <div class="grid" style="margin-bottom:18px">
-        <section class="panel">
+        <section class="panel" id="score-panel">
           <h2>Cryptographic posture</h2>
           <div class="sub" id="capmeta">Select a capture and run an assessment.</div>
           <div class="scoreline">
             <div class="dial">
               <svg width="118" height="118" viewBox="0 0 118 118" role="img" aria-labelledby="dialtitle">
                 <title id="dialtitle">Posture score</title>
-                <circle cx="59" cy="59" r="49" fill="none" stroke="#dfe7ec" stroke-width="11"/>
+                <circle class="dial-track" cx="59" cy="59" r="49" fill="none" stroke="#dfe7ec" stroke-width="11"/>
                 <circle id="arc" cx="59" cy="59" r="49" fill="none" stroke="var(--ok)"
                         stroke-width="11" stroke-linecap="butt"
                         stroke-dasharray="0 999" transform="rotate(-90 59 59)"/>
                 <text id="dialnum" x="59" y="65" text-anchor="middle"
                       font-family="IBM Plex Mono, monospace" font-size="26"
-                      font-weight="600" fill="#14212b">&mdash;</text>
+                      font-weight="600" fill="#14212b" class="dial-num">&mdash;</text>
               </svg>
             </div>
             <div class="score-meta">
@@ -461,19 +474,19 @@
 
       <div class="grid cols-2" style="margin-bottom:18px">
         <section class="panel">
-          <h2>IKE security associations <span class="domain-tag obs">observed</span></h2>
+          <h2><span data-gl="ike">IKE</span> security associations <span class="domain-tag obs" data-gl="observed">observed</span></h2>
           <div class="sub">Transform sets read from IKE_SA_INIT and Main/Aggressive Mode.</div>
           <div id="sessions"><div class="empty">No sessions yet.</div></div>
         </section>
 
         <section class="panel">
-          <h2>ESP tunnels <span class="domain-tag inf">inferred</span></h2>
+          <h2><span data-gl="esp">ESP</span> tunnels <span class="domain-tag inf" data-gl="inferred">inferred</span></h2>
           <div class="sub">Suite deduced from RFC 4303 framing. No payload is decrypted.</div>
           <div id="flows"><div class="empty">No tunnels yet.</div></div>
         </section>
       </div>
 
-      <section class="panel" style="margin-bottom:18px">
+      <section class="panel" id="findings-panel" style="margin-bottom:18px">
         <div class="findings-head">
           <h2>Findings</h2>
           <div class="seg" role="group" aria-label="Group findings">
@@ -486,11 +499,11 @@
       </section>
 
       <section class="panel" style="margin-bottom:18px">
-        <h2>Post-quantum exposure <span class="domain-tag obs">observed</span></h2>
+        <h2>Post-quantum exposure <span class="domain-tag obs" data-gl="observed">observed</span></h2>
         <div class="sub" id="pqsub">Links ranked by what an adversary recording traffic today could read later.</div>
         <div class="hclock" id="hclock" role="group" aria-label="Harvest clock" hidden>
           <div class="hclock-read">
-            <div class="hclock-label">Harvestable on quantum-exposed links</div>
+            <div class="hclock-label"><span data-gl="hndl">Harvestable</span> on quantum-exposed links</div>
             <div class="hclock-value" id="hclock-bytes">&mdash;</div>
             <div class="hclock-meta" id="hclock-rate"></div>
           </div>
@@ -685,7 +698,7 @@
         </div>
       </section>
 
-      <section class="panel remediation-panel">
+      <section class="panel remediation-panel" id="remediation-panel">
         <div class="remediation-header">
           <div>
             <h2>Automated Hardening &amp; Remediation Playbooks <span class="domain-tag obs" id="remediation-count-tag">4 Vendors</span></h2>
@@ -709,6 +722,8 @@
           </div>
           <div class="playbook-actions">
             <button id="btn-playbook-copy" class="ghost" type="button">&#128203; Copy</button>
+            <button id="btn-playbook-download" class="ghost" type="button">Download .conf</button>
+            <span class="copy-status" id="playbook-copy-status" role="status" aria-live="polite"></span>
             <button id="btn-playbook-dryrun" class="ghost" type="button">&#9874; Dry-Run Validate</button>
             <button id="btn-playbook-approve" class="solid-btn" type="button">&#9997; Approve Plan</button>
           </div>
@@ -723,6 +738,31 @@
         </div>
 
         <pre id="remediation" class="playbook-pre">Run an assessment to generate a hardening plan.</pre>
+      </section>
+
+      <section class="panel provenance-panel" id="provenance-panel" aria-labelledby="provenance-title">
+        <h2 id="provenance-title">Report and provenance</h2>
+        <div class="sub">What was assessed, by which model, with what result. Computed on the server,
+          never in this page.</div>
+        <div class="downloads" id="downloads" role="group" aria-label="Downloads">
+          <a class="btn btn-secondary" id="dl-report" href="#" download>Download JSON report</a>
+          <a class="btn btn-secondary" id="dl-cbom" href="#" download>Download CBOM (CycloneDX)</a>
+          <a class="btn btn-secondary" id="dl-config" href="#" download>Download hardening config</a>
+          <span class="copy-status" id="dl-status" role="status" aria-live="polite"></span>
+        </div>
+        <p class="prov-hint">The <span data-gl="cbom">CBOM</span> lists every cryptographic method
+          seen in this capture, in the CycloneDX format that other tools read.</p>
+        <dl class="prov-list" id="provenance">
+          <div class="prov-row"><dt>Capture SHA-256</dt><dd><code id="prov-capture">&mdash;</code>
+            <button type="button" class="ghost prov-copy" data-copy="prov-capture">Copy</button></dd></div>
+          <div class="prov-row"><dt>Model manifest SHA-256</dt><dd><code id="prov-model">&mdash;</code>
+            <button type="button" class="ghost prov-copy" data-copy="prov-model">Copy</button>
+            <span class="prov-note" id="prov-model-date"></span></dd></div>
+          <div class="prov-row"><dt>Report digest</dt><dd><code id="prov-digest">&mdash;</code>
+            <button type="button" class="ghost prov-copy" data-copy="prov-digest">Copy</button>
+            <span class="prov-note" id="prov-digest-note"></span></dd></div>
+        </dl>
+        <span class="copy-status" id="prov-status" role="status" aria-live="polite"></span>
       </section>
     </div>
 
@@ -778,6 +818,23 @@
             </div>
             <div class="diff-meta-list" id="diff-meta-b"></div>
           </div>
+        </div>
+      </section>
+
+      <!-- Per-link strength, side by side -->
+      <section class="panel" style="margin-bottom:18px" aria-labelledby="diff-links-title">
+        <h2 id="diff-links-title">Link strength, A against B</h2>
+        <div class="sub" id="diff-links-sub">Each gateway pair in either capture. Rows that differ are marked.</div>
+        <div class="table-responsive">
+          <table class="data-table diff-links-table" id="diff-links-table">
+            <thead><tr>
+              <th scope="col">Link</th>
+              <th scope="col">A: classical / quantum bits</th>
+              <th scope="col">B: classical / quantum bits</th>
+              <th scope="col">Change</th>
+            </tr></thead>
+            <tbody id="diff-links-tbody"></tbody>
+          </table>
         </div>
       </section>
 
@@ -1174,6 +1231,13 @@
     <div id="evidence-body" class="evidence-body"></div>
   </div>
 </div>
+
+<nav class="present-bar" id="present-bar" aria-label="Presentation" hidden>
+  <button type="button" class="ghost" id="present-prev" aria-label="Previous step">&larr; Previous</button>
+  <span class="present-step" id="present-step" aria-live="polite"></span>
+  <button type="button" class="ghost" id="present-next" aria-label="Next step">Next &rarr;</button>
+  <button type="button" class="ghost" id="present-exit">Exit (Esc)</button>
+</nav>
 
 <script src="/static/js/dashboard.js"></script>
 </body>

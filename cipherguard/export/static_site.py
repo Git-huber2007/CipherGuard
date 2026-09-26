@@ -5,9 +5,10 @@ import os
 import shutil
 
 from ..api.server import STATIC_DIR
-from ..intel.pqc import roadmap as pqc_roadmap
-from ..pipeline import analyze, throughput_estimate
-from ..remediation.synth import PLATFORM_NAMES, detect_platforms, synthesize
+from ..pipeline import analyze
+from ..remediation.synth import synthesize
+from .cbom import build_cbom
+from .payload import build_payload
 
 def _get_default_demo_wifi() -> dict:
     snapshot_path = os.path.join(os.path.dirname(__file__), "live_wifi_snapshot.json")
@@ -136,12 +137,8 @@ def export(
             print(f"  analysing {name}")
         assessment = analyze(path, model_dir=model_dir)
 
-        payload = assessment.to_dict()
-        payload["throughput"] = throughput_estimate(assessment)
-        payload["platforms"] = [
-            {"id": p, "name": PLATFORM_NAMES[p]} for p in detect_platforms(assessment)
-        ]
-        payload["roadmap"] = pqc_roadmap(assessment)
+        # the same document /api/analyze returns, provenance included
+        payload = build_payload(assessment, path, model_dir)
 
         # Remediation is generated per platform here too, because the static
         # page has no backend to ask for it later.
@@ -152,6 +149,12 @@ def export(
         slug = name.replace(".", "_")
         with open(os.path.join(data_dir, f"{slug}.json"), "w", encoding="utf-8") as fh:
             json.dump(payload, fh)
+
+        # the CBOM is baked too, so the static page can offer it as a real file
+        cbom_dir = os.path.join(data_dir, "cbom")
+        os.makedirs(cbom_dir, exist_ok=True)
+        with open(os.path.join(cbom_dir, f"{slug}.cdx.json"), "w", encoding="utf-8") as fh:
+            json.dump(build_cbom(assessment), fh, indent=2)
 
         # Pre-extract wire framing inspection samples for all ESP flows
         try:
@@ -170,10 +173,13 @@ def export(
         except Exception:
             pass
 
+        size = os.path.getsize(path)
         entries.append({
             "name": name,
             "file": f"data/{slug}.json",
-            "size_kb": round(os.path.getsize(path) / 1024, 1),
+            "cbom": f"data/cbom/{slug}.cdx.json",
+            "size_bytes": size,
+            "size_kb": round(size / 1024, 1),
             "score": assessment.score(),
             "grade": assessment.grade(),
         })

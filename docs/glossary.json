@@ -1,0 +1,65 @@
+{
+  "_about": "Plain-language definitions for terms the dashboard marks with a dotted underline. One or two sentences each, written so that no definition needs another definition. Keys are what the markup references (data-gl=\"key\"); a test fails if the page uses a key that is not here.",
+  "terms": {
+    "ike": {
+      "term": "IKE",
+      "definition": "The conversation two network devices have before a secure tunnel opens, in which they agree how to protect it and create the secret keys."
+    },
+    "ike-sa-init": {
+      "term": "IKE_SA_INIT",
+      "definition": "The first round of that conversation. It is not yet secret, so an observer can see exactly which protection options each side offered and chose."
+    },
+    "ike-auth": {
+      "term": "IKE_AUTH",
+      "definition": "The second round, in which each side proves who it is. It is already encrypted, so an observer cannot read it."
+    },
+    "esp": {
+      "term": "ESP",
+      "definition": "The format that carries the protected traffic itself once the tunnel is open. The contents are hidden; only the size and timing of each packet can be seen."
+    },
+    "spi": {
+      "term": "SPI",
+      "definition": "A number written on every packet of a tunnel so the receiving device knows which set of keys to use. It identifies the tunnel but reveals nothing secret."
+    },
+    "dh-group": {
+      "term": "Diffie-Hellman group",
+      "definition": "The mathematical method two devices use to agree a shared secret over a network that others can watch. Smaller or older methods can be broken by a well-funded attacker."
+    },
+    "aead": {
+      "term": "AEAD",
+      "definition": "A modern kind of encryption that hides the data and detects any tampering in one step, instead of relying on two separate mechanisms."
+    },
+    "framing-class": {
+      "term": "Framing class",
+      "definition": "A family of encryption methods that shape packets in the same way. Because the contents are hidden, this tool can name the family from packet sizes but cannot always say which member is in use."
+    },
+    "sweet32": {
+      "term": "Sweet32",
+      "definition": "An attack on older encryption that works once a single key has protected enough traffic. On a busy link that point can be reached within hours."
+    },
+    "mosca": {
+      "term": "Mosca's inequality",
+      "definition": "A simple test for urgency: if the years data must stay secret plus the years a migration takes is more than the years until quantum computers can break today's protection, the migration is already late."
+    },
+    "crqc": {
+      "term": "CRQC",
+      "definition": "Short for cryptographically relevant quantum computer: a future machine powerful enough to break the key-agreement methods most networks use today."
+    },
+    "cbom": {
+      "term": "CBOM",
+      "definition": "A cryptographic bill of materials: an inventory of every protection method in use, in a standard format other tools can read."
+    },
+    "hndl": {
+      "term": "Harvest now, decrypt later",
+      "definition": "Recording protected traffic today and storing it until it can be decrypted in the future, for example once quantum computers are available."
+    },
+    "observed": {
+      "term": "Observed",
+      "definition": "Read directly from parts of the traffic that are not encrypted. These results are facts about what the two devices actually did."
+    },
+    "inferred": {
+      "term": "Inferred",
+      "definition": "Deduced from the size and timing of encrypted packets without reading them. These results are well-supported estimates, and each one says how confident it is."
+    }
+  }
+}

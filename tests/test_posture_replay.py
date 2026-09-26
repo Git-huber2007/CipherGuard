@@ -24,6 +24,7 @@ import pytest
 
 from cipherguard.api.server import STATIC_DIR
 from cipherguard.intel.baseline import VERDICTS, BaselineStore
+from tests.jsmodules import module
 from tests.test_unattended import STRONG, WEAK, _assessment, _session
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -317,7 +318,8 @@ const out = x => process.stdout.write(JSON.stringify(x));
 
 
 def _node(body: str, data) -> Any:
-    proc = subprocess.run(["node", "-e", _PRELUDE + _module() + "\n" + body],
+    # the replay formats bits through the shared Fmt module
+    proc = subprocess.run(["node", "-e", _PRELUDE + module("Fmt") + "\n" + _module() + "\n" + body],
                           input=json.dumps(data), capture_output=True, text=True,
                           encoding="utf-8", timeout=30)
     assert proc.returncode == 0, proc.stderr
