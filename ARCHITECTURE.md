@@ -4,8 +4,8 @@ CipherGuard reads mirrored traffic and reports the cryptographic posture of the
 IPsec tunnels in it. It holds no keys and decrypts nothing. A second, smaller
 path audits the Wi-Fi networks visible to the local adapter.
 
-The README covers the method, the validation and the limitations. This file
-covers how the code is laid out and the rules it is held to.
+[METHOD.md](METHOD.md) covers the method, the validation and the limitations.
+This file covers how the code is laid out and the rules it is held to.
 
 ## Pipeline
 
@@ -60,9 +60,11 @@ distinction as a `cipherguard:provenance` property on each component.
 
 ```
 cipherguard/                       # Repository root
-├── README.md                      # Overview, method, validation, limitations
+├── README.md                      # Overview, quick start, measured results
 ├── GETTING-STARTED.md             # Install and demo walkthrough
 ├── ARCHITECTURE.md                # This file
+├── METHOD.md                      # Method, validation and limitations in full
+├── OPERATIONS.md                  # CLI, dashboard, sensor and security posture
 ├── CLAUDE.md                      # Working rules for coding agents
 ├── CONTRIBUTING.md, SECURITY.md   # How to contribute and report vulnerabilities
 ├── CHANGELOG.md                   # Release history
@@ -70,6 +72,7 @@ cipherguard/                       # Repository root
 ├── pyproject.toml                 # Packaging, metadata and lint configuration
 ├── requirements.txt               # Runtime and dashboard dependencies
 ├── requirements.lock              # The same, pinned (`make lock`)
+├── .env.example                   # Every environment variable the tool reads
 ├── Makefile                       # install, test, lint, serve, demo, lock
 ├── Dockerfile                     # Container image
 ├── render.yaml                    # Render deployment blueprint
@@ -150,13 +153,14 @@ cipherguard/                       # Repository root
 │   │
 │   └── api/                       # Local FastAPI server
 │       ├── server.py              # FastAPI app and every route (REST under /api/)
+│       ├── security.py            # Host allowlist, cross-site refusal, headers, rate limits
 │       └── static/                # The dashboard: index.html, 404.html,
 │                                  #   css/dashboard.css, js/dashboard.js,
 │                                  #   js/theme-init.js, fonts/, img/
 │
 ├── docs/                          # Output of `cipherguard export-demo` (GitHub Pages root):
 │                                  #   a copy of api/static/ plus precomputed data/
-├── tests/                         # Pytest suite (422 tests)
+├── tests/                         # Pytest suite
 ├── scripts/                       # Release, soak, capture-fetch and export helpers
 ├── deploy/                        # systemd unit for the sensor
 ├── samples/                       # Lab captures written by `cipherguard lab`
@@ -182,8 +186,8 @@ Three parts use it, all in `ml/`:
 
 The mask always wins. If a model prefers a suite the wire arithmetic excludes,
 that suite is dropped and the exclusion is reported with its reason. The
-README's "How ESP inference works" and "Measured accuracy, and its ceiling"
-sections give the derivation and the numbers.
+"How ESP inference works" and "Measured accuracy, and its ceiling" sections of
+[METHOD.md](METHOD.md) give the derivation and the numbers.
 
 ### IKE dissection and hybrid key exchange
 
@@ -271,7 +275,10 @@ These hold across the codebase. `tests/test_guarantees.py` and
    are bundled.
 6. **Loopback by default.** `cipherguard serve` binds to `127.0.0.1`. A
    non-loopback bind is refused unless a token is set in `CIPHERGUARD_TOKEN`
-   or `--insecure-bind` is passed.
+   or `--insecure-bind` is passed. Without a token the server also answers
+   loopback host names only and refuses state-changing requests from another
+   web site (`api/security.py`), because a loopback bind does not keep out a
+   page in the analyst's own browser.
 7. **The static and live dashboards are the same files.** `export-demo` copies
    `cipherguard/api/static/` into `docs/`. A change must keep both working.
 
@@ -286,7 +293,9 @@ Colours, the type scale and corner radii are custom properties at the top of
 under `fonts/`. Light and dark themes share the same tokens.
 
 The live API is REST under `/api/` with one server-sent event stream
-(`/api/sniff/stream`). There are no WebSocket routes.
+(`/api/sniff/stream`). There are no WebSocket routes. Responses carry a content
+security policy that allows scripts from the server's own files only, so the
+page must not use inline scripts or inline event handlers.
 
 ## Dependencies
 

@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 Working rules for coding agents in this repository. Read `ARCHITECTURE.md` for
-the layout and `README.md` for the method and its limits.
+the layout and `METHOD.md` for the method and its limits.
 
 ## Commands
 
@@ -10,6 +10,7 @@ pip install -r requirements.txt && pip install -e ".[dev]"
 cipherguard lab            # write the sample captures to samples/
 cipherguard train          # train the ESP inference model into models/
 ruff check .               # lint; must pass
+ruff format .              # formatting; CI runs `ruff format --check`
 python -m pytest tests/    # full suite, about 3 minutes
 python -m pytest tests/ -m "not soak"
 cipherguard serve          # dashboard on http://127.0.0.1:8000
@@ -30,6 +31,11 @@ cipherguard export-demo --out docs   # regenerate the static dashboard
    with no internet access.
 6. `cipherguard serve` binds to loopback by default. A non-loopback bind
    requires `CIPHERGUARD_TOKEN`. Do not weaken that check.
+7. Do not loosen the request checks in `cipherguard/api/security.py` (Host
+   allowlist, cross-site refusal, content security policy, size limits). The
+   page must not use inline scripts or inline event handlers.
+8. Never show a stand-in value as if it were measured. If the server did not
+   report something, the page shows an em dash or says it was not checked.
 
 ## Dependencies
 

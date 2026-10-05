@@ -1,7 +1,7 @@
 {
   "algorithm": "sha256",
   "files": {
-    "rf.joblib": "16525a5d4e7769ffc36d64d2463a615a0fd9ef3699949448fcf9c5c23b95ad4f",
-    "cnn.npz": "3f32b5ea3212f6b77a979be90105678f914723354f79b9d3bbace0460a06f0b3"
+    "rf.joblib": "af9386ce4a0b49afa7af1991b1e45ee1f283cc2ec08a9dc890cc272563220942",
+    "cnn.npz": "cf01f1ad8b10f963ffc804c81142c8c91490e63c27283dac9a52c4358b4b7470"
   }
 }

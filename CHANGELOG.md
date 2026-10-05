@@ -6,6 +6,43 @@ Notable changes to CipherGuard. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- Without a token the server answers loopback host names only (`--allowed-host`
+  adds others) and refuses state-changing requests from another web site.
+- Content security policy and related headers on every response; the page uses
+  no inline script.
+- Lockout after repeated wrong tokens; per-client rate limit on the routes that
+  analyse, write files or run operating-system commands.
+- Request bodies are size-checked from `Content-Length`. Uploads are checked
+  for a capture magic number and counted against a 4 GB directory ceiling. The
+  per-file limit is now 500 MB.
+- `/api/analyze` accepts only known rule IDs in `disabled`, and the report and
+  audit log record which rules were switched off.
+- Unreadable captures and malformed parameters return a 4xx with the reason
+  instead of a 500. The interactive API docs are no longer served.
+
+### Fixed
+
+- The CBOM dialog showed a hard-coded inventory when the API was unreachable,
+  and always in the static build. It now shows the capture's own CBOM or says
+  none is available.
+- The dashboard only worked when served on port 8000.
+- Stand-in values (latency, channel, signal, band, authentication) are no
+  longer displayed where nothing was measured.
+- The shipped model is the one the documentation describes (default training
+  settings), and the documented accuracy figures match what the commands print.
+
+### Changed
+
+- Keyboard shortcuts need Alt.
+- The exported report includes the IPsec findings and labels the bundled Wi-Fi
+  example as an example.
+- `launch_dashboard.bat` installs into a project `.venv` and no longer ends
+  whatever process holds the port. `--port N` selects another port.
+- The README is a short overview; the method is in `METHOD.md` and operation
+  in `OPERATIONS.md`.
+
 ## [1.0.0] - not yet tagged
 
 First versioned state of the project.

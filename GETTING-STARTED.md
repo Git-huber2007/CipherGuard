@@ -13,14 +13,18 @@ Five minutes from download to a running dashboard.
 
 ---
 
-## Step 1 — Unzip and enter the folder
+## Step 1 — Get the code
 
 ```bash
-unzip cipherguard.zip
-cd cipherguard
+git clone https://github.com/Git-huber2007/CipherGuard.git
+cd CipherGuard
 ```
 
-You should see `cipherguard/`, `tests/`, `docker/`, `README.md`.
+You should see `cipherguard/`, `samples/`, `models/`, `tests/`, `README.md`.
+
+On Windows you can stop here and double-click `launch_dashboard.bat`: it
+creates the virtual environment, installs the dependencies into it and opens
+the dashboard. The steps below do the same by hand, on any platform.
 
 ---
 
@@ -31,47 +35,53 @@ A virtual environment keeps this off your system Python.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements.lock
 pip install -e .
 ```
 
-The second install registers the `cipherguard` command. Without it every
-`cipherguard ...` example below fails, and you would have to prefix each one
-with `python -m cipherguard.cli`.
+`requirements.lock` holds the exact versions the project is tested with. The
+second install registers the `cipherguard` command; without it, write
+`python -m cipherguard` wherever an example says `cipherguard`.
 
 Takes about a minute. If `pip` complains on Debian or Ubuntu about an
 externally-managed environment, you skipped the venv — go back and create it.
 
 ---
 
-## Step 3 — Generate the sample captures
+## Step 3 — The sample captures (already there)
 
-There are no `.pcap` files in the archive; they are generated so the archive
-stays small and the captures are reproducible.
-
-```bash
-python -m cipherguard.cli lab
-```
-
-Writes seven scenarios into `samples/`: a legacy IKEv1 gateway, a partially
+`samples/` holds seven lab scenarios: a legacy IKEv1 gateway, a partially
 modernised one, a hardened one, a mixed backbone, a downgrade capture, and two
 post-quantum ones: an RFC 9370 hybrid key exchange, and the same offer declined
-by the responder.
+by the responder. Nothing needs generating.
+
+To write them again:
+
+```bash
+python -m cipherguard lab
+```
+
+The nonces, SPIs and key-exchange values are random, so a regenerated capture
+differs byte for byte from the committed one. What each scenario negotiates,
+and so what the audit finds, is the same.
 
 ---
 
-## Step 4 — Train the inference model
+## Step 4 — The inference model (already there)
+
+`models/` holds the trained model and the SHA-256 manifest it is checked
+against before loading. To train it again:
 
 ```bash
-python -m cipherguard.cli train
+python -m cipherguard train
 ```
 
-About one minute. Prints the accuracy figures and writes `models/`.
-
-Expect **100% framing-class** and **~59% exact-suite** accuracy. The second
-number is *supposed* to be low — several ESP suites are byte-identical on the
-wire and cannot be told apart by anything. The README explains this; it is worth
-reading before you demo.
+About one minute. The seed is fixed, so with the pinned dependencies this
+reproduces the committed model's figures: **100% framing-class** and
+**60.6% exact-suite** accuracy on 360 held-out flows. The second number is low
+because several ESP suites are byte-identical on the wire and cannot be told
+apart by anything; [METHOD.md](METHOD.md#measured-accuracy-and-its-ceiling)
+explains it.
 
 ---
 
@@ -94,19 +104,19 @@ python -m cipherguard.cli serve
 
 Then open **http://127.0.0.1:8000** in your browser.
 
-Pick a capture from the dropdown and press **Assess capture**. Leave the
+Pick a capture from the list and select **Assess capture**. Leave the
 terminal running; `Ctrl-C` stops the server.
 
-> The dashboard loads fonts from Google. Without internet it falls back to
-> system fonts and looks slightly different — nothing breaks.
+The page needs no internet connection: its fonts, script and styles are all
+served from your machine.
 
 ---
 
 ## The demo sequence
 
-If you have five minutes in front of judges, run these in order.
+Seven short steps that show each part of the tool.
 
-**1. The contrast — catastrophic vs clean, same tool, same second**
+**1. A broken gateway and a hardened one, side by side**
 
 ```bash
 python -m cipherguard.cli analyze samples/legacy.pcap
@@ -121,28 +131,29 @@ python -m cipherguard.cli watch samples/downgrade.pcap --db fleet.db
 ```
 
 The second command prints a downgrade from 128 bits to 80 bits on the same peer
-pair, and exits with code 3. This is the strongest ten seconds you have.
+pair, and exits with code 3. Neither capture shows a problem on its own.
 
-**3. Real-world validation — it works on traffic we did not create**
+**3. Validation on traffic the project did not create**
 
 ```bash
-./scripts/fetch-real-captures.sh
+./scripts/fetch-real-captures.sh          # Windows: powershell -ExecutionPolicy Bypass -File scripts\fetch-real-captures.ps1
 python -m cipherguard.cli verify-real -v
 ```
 
-Five real IKE captures from the Wireshark project, validated against ground
-truth from their filenames. Needs internet the first time. Finding two genuine
-bugs this way is a better story than a clean run would have been.
+Five real IKE captures from the Wireshark project, checked against the
+algorithms their filenames state. Needs internet the first time. These contain
+IKE handshakes only, so they validate the dissector, not ESP inference.
 
-**4. Honest accuracy — volunteer the limitation**
+**4. What the learned models contribute**
 
 ```bash
 python -m cipherguard.cli validate
 ```
 
-Shows the learned models alone reach ~74% on independently generated traffic
-while the RFC arithmetic mask carries it to 100%. Saying "our ML overfit, and
-here is the measurement" lands better than any number you could claim.
+On independently generated traffic the learned models alone reach 73.7%
+framing-class accuracy; with the RFC 4303 arithmetic applied it is 100%. The
+models overfit the generator they were trained on, and the arithmetic is what
+carries the result.
 
 **5. Post-quantum roadmap**
 
@@ -192,7 +203,9 @@ pip install -e ".[dev]"
 python -m pytest tests/ -q
 ```
 
-422 tests, about 4 minutes. The real-capture tests skip until step 3 of the demo sequence. The first run trains a small model, so it is slower.
+About 470 tests, about 4 minutes. Fourteen need the real captures and skip
+until step 3 of the demo sequence has fetched them. The first run trains a
+small model, so it is slower.
 
 ---
 
@@ -212,8 +225,12 @@ stricter 3072-bit directive, with no code change.
 
 | Symptom | Cause and fix |
 |---|---|
-| `No such file: samples/backbone.pcap` | Step 3 not run. `python -m cipherguard.cli lab` |
-| Findings appear but no ESP suites | Step 4 not run. `python -m cipherguard.cli train` |
+| `No such file: samples/backbone.pcap` | The samples were removed. `python -m cipherguard lab` |
+| Findings appear but no ESP suites | No model in `models/`. `python -m cipherguard train` |
+| `unrecognised Host header` | Without a token the server answers `127.0.0.1` and `localhost` only. Open it by one of those, or name the host with `--allowed-host` |
+| Port 8000 is already in use | Another program has it. `cipherguard serve --port 8001`, or `launch_dashboard.bat --port 8001` |
+| The dashboard asks for an access token | The server was started with `CIPHERGUARD_TOKEN` (or `launch_dashboard.bat --lan`). The token is printed where it was started |
+| `too many failed attempts` | Ten wrong tokens lock that browser's address out for a minute. Wait, then enter the right one |
 | `externally-managed-environment` from pip | You skipped the venv in step 2 |
 | `ModuleNotFoundError: cipherguard` | You are in the wrong directory, or the venv is not activated |
 | Dashboard shows "Backend unreachable" | The `serve` process stopped; check that terminal |
@@ -239,9 +256,11 @@ cipherguard/
 │   ├── api/            FastAPI backend + dashboard
 │   │   └── static/     index.html, css/, js/
 │   └── cli.py          command line entry point
-├── tests/              133 tests
+├── tests/              pytest suite
 ├── docker/             strongSwan testbed
-└── README.md           architecture, accuracy, limitations
+├── README.md           overview, quick start, measured results
+├── METHOD.md           method, validation, limitations
+└── OPERATIONS.md       CLI, dashboard, sensor, security posture
 ```
 
 
@@ -287,9 +306,9 @@ cipherguard export-demo
 python3 -m http.server -d docs 8080     # then open http://localhost:8080
 ```
 
-The generated `docs/` output is gitignored on purpose: it is rebuilt in CI on
-every push, so the hosted page cannot drift away from the code that produced it.
-Committing it would let the two disagree silently.
+`docs/` is committed so Pages can also deploy from the branch, but the workflow
+does not publish that copy: it rebuilds `docs/` from the code on every push, so
+the hosted page cannot drift away from the code that produced it.
 
 ### If you need the real backend online
 
@@ -312,6 +331,5 @@ On Windows, `launch_dashboard.bat` serves the dashboard to this machine only.
 `launch_dashboard.bat --lan` serves other devices on the network and prints the
 access token each browser is asked for.
 
-For a hackathon, the Pages build plus a local demo on your own laptop is
-usually the better combination: nothing to go wrong on the day, and a link you
-can put on a slide.
+The Pages build and a local server cover most uses between them: the first
+needs nothing installed, the second assesses your own captures.
