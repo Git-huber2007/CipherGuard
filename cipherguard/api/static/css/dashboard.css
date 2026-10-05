@@ -59,7 +59,7 @@
   --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
 
-  /* --- Unified Typographic Scale (Heuristic #1) --- */
+  /* --- Unified Typographic Scale --- */
   --text-xs: 0.75rem;     /* 12px - Footnotes, timestamps, micro-tags */
   --text-sm: 0.8125rem;   /* 13px - Secondary meta, badges, table cells */
   --text-base: 0.9375rem; /* 15px - Body copy, default UI text */
@@ -68,7 +68,7 @@
   --text-xl: 1.625rem;    /* 26px - Hero titles, major score dials */
   --text-2xl: 2.125rem;   /* 34px - Large metric displays */
 
-  /* --- Unified Text Color Tokens (Heuristic #2) --- */
+  /* --- Unified Text Color Tokens --- */
   --text-primary: #14212b;
   --text-secondary: #475569;
   --text-muted:#5a687d;
@@ -76,7 +76,7 @@
   --text-success:#137638;
   --text-danger: #b91c1c;
 
-  /* --- Unified Geometric Corner Radii (Heuristic #3) --- */
+  /* --- Unified Geometric Corner Radii --- */
   --radius-sm: 4px;       /* Chips, small tags, inline inputs */
   --radius-md: 6px;       /* Buttons, table rows, cards */
   --radius-lg: 10px;      /* Panels, hero cards, dialogs */
@@ -194,7 +194,7 @@ button.ghost:hover{background:var(--sunk)}
 button.ghost[aria-pressed="true"]{background:var(--ink);color:var(--text-inverse, #fff);border-color:var(--ink)}
 :focus-visible{outline:2px solid var(--observed);outline-offset:2px}
 
-/* --- Unified Button System (Heuristic #4) --- */
+/* --- Unified Button System --- */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -387,7 +387,7 @@ button.ghost[aria-pressed="true"]{background:var(--ink);color:var(--text-inverse
 .domain-tag.inf{background:var(--inferred-bg);color:var(--inferred)}
 .domain-tag.inline{margin-left:8px}
 
-/* Equal panel heights in 2-column grid (Heuristic #11) */
+/* Equal panel heights in 2-column grid */
 .grid.cols-2 > .panel {
   display: flex;
   flex-direction: column;
@@ -902,7 +902,7 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   font-family:var(--mono);
 }
 
-/* ---------- Wi-Fi Health List (Heuristic #12) ---------- */
+/* ---------- Wi-Fi Health List ---------- */
 .wifi-health-list{
   display:flex;
   flex-direction:column;
@@ -2260,14 +2260,10 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
 
 
 /* ==========================================================================
-   MITRE ATT&CK & NIST SP 800-77 Compliance Matrix
+   Loading, error and notification states
    ========================================================================== */
 
-/* ==========================================================================
-   20-POINT PRODUCTION READINESS ENHANCEMENTS
-   ========================================================================== */
-
-/* ---------- 1. Global Progress Bar (Loading State) ---------- */
+/* ---------- Global Progress Bar (Loading State) ---------- */
 .global-progress-bar {
   position: fixed;
   top: 0;
@@ -2288,7 +2284,7 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   50% { opacity: .45; }
 }
 
-/* ---------- 2. Button Loading Spinners ---------- */
+/* ---------- Button Loading Spinners ---------- */
 .btn-loading {
   position: relative;
   pointer-events: none;
@@ -2309,7 +2305,7 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   to { transform: rotate(360deg); }
 }
 
-/* ---------- 3. Loading placeholders ----------
+/* ---------- Loading placeholders ----------
    Blocks drawn in each panel's real layout while an assessment runs, so the
    page keeps its shape. Static by default; the shimmer is added only for
    readers who have not asked for reduced motion. No spinner anywhere. */
@@ -2341,7 +2337,7 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   border-radius:var(--radius-sm); font-size:var(--text-xs); color:var(--text-warning); }
 .banner .banner-retry { margin-left: 12px; padding: 3px 12px; font-size: var(--text-sm); }
 
-/* ---------- 4. Form Error States & Shake Animation ---------- */
+/* ---------- Form Error States & Shake Animation ---------- */
 .has-error {
   border-color: var(--crit) !important;
   box-shadow: 0 0 0 3px rgba(168, 30, 19, 0.22) !important;
@@ -2368,7 +2364,7 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   border-left: 2px solid var(--crit);
 }
 
-/* ---------- 5. Toast Notifications ---------- */
+/* ---------- Toast Notifications ---------- */
 .toast-container {
   position: fixed;
   bottom: 24px;
@@ -2423,7 +2419,7 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ---------- 6. Prominent CTA Above the Fold ---------- */
+/* ---------- Prominent CTA Above the Fold ---------- */
 .hero-cta-btn {
   background: #1b6e8c;
   color: #ffffff;
@@ -2458,9 +2454,7 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   letter-spacing: 0.02em;
 }
 
-/* ---------- 7. Cookie & Local Storage Consent Banner ---------- */
-
-/* ---------- 8. Sticky Mobile CTA Bar ---------- */
+/* ---------- Sticky Mobile CTA Bar ---------- */
 .mobile-sticky-cta {
   display: none;
   position: fixed;
@@ -2505,20 +2499,8 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   white-space: nowrap;
 }
 
-/* ---------- 9. Rich Footer & Sovereign Cyber Defence Framework ---------- */
-
-/* Brand Column */
-
-/* Columns General */
-
-/* Column 2: Navigation Links */
-
-/* Column 3: Lab Command Card */
-
-/* Footer Bottom Bar */
-
 /* ==========================================================================
-   10. UNIVERSAL RESPONSIVE DESIGN SYSTEM (All Devices & Screen Sizes)
+   Responsive layout
    ========================================================================== */
 
 /* ---------- A. 4K, Ultra-Wide & Large Desktop Displays (min-width: 1441px) ---------- */
@@ -2888,10 +2870,6 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
     padding-bottom: max(10px, env(safe-area-inset-bottom, 10px));
   }
 
-  /* Footer */
-
-  /* Documentation Pages */
-
 }
 
 /* ---------- D. Standard Smartphones (max-width: 480px) ---------- */
@@ -2969,8 +2947,6 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
     flex: 1 1 100%;
   }
 
-  /* Cookie Consent */
-
   /* Backend Engine Modal */
   .modal-backdrop {
     padding: 8px;
@@ -3013,8 +2989,6 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
     min-height: 38px;
     text-align: center;
   }
-
-  /* Documentation Pages */
 
 }
 
@@ -3321,7 +3295,7 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
 }
 
 /* ==========================================================================
-   11. JURY THREAT SIMULATOR, SHORTCUTS MODAL & EXECUTIVE PRINT STYLES
+   Shortcuts modal and print styles
    ========================================================================== */
 
 /* Shortcuts Trigger Pill Button in Masthead */
@@ -3357,8 +3331,6 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   font-weight: 700;
   color: var(--ink);
 }
-
-/* Threat Simulation Control Bar */
 
 /* Shortcuts Modal Dialog */
 #shortcuts-modal {
@@ -3461,7 +3433,7 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   line-height: 1.45;
 }
 
-/* Print Styles for Clean Executive Dossier Printing */
+/* Print styles */
 @media print {
   body {
     background: var(--dk-bg-ffffff, #ffffff) !important;
@@ -3486,32 +3458,7 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
 
 }
 
-/* ==========================================================================
-   12. TACTICAL DEFENSE HUD, RADAR SCOPE, SOVEREIGN MAP, PQC & CYBER TERMINAL
-   ========================================================================== */
-
-/* Top Masthead Extra Quick Controls */
-
-/* 1. Sovereign Cryptographic Routing & Geo-IP Egress Map */
-
-/* 2. Tactical 360° RF Radar Sweep Display (SIGINT HUD) */
-
-/* 3. Interactive Q-Day Post-Quantum Mosca Cockpit */
-
-/* 4. Embedded Interactive Cyber Terminal Drawer */
-
-/* ==========================================================================
-   13. NEXT-GEN DEFENSE: HEX DISSECTOR, CBOM, SOC COPILOT, MITRE HEATMAP & FLEET
-   ========================================================================== */
-
-/* Top Masthead Extra Defense Buttons */
-
-
-/* 1. In-Browser Hex Packet Dissector & Protocol Inspector */
-
-/* 2. MITRE ATT&CK Enterprise Threat Heatmap */
-
-/* 3. CycloneDX v1.6 Sovereign CBOM Viewer Modal */
+/* ---------- CBOM viewer modal ---------- */
 .cbom-modal-card {
   background: var(--surface);
   border: 1px solid var(--rule);
@@ -3602,15 +3549,7 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   max-height: 480px;
 }
 
-/* 4. Multi-Gateway Fleet Sentinel Modal */
-
-/* 5. Autonomous SOC Cryptographic Copilot Drawer */
-
-/* ==========================================================================
-   Interactive Wire Dissector & Live Sniffer Cockpit
-   ========================================================================== */
-
-/* Live Wire Sniffer Cockpit */
+/* ---------- Live wire sniffer ---------- */
 .live-sniffer-panel {
   background: var(--card);
   border: 1px solid var(--rule);
@@ -3810,19 +3749,11 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   font-weight: 600;
 }
 
-/* Wire Dissector Anatomy Bar */
-
-/* Zero-Decryption Modulo Proof Card */
-
-/* Wire Hex Viewer Highlighting */
-
-/* Button to inspect wire in flows table */
-
 /* ==========================================================================
-   Usability Heuristics Harmonization (15-Issue Resolution Suite)
+   Shared type scale, buttons, badges and tables
    ========================================================================== */
 
-/* 1. Unified Typographic Scale (Heuristic #1)
+/* Unified Typographic Scale
    Restricts active font-size declarations across the page to 7 harmonious steps. */
 :root {
   --text-xs: 0.75rem;     /* 12px - minimum readable threshold for micro-meta/tags */
@@ -3833,7 +3764,7 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   --text-xl: 1.5rem;      /* 24px - hero headers */
   --text-2xl: 2rem;       /* 32px - major score indicators */
 
-  /* 2. Consolidated Text Colors (Heuristic #2)
+  /* Consolidated Text Colors
      Restricts typography colors to 8 standard semantic variables. */
   --text-primary: #14212b;
   --text-secondary: #475569;
@@ -3844,7 +3775,7 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   --text-danger: #b91c1c;
   --text-inverse: #ffffff;
 
-  /* 3. Consolidated Corner Radii (Heuristic #3)
+  /* Consolidated Corner Radii
      Restricts all borders to 4 predictable geometric tokens. */
   --radius-sm: 4px;       /* Chips, tags, small inputs */
   --radius-md: 6px;       /* Standard buttons, table rows, cards */
@@ -3852,7 +3783,7 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   --radius-full: 9999px;  /* Pills, circle badges, status dots */
 }
 
-/* 4. Unified Button System (Heuristic #4)
+/* Unified Button System
    Standardizes buttons into 4 coherent variants with unified sizing & transitions. */
 button, .btn, .action-btn, .btn-toggle, .spectrum-band-btn, .btn-ap-subtoggle {
   font-family: var(--sans);
@@ -3870,7 +3801,7 @@ button, .btn, .action-btn, .btn-toggle, .spectrum-band-btn, .btn-ap-subtoggle {
   box-sizing: border-box;
 }
 
-/* 5. Minimum Body Text Size (Heuristic #5)
+/* Minimum Body Text Size
    Elevates status pill and body copy to 13px (0.8125rem >= 12px min threshold). */
 #backend-status-label,
 .backend-status-pill {
@@ -3878,7 +3809,7 @@ button, .btn, .action-btn, .btn-toggle, .spectrum-band-btn, .btn-ap-subtoggle {
   line-height: 1.4;
 }
 
-/* 6. Severity Level Badge Styling (Heuristic #6)
+/* Severity Level Badge Styling
    Transforms plain-text severity labels into high-contrast, color-coded security badges. */
 .sev-mark {
   display: inline-flex;
@@ -3921,7 +3852,7 @@ button, .btn, .action-btn, .btn-toggle, .spectrum-band-btn, .btn-ap-subtoggle {
   border: 1px solid var(--dk-bd-cbd5e1, #cbd5e1) !important;
 }
 
-/* 7. Persistent Table Header Formatting (Heuristic #7) */
+/* Persistent Table Header Formatting */
 .data-table thead th,
 .data-table th[scope="col"] {
   background: var(--sunk);
@@ -3935,13 +3866,13 @@ button, .btn, .action-btn, .btn-toggle, .spectrum-band-btn, .btn-ap-subtoggle {
   white-space: nowrap;
 }
 
-/* 8. Spectrum Chart Leader Line & Callouts (Heuristic #8) */
+/* Spectrum Chart Leader Line & Callouts */
 .spectrum-svg text {
   font-family: var(--mono);
   font-size: 10px;
 }
 
-/* 9. Spectrum Legend Breathing Room (Heuristic #9)
+/* Spectrum Legend Breathing Room
    Provides comfortable horizontal and vertical spacing for legend elements. */
 .spectrum-legend {
   display: flex !important;
@@ -3967,12 +3898,7 @@ button, .btn, .action-btn, .btn-toggle, .spectrum-band-btn, .btn-ap-subtoggle {
   margin-right: 0 !important;
 }
 
-/* 10. Standardized VPN Controls (Heuristic #10) */
-
-/* 11. Evaluator Threat Simulator Secondary Card (Heuristic #11)
-   Restyles the simulator bar to fit cleanly as a secondary tooling panel. */
-
-/* 12. Chevron Affordance on Expandable Finding Items (Heuristic #12) */
+/* Chevron Affordance on Expandable Finding Items */
 .fhead {
   display: flex;
   gap: 12px;
@@ -4008,7 +3934,7 @@ button, .btn, .action-btn, .btn-toggle, .spectrum-band-btn, .btn-ap-subtoggle {
   color: var(--text-inverse, #fff);
 }
 
-/* 13. Mesh AP Row Height Alignment (Heuristic #13)
+/* Mesh AP Row Height Alignment
    Keeps the "View all APs" button on the same horizontal plane as the BSSID. */
 .mesh-cell-summary {
   display: flex !important;
@@ -4024,7 +3950,7 @@ button, .btn, .action-btn, .btn-toggle, .spectrum-band-btn, .btn-ap-subtoggle {
   border-radius: var(--radius-sm) !important;
 }
 
-/* 14. Group by Network View Toggle Active State (Heuristic #14)
+/* Group by Network View Toggle Active State
    Provides high-contrast, unambiguous active/selected styling. */
 .wifi-view-toggle-group .btn-toggle.active {
   background: var(--observed) !important;
@@ -4034,7 +3960,7 @@ button, .btn, .action-btn, .btn-toggle, .spectrum-band-btn, .btn-ap-subtoggle {
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(27, 110, 140, 0.35) !important;
 }
 
-/* 15. Frequency Band Switcher Active State (Heuristic #15)
+/* Frequency Band Switcher Active State
    Provides high-contrast, solid active state for 2.4 GHz vs 5 GHz buttons. */
 .spectrum-band-btn.active {
   background: var(--observed) !important;

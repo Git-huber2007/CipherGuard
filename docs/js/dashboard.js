@@ -4061,7 +4061,7 @@ function renderRfSpectrum(networks) {
     return (a.rssi_dbm || -80) - (b.rssi_dbm || -80);
   });
 
-  // Collision detection tracking for AP labels (Heuristic #9)
+  // Collision detection tracking for AP labels
   const placedLabels = [];
 
   // Render AP bell curves
@@ -4099,7 +4099,7 @@ function renderRfSpectrum(networks) {
       status: n.is_rogue ? "Possible evil twin" : (n.connected ? "Connected" : "Other network")
     }).replace(/"/g, "&quot;");
 
-    // Robust collision avoidance across congested channels (Heuristic #8)
+    // Robust collision avoidance across congested channels
     let yLabel = yPeak - 8;
     let xLabel = xc;
     let collisionCount = 0;
@@ -4341,14 +4341,7 @@ function exportSecurityAuditReport(){
 
 
 
-/* ==========================================================================
-   14. NEXT-GEN DEFENSE IMPLEMENTATION:
-       1. In-Browser Hex Packet Dissector & Protocol Inspector (Wireshark-Style)
-       2. CycloneDX v1.6 Sovereign CBOM Viewer & Exporter
-       3. Autonomous SOC Cryptographic Copilot (AI Security Assistant Drawer)
-       4. MITRE ATT&CK Enterprise Threat Matrix Heatmap
-       5. Multi-Gateway Enterprise Fleet Sentinel
-   ========================================================================== */
+/* ------------------------------------------------- inspector, CBOM, matrix */
 
 // --- 1. IN-BROWSER HEX PACKET DISSECTOR & PROTOCOL INSPECTOR ---
 
@@ -4634,7 +4627,7 @@ const LiveSnifferEngine = (function() {
 window.LiveSnifferEngine = LiveSnifferEngine;
 
 
-// --- 2. CYCLONEDX v1.6 SOVEREIGN CBOM VIEWER & EXPORTER ---
+// --- CycloneDX 1.6 CBOM viewer and exporter ---
 const CbomEngine = (function() {
   let cachedCbom = null;
 
@@ -4651,15 +4644,15 @@ const CbomEngine = (function() {
           components: [
             {
               type: "application",
-              name: "CipherGuard Sovereign Engine",
+              name: "CipherGuard",
               version: "2.2.0",
-              vendor: "NTRO / SIH26160 Defense Division"
+              vendor: "CipherGuard Contributors"
             }
           ]
         },
         component: {
           type: "application",
-          name: "Sovereign Network Security Perimeter",
+          name: "Assessed network",
           version: "2.2.0",
           scope: "required"
         }
@@ -4916,7 +4909,7 @@ window.openCbomModal = CbomEngine.openModal;
 window.closeCbomModal = CbomEngine.closeModal;
 
 
-// --- 3. AUTONOMOUS SOC CRYPTOGRAPHIC COPILOT ---
+// --- Shared helpers ---
 function escapeHtml(s) {
   if (s === null || s === undefined) return "";
   return String(s)
