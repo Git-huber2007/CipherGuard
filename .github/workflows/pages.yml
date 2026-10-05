@@ -37,12 +37,10 @@ jobs:
       - name: Install
         run: |
           pip install -r requirements.txt
-          pip install -e .
+          pip install -e ".[dev]"
 
       - name: Run the test suite
-        run: |
-          pip install pytest httpx
-          pytest tests/ -q
+        run: pytest tests/ -q
 
       - name: Generate captures and train the model
         run: |
