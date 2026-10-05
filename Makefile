@@ -1,7 +1,7 @@
-.PHONY: install test lint serve demo lock
+.PHONY: install test lint format serve demo lock
 
 install:
-	pip install -r requirements.txt
+	pip install -r requirements.lock
 	pip install -e ".[dev]"
 
 test:
@@ -9,6 +9,10 @@ test:
 
 lint:
 	ruff check .
+	ruff format --check .
+
+format:
+	ruff format .
 
 serve:
 	python -m cipherguard serve

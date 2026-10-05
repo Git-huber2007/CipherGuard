@@ -1,4 +1,5 @@
-# Lint and test every pull request and every push to main.
+# Lint, test and build the container image on every pull request and every
+# push to main.
 #
 # The Pages workflow also runs the suite before it deploys. This one exists so
 # a change is checked before it is merged, not after.
@@ -27,10 +28,14 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Lint
+      - name: Lint and format check
         run: |
           pip install "ruff>=0.16"
           ruff check .
+          ruff format --check .
+
+      - name: Dashboard script parses
+        run: node --check cipherguard/api/static/js/dashboard.js
 
   test:
     runs-on: ubuntu-latest
@@ -55,3 +60,29 @@ jobs:
 
       - name: Run the test suite
         run: pytest tests/ -q
+
+  # The image is not built anywhere else, so build it here and check that it
+  # starts, answers its health probe and refuses to run without a token.
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: docker build -t cipherguard:ci .
+
+      - name: Refuses to start without a token
+        run: |
+          if docker run --rm cipherguard:ci; then
+            echo "the container started unauthenticated" && exit 1
+          fi
+
+      - name: Starts with a token and answers the health probe
+        run: |
+          docker run -d --name cg -e CIPHERGUARD_TOKEN=ci-only-token -p 8000:8000 cipherguard:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/api/health; then exit 0; fi
+            sleep 1
+          done
+          docker logs cg
+          exit 1
