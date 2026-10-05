@@ -1,24 +1,28 @@
 @echo off
 setlocal enabledelayedexpansion
-title CipherGuard - Dual-Layer Wireless and VPN Security Platform
+title CipherGuard
 cls
 
-REM Force UTF-8 console output for Unicode SSIDs, symbols, and telemetry
+REM UTF-8 console output, for network names and symbols in the server's log
 chcp 65001 >nul 2>nul
 set "PYTHONIOENCODING=utf-8"
 set "PYTHONUTF8=1"
 
 REM -------------------------------------------------------------------------
 REM Arguments: --lan serves other devices on the network, behind a token.
-REM Without it the dashboard listens on this machine only. Everything else
-REM is passed through to "cipherguard serve".
+REM --port N changes the port. Without --lan the dashboard listens on this
+REM machine only. Everything else is passed through to "cipherguard serve".
 REM -------------------------------------------------------------------------
 set "LAN_MODE="
+set "PORT=8000"
 set "SERVE_ARGS="
 :parse_args
 if "%~1"=="" goto :args_done
 if /i "%~1"=="--lan" (
     set "LAN_MODE=1"
+) else if /i "%~1"=="--port" (
+    set "PORT=%~2"
+    shift
 ) else (
     set "SERVE_ARGS=!SERVE_ARGS! %1"
 )
@@ -26,185 +30,105 @@ shift
 goto :parse_args
 :args_done
 
-REM Ensure we are running from the project directory containing cipherguard
-if exist "%~dp0cipherguard\cli.py" (
-    cd /d "%~dp0"
-) else if exist "%~dp0cipherguard\cipherguard\cli.py" (
-    cd /d "%~dp0cipherguard"
-) else if exist "%~dp0final\cipherguard\cipherguard\cli.py" (
-    cd /d "%~dp0final\cipherguard"
-) else if exist "%~dp0..\cipherguard\cli.py" (
-    cd /d "%~dp0.."
-) else (
-    cd /d "%~dp0"
+REM Run from the directory this script is in: the project root.
+cd /d "%~dp0"
+if not exist "cipherguard\cli.py" (
+    echo [ERROR] launch_dashboard.bat must stay in the CipherGuard project folder.
+    pause
+    exit /b 1
 )
 
 echo ======================================================================
-echo   CIPHERGUARD - DUAL-LAYER SECURITY PLATFORM (Wi-Fi + IPsec/VPN)
-echo   SIH26160 / NTRO Compliance - NIST SP 800-77 and RFC 8247 Hardening
+echo   CipherGuard - IPsec and Wi-Fi cryptographic assessment
 echo ======================================================================
 echo.
 
+REM -------------------------------------------------------------------------
+REM Step 1: Find a Python that already has the dependencies.
+REM PY_EXE holds the whole command, quoted where it is a path, so it is
+REM always used as  !PY_EXE! -m ...
+REM -------------------------------------------------------------------------
 set "PY_EXE="
 
-REM -------------------------------------------------------------------------
-REM Step 1: Detect a Python interpreter that has dependencies installed
-REM -------------------------------------------------------------------------
-
-REM 1. Active virtual environment in shell
 if defined VIRTUAL_ENV if exist "%VIRTUAL_ENV%\Scripts\python.exe" (
-    "%VIRTUAL_ENV%\Scripts\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%VIRTUAL_ENV%\Scripts\python.exe"
+    "%VIRTUAL_ENV%\Scripts\python.exe" -c "import numpy, fastapi" >nul 2>nul && set PY_EXE="%VIRTUAL_ENV%\Scripts\python.exe"
 )
 if defined PY_EXE goto :python_ready
 
-REM 2. Project-local virtual environments (.venv or venv)
-if exist "%CD%\.venv\Scripts\python.exe" (
-    "%CD%\.venv\Scripts\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%CD%\.venv\Scripts\python.exe"
+for %%d in (.venv venv) do (
+    if not defined PY_EXE if exist "%CD%\%%d\Scripts\python.exe" (
+        "%CD%\%%d\Scripts\python.exe" -c "import numpy, fastapi" >nul 2>nul && set PY_EXE="%CD%\%%d\Scripts\python.exe"
+    )
 )
 if defined PY_EXE goto :python_ready
 
-if exist "%CD%\venv\Scripts\python.exe" (
-    "%CD%\venv\Scripts\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%CD%\venv\Scripts\python.exe"
-)
+python -c "import numpy, fastapi" >nul 2>nul && set "PY_EXE=python"
 if defined PY_EXE goto :python_ready
 
-if exist "%~dp0.venv\Scripts\python.exe" (
-    "%~dp0.venv\Scripts\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%~dp0.venv\Scripts\python.exe"
-)
-if defined PY_EXE goto :python_ready
-
-if exist "%~dp0venv\Scripts\python.exe" (
-    "%~dp0venv\Scripts\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%~dp0venv\Scripts\python.exe"
-)
-if defined PY_EXE goto :python_ready
-
-REM 3. Python on system PATH
-python -c "import numpy" >nul 2>nul && set "PY_EXE=python"
-if defined PY_EXE goto :python_ready
-
-REM 4. Windows py launcher
-py -3 -c "import numpy" >nul 2>nul && set "PY_EXE=py -3"
-if defined PY_EXE goto :python_ready
-
-REM 5. WindowsApps / Microsoft Store Python
-if exist "%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe" (
-    "%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe"
-)
-if defined PY_EXE goto :python_ready
-
-REM 6. Standard installed Python distributions in LocalAppData
-if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
-    "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
-)
-if defined PY_EXE goto :python_ready
-
-if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
-    "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
-)
-if defined PY_EXE goto :python_ready
-
-if exist "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" (
-    "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
-)
-if defined PY_EXE goto :python_ready
-
-REM 7. Program Files / System-wide Python distributions
-if exist "%ProgramFiles%\Python312\python.exe" (
-    "%ProgramFiles%\Python312\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%ProgramFiles%\Python312\python.exe"
-)
-if defined PY_EXE goto :python_ready
-
-if exist "%ProgramFiles%\Python311\python.exe" (
-    "%ProgramFiles%\Python311\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%ProgramFiles%\Python311\python.exe"
-)
-if defined PY_EXE goto :python_ready
-
-if exist "%ProgramFiles%\Python310\python.exe" (
-    "%ProgramFiles%\Python310\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%ProgramFiles%\Python310\python.exe"
-)
-if defined PY_EXE goto :python_ready
-
-if exist "C:\Python312\python.exe" (
-    "C:\Python312\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=C:\Python312\python.exe"
-)
-if defined PY_EXE goto :python_ready
-
-if exist "C:\Python311\python.exe" (
-    "C:\Python311\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=C:\Python311\python.exe"
-)
-if defined PY_EXE goto :python_ready
-
-REM 8. User profile venv (only if numpy is verified installed)
-if exist "%USERPROFILE%\venv\Scripts\python.exe" (
-    "%USERPROFILE%\venv\Scripts\python.exe" -c "import numpy" >nul 2>nul && set "PY_EXE=%USERPROFILE%\venv\Scripts\python.exe"
-)
+py -3 -c "import numpy, fastapi" >nul 2>nul && set "PY_EXE=py -3"
 if defined PY_EXE goto :python_ready
 
 REM -------------------------------------------------------------------------
-REM Step 2: Fallback - locate any Python and install missing dependencies
+REM Step 2: None has them. Create a virtual environment in this folder and
+REM install there. Nothing is installed into a system-wide Python.
 REM -------------------------------------------------------------------------
-if defined VIRTUAL_ENV if exist "%VIRTUAL_ENV%\Scripts\python.exe" set "PY_EXE=%VIRTUAL_ENV%\Scripts\python.exe"
-if not defined PY_EXE if exist "%CD%\.venv\Scripts\python.exe" set "PY_EXE=%CD%\.venv\Scripts\python.exe"
-if not defined PY_EXE if exist "%CD%\venv\Scripts\python.exe" set "PY_EXE=%CD%\venv\Scripts\python.exe"
-if not defined PY_EXE if exist "%~dp0.venv\Scripts\python.exe" set "PY_EXE=%~dp0.venv\Scripts\python.exe"
-if not defined PY_EXE if exist "%~dp0venv\Scripts\python.exe" set "PY_EXE=%~dp0venv\Scripts\python.exe"
-if not defined PY_EXE where python >nul 2>nul && set "PY_EXE=python"
-if not defined PY_EXE where py >nul 2>nul && set "PY_EXE=py -3"
-if not defined PY_EXE if exist "%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe" set "PY_EXE=%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe"
-if not defined PY_EXE if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
-if not defined PY_EXE if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
-if not defined PY_EXE if exist "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" set "PY_EXE=%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
-if not defined PY_EXE if exist "%ProgramFiles%\Python312\python.exe" set "PY_EXE=%ProgramFiles%\Python312\python.exe"
-if not defined PY_EXE if exist "%ProgramFiles%\Python311\python.exe" set "PY_EXE=%ProgramFiles%\Python311\python.exe"
-if not defined PY_EXE if exist "C:\Python312\python.exe" set "PY_EXE=C:\Python312\python.exe"
-if not defined PY_EXE if exist "C:\Python311\python.exe" set "PY_EXE=C:\Python311\python.exe"
-
-if not defined PY_EXE (
-    echo [ERROR] Python 3.10+ was not found on your system.
-    echo Please install Python from https://www.python.org/downloads/
-    echo and ensure "Add Python to PATH" is checked during installation.
+set "BASE_PY="
+python -c "import sys; sys.exit(sys.version_info < (3, 10))" >nul 2>nul && set "BASE_PY=python"
+if not defined BASE_PY py -3 -c "import sys; sys.exit(sys.version_info < (3, 10))" >nul 2>nul && set "BASE_PY=py -3"
+if not defined BASE_PY (
+    echo [ERROR] Python 3.10 or newer was not found.
+    echo Install it from https://www.python.org/downloads/ and tick
+    echo "Add Python to PATH" during installation, then run this again.
     echo.
     pause
     exit /b 1
 )
 
-echo [*] Python interpreter found: !PY_EXE!
-echo [*] Installing required dependencies from requirements.txt...
-echo.
-!PY_EXE! -m pip install -r requirements.txt
+echo [*] First run: creating a virtual environment in .venv
+if not exist "%CD%\.venv\Scripts\python.exe" !BASE_PY! -m venv "%CD%\.venv"
+if not exist "%CD%\.venv\Scripts\python.exe" (
+    echo [ERROR] Could not create the virtual environment in .venv
+    pause
+    exit /b 1
+)
+set PY_EXE="%CD%\.venv\Scripts\python.exe"
+echo [*] Installing dependencies into .venv (about a minute, needs internet once)
+!PY_EXE! -m pip install --disable-pip-version-check -r requirements.txt
 if !errorlevel! neq 0 (
     echo.
-    echo [ERROR] Failed to install dependencies automatically.
-    echo Please run: !PY_EXE! -m pip install -r requirements.txt
+    echo [ERROR] Installing the dependencies failed. Check the internet connection
+    echo and run this again, or install by hand:
+    echo     !PY_EXE! -m pip install -r requirements.txt
     pause
     exit /b 1
 )
 
 :python_ready
+echo [*] Python: !PY_EXE!
 
-echo [*] Project Directory: %CD%
-echo [*] Python Interpreter: !PY_EXE!
-
-REM Ensure PYTHONPATH includes current project directory for seamless module resolution
+REM The package is run from this folder without being installed.
 set "PYTHONPATH=%CD%;!PYTHONPATH!"
 
 REM -------------------------------------------------------------------------
-REM Step 3: Verify trained ML models
+REM Step 3: The ESP inference model ships in models\. Train only if missing.
 REM -------------------------------------------------------------------------
-if not exist "models\cnn.npz" (
-    echo [*] Pre-trained models not found in models/. Generating baseline model...
-    !PY_EXE! -m cipherguard.cli train --samples 30 --epochs 20
+if not exist "models\MANIFEST.sha256" (
+    echo [*] No trained model in models\. Training one, about a minute...
+    !PY_EXE! -m cipherguard.cli train
     echo.
 )
 
 REM -------------------------------------------------------------------------
-REM Step 4: Ensure port 8000 is available and choose the bind address
+REM Step 4: The port must be free. Whatever holds it is left alone: it may
+REM not be CipherGuard, and ending another program is not this script's call.
 REM -------------------------------------------------------------------------
-for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr /c:":8000 " ^| findstr "LISTENING"') do (
-    if not "%%p"=="0" if not "%%p"=="4" (
-        echo [*] Clearing lingering server instance on port 8000 ^(PID %%p^)...
-        taskkill /F /PID %%p >nul 2>nul
-    )
+netstat -ano 2>nul | findstr /r /c:":%PORT% .*LISTENING" >nul 2>nul
+if !errorlevel! equ 0 (
+    echo [ERROR] Port %PORT% is already in use.
+    echo If another CipherGuard window is open, use that one or close it first.
+    echo To use a different port instead, run:  launch_dashboard.bat --port 8001
+    pause
+    exit /b 1
 )
 
 REM The dashboard shows which links use weak cryptography, so it is served to
@@ -230,34 +154,32 @@ for /f "tokens=4" %%a in ('route print 0.0.0.0 2^>nul ^| findstr "\<0.0.0.0\>"')
 )
 :bind_ready
 
-echo [*] Launching CipherGuard Security Dashboard...
-echo [*] Local Workstation URL: http://127.0.0.1:8000/
+echo [*] Dashboard:    http://127.0.0.1:%PORT%/
 if defined LAN_MODE (
     if defined LAN_IP (
-        echo [*] LAN URL:               http://!LAN_IP!:8000/  [phones / tablets / other PCs]
+        echo [*] On the LAN:   http://!LAN_IP!:%PORT%/
     ) else (
-        echo [*] LAN URL:               http://YOUR-LAN-IP:8000/  [check ipconfig for the address]
+        echo [*] On the LAN:   http://YOUR-LAN-IP:%PORT%/   [see ipconfig for the address]
     )
-    echo [*] Access token:          !CIPHERGUARD_TOKEN!
+    echo [*] Access token: !CIPHERGUARD_TOKEN!
     echo [*] Every browser, this one included, is asked for the token once.
+    echo [*] The token crosses the network unencrypted. Use --lan on a network you trust.
 ) else (
     echo [*] Listening on this machine only. Run "launch_dashboard.bat --lan" to
     echo     serve other devices on the network, protected by an access token.
 )
-echo [*] Opening your default web browser...
-echo [*] (Keep this window open. Press Ctrl+C anytime to stop the server.)
+echo [*] Keep this window open. Press Ctrl+C to stop the server.
 echo ======================================================================
 echo.
 
-REM Open browser in background
-start "" "http://127.0.0.1:8000/"
+if not defined CIPHERGUARD_NO_BROWSER start "" "http://127.0.0.1:%PORT%/"
 
-REM Start the dashboard server. In LAN mode the token is read from CIPHERGUARD_TOKEN.
-!PY_EXE! -m cipherguard.cli serve --host !BIND_HOST! --port 8000 !SERVE_ARGS!
+REM In LAN mode the token is read from CIPHERGUARD_TOKEN.
+!PY_EXE! -m cipherguard.cli serve --host !BIND_HOST! --port %PORT% !SERVE_ARGS!
 
-REM If server exited abnormally (not from Ctrl+C / SIGINT 130 or STATUS_CONTROL_C_EXIT)
+REM Ctrl+C exits with 130 or STATUS_CONTROL_C_EXIT; anything else is a failure worth reading
 if !errorlevel! neq 0 if !errorlevel! neq 130 if !errorlevel! neq -1073741510 (
     echo.
-    echo [ERROR] Server exited with error code: !errorlevel!
+    echo [ERROR] The server stopped with exit code !errorlevel!
     pause
 )

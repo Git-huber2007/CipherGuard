@@ -19,6 +19,9 @@ from tests.jsmodules import ESC, NODE, STATIC, dashboard_js, function, module, r
 
 needs_node = pytest.mark.skipif(NODE is None, reason="node not installed")
 
+# An empty but valid pcap; the upload endpoint checks the magic number.
+PCAP_HEADER = bytes.fromhex("d4c3b2a1" "0200" "0400" "00000000" "00000000" "00000400" "01000000")
+
 
 def _read(*parts: str) -> str:
     with open(os.path.join(STATIC, *parts), encoding="utf-8") as fh:
@@ -101,7 +104,7 @@ def test_upload_errors_are_the_endpoints_own_words(tmp_path):
 
     (tmp_path / "taken.pcap").write_bytes(b"\x00")
     client = TestClient(create_app(capture_dir=str(tmp_path)))
-    dup = client.post("/api/upload", files={"file": ("taken.pcap", b"\x00")})
+    dup = client.post("/api/upload", files={"file": ("taken.pcap", PCAP_HEADER)})
     bad = client.post("/api/upload", files={"file": ("notes.txt", b"\x00")})
     assert dup.status_code == 409 and "already exists" in dup.json()["detail"]
     assert bad.status_code == 400 and ".pcap" in bad.json()["detail"]

@@ -143,6 +143,7 @@ class AuditLog:
                     {f"{f.rule_id}:{f.subject}" for f in assessment.findings}
                 ),
                 "report_digest": assessment.digest(),
+                "disabled_rules": list(assessment.stats.get("disabled_rules", [])),
             }
         )
 

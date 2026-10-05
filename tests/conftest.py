@@ -48,6 +48,19 @@ def _point_analysis_at_the_test_model(monkeypatch, request):
     monkeypatch.setattr(pipeline, "analyze", analyze_with_test_model)
 
 
+@pytest.fixture(autouse=True)
+def _test_client_host_is_local(monkeypatch):
+    """Starlette's TestClient addresses the app as "testserver".
+
+    A tokenless app answers loopback names only, so the test client's name is
+    added here rather than in the product. test_api_security.py sends explicit
+    Host headers to check the allowlist itself.
+    """
+    from cipherguard.api import security
+
+    monkeypatch.setattr(security, "LOOPBACK_HOSTS", security.LOOPBACK_HOSTS | {"testserver"})
+
+
 def pytest_report_header(config):
     """Say plainly whether the strongest validation claim is actually running.
 

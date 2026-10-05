@@ -3,7 +3,7 @@ services:
     name: cipherguard-api
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt && pip install -e .
+    buildCommand: pip install -r requirements.lock && pip install -e .
     # No --insecure-bind: a public host must not serve the dashboard
     # unauthenticated. The server refuses a non-loopback bind without a token.
     startCommand: python -m cipherguard.cli serve --host 0.0.0.0

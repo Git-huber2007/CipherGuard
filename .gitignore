@@ -1,6 +1,12 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+.env
+.env.*
+!.env.example
 *.egg-info/
 build/
 dist/

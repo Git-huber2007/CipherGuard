@@ -802,6 +802,7 @@ def cmd_rules(args: argparse.Namespace) -> int:
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
+    from .api.security import LOOPBACK_HOSTS
     from .api.server import create_app
 
     # The dashboard has no authentication. On loopback that is reasonable for a
@@ -829,6 +830,20 @@ def cmd_serve(args: argparse.Namespace) -> int:
     # environment. See create_app for why a wildcard is not accepted.
     cors = list(args.cors_origin or [])
     cors += [o for o in os.environ.get("CIPHERGUARD_CORS_ORIGINS", "").split(",") if o.strip()]
+
+    # Without a token the server answers only requests addressed to it by a
+    # loopback name, which is what stops a DNS-rebinding page reading the API.
+    # A name it is reached by through a tunnel or proxy has to be added.
+    extra_hosts = list(args.allowed_host or [])
+    extra_hosts += [h.strip() for h in os.environ.get("CIPHERGUARD_ALLOWED_HOSTS", "").split(",")
+                    if h.strip()]
+    allowed_hosts: list[str] | str | None
+    if token:
+        allowed_hosts = extra_hosts or None
+    elif loopback:
+        allowed_hosts = sorted(LOOPBACK_HOSTS | set(extra_hosts))
+    else:
+        allowed_hosts = extra_hosts or None  # --insecure-bind: the operator opted out
     try:
         app = create_app(
             model_dir=args.models,
@@ -838,6 +853,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
             auth_token=token,
             audit_log=args.audit_log,
             cors_origins=cors,
+            allowed_hosts=allowed_hosts,
         )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -1184,6 +1200,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="allow this web origin to call the API from a browser, e.g. "
                         "https://example.github.io (repeatable; or set "
                         "CIPHERGUARD_CORS_ORIGINS, comma-separated). Off by default.")
+    p.add_argument("--allowed-host", action="append", metavar="NAME",
+                   help="also answer requests addressed to this host name, e.g. the name "
+                        "of a tunnel or reverse proxy (repeatable; or set "
+                        "CIPHERGUARD_ALLOWED_HOSTS, comma-separated). Without a token "
+                        "only loopback names are answered.")
     p.add_argument("--audit-log", default="cipherguard-audit.jsonl",
                    help="JSON Lines audit trail path; use '' to disable")
     p.set_defaults(func=cmd_serve)

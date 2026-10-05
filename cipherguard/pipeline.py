@@ -100,6 +100,9 @@ def analyze(
             "model_loaded": model_loaded,
             "model_metrics": model_metrics,
             "parse_errors": sum(len(m.parse_errors) for m in messages),
+            # A score with rules switched off is not comparable to one without,
+            # so the report and the audit trail both carry which were skipped.
+            "disabled_rules": sorted(disabled_rules or ()),
         },
     )
 

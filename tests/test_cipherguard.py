@@ -32,6 +32,10 @@ from cipherguard.ml.synth import esp_ciphertext_length, synth_flow
 from cipherguard.pipeline import analyze
 from cipherguard.remediation.synth import GENERATORS, synthesize
 
+# An empty but valid pcap: the upload endpoint refuses anything that does not
+# start with a capture magic number.
+PCAP_HEADER = struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 262144, 1)
+
 
 # ---------------------------------------------------------------------------
 # Capture I/O
@@ -883,7 +887,7 @@ def test_upload_rejects_traversal_and_control_characters(tmp_path):
     # it cannot be exercised end-to-end; the server-side check remains as
     # defence against a client that does not.
     for name in ("../../etc/passwd.pcap", "..\\win.pcap", ".hidden.pcap", "x.exe", ""):
-        r = client.post("/api/upload", files={"file": (name, b"\x00" * 32)})
+        r = client.post("/api/upload", files={"file": (name, PCAP_HEADER)})
         assert r.status_code >= 400, f"{name} was accepted"
 
     assert not list(tmp_path.iterdir()), "a rejected upload still wrote to disk"
@@ -898,7 +902,7 @@ def test_stored_capture_names_never_contain_control_characters(tmp_path):
     from cipherguard.api.server import create_app
 
     client = TestClient(create_app(capture_dir=str(tmp_path)))
-    client.post("/api/upload", files={"file": ("good.pcap", b"\x00" * 32)})
+    client.post("/api/upload", files={"file": ("good.pcap", PCAP_HEADER)})
     for child in tmp_path.iterdir():
         assert not any(ord(c) < 32 or ord(c) == 127 for c in child.name)
         assert os.sep not in child.name
@@ -912,7 +916,7 @@ def test_upload_refuses_to_overwrite_existing_capture(tmp_path):
 
     (tmp_path / "existing.pcap").write_bytes(b"original")
     client = TestClient(create_app(capture_dir=str(tmp_path)))
-    r = client.post("/api/upload", files={"file": ("existing.pcap", b"replacement")})
+    r = client.post("/api/upload", files={"file": ("existing.pcap", PCAP_HEADER)})
     assert r.status_code == 409
     assert (tmp_path / "existing.pcap").read_bytes() == b"original"
 
