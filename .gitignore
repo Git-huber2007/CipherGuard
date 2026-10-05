@@ -5,6 +5,7 @@ __pycache__/
 *.db
 *.jsonl
 *.lock
+!requirements.lock
 
 # models/ is tracked on purpose: the Docker image and the Render deploy serve
 # the dashboard without running `cipherguard train` first.

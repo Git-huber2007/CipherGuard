@@ -10,6 +10,5 @@ uvicorn>=0.27
 pydantic>=2.0
 python-multipart>=0.0.9   # optional: capture upload endpoint only
 
-# Tests
-pytest>=7.4
-psutil>=5.9   # soak test RSS/descriptor sampling; Linux can fall back to /proc
+# Test and lint tools are in the `dev` extra: pip install -e ".[dev]"
+# Exact versions for a reproducible install are in requirements.lock.

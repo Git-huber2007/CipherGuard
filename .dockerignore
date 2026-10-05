@@ -1,0 +1,38 @@
+# Version control and CI
+.git
+.gitignore
+.gitattributes
+.github
+
+# Caches and local environments
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Runtime state written by the tool: audit trail, plan store, baselines
+*.db
+*.jsonl
+*.jsonl.lock
+
+# Only the lab captures belong in the image. Anything else in samples/ may be
+# real traffic from the build machine.
+samples/*.pcap
+!samples/backbone.pcap
+!samples/downgrade.pcap
+!samples/hardened.pcap
+!samples/legacy.pcap
+!samples/pqc_declined.pcap
+!samples/pqc_hybrid.pcap
+!samples/transitional.pcap
+samples/real/
+docker/
+*.local.json
+
+# Not needed to run the server
+tests/
+deploy/
+.claude/

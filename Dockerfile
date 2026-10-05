@@ -7,9 +7,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Install python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install python dependencies at the pinned versions
+COPY requirements.lock .
+RUN pip install --no-cache-dir -r requirements.lock
 
 # Copy source code and models
 COPY . .
