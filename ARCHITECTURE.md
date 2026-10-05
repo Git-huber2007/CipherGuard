@@ -64,9 +64,13 @@ cipherguard/                       # Repository root
 ├── GETTING-STARTED.md             # Install and demo walkthrough
 ├── ARCHITECTURE.md                # This file
 ├── CLAUDE.md                      # Working rules for coding agents
+├── CONTRIBUTING.md, SECURITY.md   # How to contribute and report vulnerabilities
+├── CHANGELOG.md                   # Release history
 ├── LICENSE, NOTICE                # Apache License 2.0 and attributions
-├── pyproject.toml                 # Packaging and metadata
-├── requirements.txt               # Runtime, dashboard and test dependencies
+├── pyproject.toml                 # Packaging, metadata and lint configuration
+├── requirements.txt               # Runtime and dashboard dependencies
+├── requirements.lock              # The same, pinned (`make lock`)
+├── Makefile                       # install, test, lint, serve, demo, lock
 ├── Dockerfile                     # Container image
 ├── render.yaml                    # Render deployment blueprint
 ├── launch_dashboard.bat           # Windows launcher
@@ -152,7 +156,7 @@ cipherguard/                       # Repository root
 │
 ├── docs/                          # Output of `cipherguard export-demo` (GitHub Pages root):
 │                                  #   a copy of api/static/ plus precomputed data/
-├── tests/                         # Pytest suite (421 tests)
+├── tests/                         # Pytest suite (422 tests)
 ├── scripts/                       # Release, soak, capture-fetch and export helpers
 ├── deploy/                        # systemd unit for the sensor
 ├── samples/                       # Lab captures written by `cipherguard lab`
@@ -291,7 +295,7 @@ The live API is REST under `/api/` with one server-sent event stream
 | Language | Python 3.10 or later | Everything. The dissector and pcap reader use the standard library only. |
 | Inference | `numpy>=1.24`, `scikit-learn>=1.3`, `joblib>=1.3` | Features, Random Forest, model files |
 | API | `fastapi>=0.110`, `uvicorn>=0.27`, `pydantic>=2.0`, `python-multipart>=0.0.9` | `cipherguard serve` only |
-| Tests | `pytest>=7.4`, `psutil>=5.9` | Test suite and soak test |
+| Development | `pytest>=7.4`, `httpx>=0.26`, `psutil>=5.9`, `ruff>=0.16` | Test suite, soak test and lint (the `dev` extra) |
 | Front end | HTML, CSS, JavaScript | No bundler, no framework |
 
 ## Ways to run it

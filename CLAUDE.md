@@ -6,9 +6,10 @@ the layout and `README.md` for the method and its limits.
 ## Commands
 
 ```bash
-pip install -r requirements.txt && pip install -e .
+pip install -r requirements.txt && pip install -e ".[dev]"
 cipherguard lab            # write the sample captures to samples/
 cipherguard train          # train the ESP inference model into models/
+ruff check .               # lint; must pass
 python -m pytest tests/    # full suite, about 3 minutes
 python -m pytest tests/ -m "not soak"
 cipherguard serve          # dashboard on http://127.0.0.1:8000

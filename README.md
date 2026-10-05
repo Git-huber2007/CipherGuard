@@ -17,6 +17,8 @@ A passive analyzer that audits the cryptographic posture of IPsec VPN
 deployments from mirrored traffic alone. It holds no keys, touches no gateway,
 and changes no configuration.
 
+![The dashboard assessing the backbone lab capture: one link's cleartext and encrypted fields side by side, and its posture grade](.github/assets/dashboard.png)
+
 ---
 
 ## System Architecture & Data Flow
@@ -749,7 +751,7 @@ python -m cipherguard.cli analyze docker/captures/weak.pcap
 ## Tests
 
 ```bash
-python -m pytest tests/ -q                 # 407 passed, 14 skipped without real captures
+python -m pytest tests/ -q                 # 408 passed, 14 skipped without real captures
 python -m pytest tests/ -q -m "not soak"   # skip the ~90 s of soak tests
 ```
 

@@ -188,11 +188,11 @@ Add `--no-evidence` to assess and discard.
 ## Optional — run the tests
 
 ```bash
-pip install pytest httpx
+pip install -e ".[dev]"
 python -m pytest tests/ -q
 ```
 
-421 tests, about 4 minutes. The real-capture tests skip until step 3 of the demo sequence. The first run trains a small model, so it is slower.
+422 tests, about 4 minutes. The real-capture tests skip until step 3 of the demo sequence. The first run trains a small model, so it is slower.
 
 ---
 
