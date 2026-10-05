@@ -1,7 +1,8 @@
-"""Remediation execution & dry-run validation dispatcher.
+"""Dry-run check of a hardening plan.
 
-Supports non-destructive dry-run syntax verification and authorized configuration
-staging on target gateways.
+A dry run syntax-checks the plan and reports how many configuration lines it
+holds. Nothing is ever sent to a gateway: there is no code path that connects
+to one, and a request to apply a plan for real is refused.
 """
 
 from __future__ import annotations
@@ -19,10 +20,10 @@ def apply_plan(
     target_host: str = "",
     credentials: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Execute or simulate the application of a hardening plan.
+    """Syntax-check `plan` and report what applying it would involve.
 
-    By default, `dry_run=True` ensures zero out-of-band side effects, validating
-    syntactic correctness and emitting the staged execution sequence.
+    `dry_run=False` with a target is refused. `credentials` is accepted for
+    interface compatibility and never read.
     """
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -33,7 +34,7 @@ def apply_plan(
             "success": False,
             "mode": "dry-run" if dry_run else "active",
             "timestamp": now,
-            "error": "Syntax validation failed before execution",
+            "error": "The plan failed its syntax check",
             "details": errors,
             "lines_staged": 0,
         }
@@ -45,20 +46,19 @@ def apply_plan(
             "success": True,
             "mode": "dry-run",
             "timestamp": now,
-            "target": target_host or "Simulated Gateway",
+            "target": target_host or None,
             "platform": plan.platform_name,
             "lines_staged": len(lines),
             "output": (
-                f"[DRY-RUN SUCCESSFUL] {len(lines)} configuration commands verified for {plan.platform_name}.\n"
-                f"Candidate configuration staged into memory with zero live disruptions.\n"
-                f"Rollback safety-net armed: {len(plan.rollback_config.splitlines())} lines."
+                f"Dry run: {len(lines)} configuration lines for {plan.platform_name} passed the syntax check.\n"
+                f"Nothing was sent to a gateway.\n"
+                f"The rollback plan has {len(plan.rollback_config.splitlines())} lines."
             ),
             "command_preview": lines[:6],
         }
 
-    # Live direct gateway mutation is prohibited under the passive defense doctrine.
-    # CipherGuard strictly enforces an out-of-band architecture: live gateway modification
-    # is reserved for authorized network administrators via human-in-the-loop reviewable playbooks.
+    # The tool is passive by design: it has no code that connects to a gateway.
+    # Applying a plan is an administrator's change, made under change control.
     return {
         "success": False,
         "mode": "live_apply_prohibited",
@@ -67,7 +67,7 @@ def apply_plan(
         "platform": plan.platform_name,
         "lines_staged": len(lines),
         "error": (
-            "Live direct gateway mutation is prohibited by NTRO / NIST SP 800-77 passive defense doctrine. "
-            "CipherGuard generates reviewable, vendor-validated CLI playbooks for administrator change-control execution."
+            "CipherGuard does not apply configuration to gateways. Review the plan and "
+            "apply it through your own change-control process."
         ),
     }

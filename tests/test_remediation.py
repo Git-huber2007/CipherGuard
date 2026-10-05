@@ -224,7 +224,7 @@ def test_apply_plan_dry_run(downgrade_assessment):
     assert res["success"] is True
     assert res["mode"] == "dry-run"
     assert res["lines_staged"] > 0
-    assert "DRY-RUN SUCCESSFUL" in res["output"]
+    assert "passed the syntax check" in res["output"] and "Nothing was sent" in res["output"]
 
 
 def test_apply_plan_syntax_gate():
@@ -241,7 +241,7 @@ def test_apply_plan_syntax_gate():
 
     res = apply_plan(invalid_plan, dry_run=True)
     assert res["success"] is False
-    assert "Syntax validation failed" in res["error"]
+    assert "failed its syntax check" in res["error"]
 
 
 def test_apply_plan_live_prohibited(downgrade_assessment):
@@ -249,4 +249,4 @@ def test_apply_plan_live_prohibited(downgrade_assessment):
     res = apply_plan(plan, dry_run=False, target_host="192.168.1.1")
     assert res["success"] is False
     assert res["mode"] == "live_apply_prohibited"
-    assert "passive defense doctrine" in res["error"]
+    assert "does not apply configuration" in res["error"]

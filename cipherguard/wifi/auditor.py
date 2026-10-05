@@ -7,6 +7,7 @@ DNS security, and rogue AP detection), and produces structured assessments.
 
 from __future__ import annotations
 
+import logging
 import ipaddress
 import re
 import subprocess
@@ -20,6 +21,8 @@ from .models import (
     WifiInterfaceInfo,
     WifiNetwork,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _is_private_ip(ip: str) -> bool:
@@ -329,7 +332,7 @@ class WifiAuditor:
             rx_rate = float(fields.get("receive rate (mbps)", "0").split()[0])
             tx_rate = float(fields.get("transmit rate (mbps)", "0").split()[0])
         except Exception:
-            pass
+            logger.debug("Wi-Fi probe failed; reporting what was read so far", exc_info=True)
 
         return WifiInterfaceInfo(
             name=fields.get("name", "Wi-Fi"),
@@ -362,7 +365,7 @@ class WifiAuditor:
                 from .wlan_native import trigger_scan
                 trigger_scan(wait_secs=1.5 if force_scan else 0.8)
             except Exception:
-                pass
+                logger.debug("Wi-Fi probe failed; reporting what was read so far", exc_info=True)
 
         try:
             out = subprocess.check_output(
@@ -638,7 +641,7 @@ class WifiAuditor:
             if not info["dns_servers"]:
                 info["dns_servers"] = list(dict.fromkeys(dns_matches))
         except Exception:
-            pass
+            logger.debug("Wi-Fi probe failed; reporting what was read so far", exc_info=True)
         return info
 
     # -- Linux Fallbacks ---------------------------------------------------
@@ -666,7 +669,7 @@ class WifiAuditor:
                         rssi_dbm=int((int(parts[4] or 80) / 2) - 100),
                     )
         except Exception:
-            pass
+            logger.debug("Wi-Fi probe failed; reporting what was read so far", exc_info=True)
         return None
 
     def _get_linux_networks(self) -> list[WifiNetwork]:
@@ -707,7 +710,7 @@ class WifiAuditor:
                         )
                     )
         except Exception:
-            pass
+            logger.debug("Wi-Fi probe failed; reporting what was read so far", exc_info=True)
         return networks
 
     def _get_linux_dns(self) -> dict[str, Any]:
@@ -718,5 +721,5 @@ class WifiAuditor:
                     if line.startswith("nameserver"):
                         info["dns_servers"].append(line.split()[1])
         except Exception:
-            pass
+            logger.debug("Wi-Fi probe failed; reporting what was read so far", exc_info=True)
         return info

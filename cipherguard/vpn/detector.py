@@ -8,6 +8,7 @@ egress IP/ISP geolocation.
 
 from __future__ import annotations
 
+import logging
 import json
 import os
 import re
@@ -17,8 +18,11 @@ import time
 import urllib.request
 from typing import Any
 
+from .. import __version__
 from ..wifi.models import SecurityFinding
 from .models import VpnTunnelInfo
+
+logger = logging.getLogger(__name__)
 
 VPN_PATTERNS: list[tuple[str, str]] = [
     (r"protun|proton", "ProtonVPN (WireGuard)"),
@@ -384,7 +388,7 @@ class VpnDetector:
                 info.vpn_type = detected_vpn_type
                 info.is_default_route = True
         except Exception:
-            pass
+            logger.debug("VPN probe failed; reporting what was read so far", exc_info=True)
         return info
 
     def _detect_linux(self, wifi_iface_name: str, wifi_dns: list[str] | None) -> VpnTunnelInfo:
@@ -412,7 +416,7 @@ class VpnDetector:
                             info.gateway_ip = parts[parts.index("via") + 1]
                         break
         except Exception:
-            pass
+            logger.debug("VPN probe failed; reporting what was read so far", exc_info=True)
         return info
 
     def _get_egress_info(self) -> dict[str, Any]:
@@ -438,13 +442,13 @@ class VpnDetector:
             try:
                 req = urllib.request.Request(
                     endpoint,
-                    headers={"User-Agent": "CipherGuard-Security-Auditor/2.0"},
+                    headers={"User-Agent": f"CipherGuard/{__version__}"},
                 )
                 with urllib.request.urlopen(req, timeout=1.8) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                     if kind == "ipwho" and data.get("ip"):
                         conn = data.get("connection") or {}
-                        isp = conn.get("isp") or conn.get("org") or data.get("isp", "Encrypted Tunnel Egress")
+                        isp = conn.get("isp") or conn.get("org") or data.get("isp", "")
                         info = {
                             "ip": data.get("ip", ""),
                             "isp": isp,
@@ -455,7 +459,7 @@ class VpnDetector:
                     elif kind == "ipapico" and data.get("ip"):
                         info = {
                             "ip": data.get("ip", ""),
-                            "isp": data.get("org", "") or data.get("asn", "Encrypted Tunnel Egress"),
+                            "isp": data.get("org", "") or data.get("asn", ""),
                             "country": data.get("country_name", ""),
                             "city": data.get("city", ""),
                         }
@@ -463,13 +467,13 @@ class VpnDetector:
                     elif data.get("status") == "success" or data.get("query"):
                         info = {
                             "ip": data.get("query", data.get("ip", "")),
-                            "isp": data.get("isp", "") or data.get("org", "Public Egress"),
+                            "isp": data.get("isp", "") or data.get("org", ""),
                             "country": data.get("country", ""),
                             "city": data.get("city", ""),
                         }
                         break
                     elif data.get("ip"):
-                        info = {"ip": data.get("ip"), "isp": "Public Egress", "country": "", "city": ""}
+                        info = {"ip": data.get("ip"), "isp": "", "country": "", "city": ""}
                         break
             except Exception:
                 continue

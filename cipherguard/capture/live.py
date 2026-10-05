@@ -24,6 +24,7 @@ Two properties matter more than throughput:
 
 from __future__ import annotations
 
+import logging
 import os
 import socket
 import struct
@@ -33,6 +34,8 @@ from dataclasses import dataclass
 from typing import Iterator
 
 from ..dissector.pcap import LINKTYPE_ETHERNET, LINKTYPE_RAW, Packet, PcapWriter, decode
+
+logger = logging.getLogger(__name__)
 
 ETH_P_ALL = 0x0003
 SO_ATTACH_FILTER = 26
@@ -148,7 +151,7 @@ class LiveCapture:
                     host_name = socket.gethostname()
                     host_ip = socket.gethostbyname(host_name)
                 except Exception:
-                    pass
+                    logger.debug("could not look up the local address; using the default", exc_info=True)
                 sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IP)
                 sock.bind((host_ip, 0))
                 try:

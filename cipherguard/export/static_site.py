@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import json
 import os
 import shutil
@@ -9,6 +10,8 @@ from ..pipeline import analyze
 from ..remediation.synth import synthesize
 from .cbom import build_cbom
 from .payload import build_payload
+
+logger = logging.getLogger(__name__)
 
 def _get_default_demo_wifi() -> dict:
     """The example Wi-Fi scan shown by the static build.
@@ -25,7 +28,7 @@ def _get_default_demo_wifi() -> dict:
                 if data.get("networks_in_range"):
                     return data
         except Exception:
-            pass
+            logger.debug("optional export step skipped", exc_info=True)
     return {
         "interface": {
             "name": "Wi-Fi",
@@ -187,9 +190,9 @@ def export(
                     with open(os.path.join(wire_dir, w_slug), "w", encoding="utf-8") as fh:
                         json.dump(w_sample, fh)
                 except Exception:
-                    pass
+                    logger.debug("optional export step skipped", exc_info=True)
         except Exception:
-            pass
+            logger.debug("optional export step skipped", exc_info=True)
 
         size = os.path.getsize(path)
         entries.append({

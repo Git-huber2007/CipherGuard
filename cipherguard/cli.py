@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import argparse
 import json
 import os
@@ -16,6 +17,8 @@ from .core.models import Assessment, Severity
 from .core.retention import prune_evidence
 from .intel.baseline import DEFAULT_RETAIN_DAYS, DEFAULT_RETAIN_PER_PEER
 from .pipeline import analyze, throughput_estimate
+
+logger = logging.getLogger(__name__)
 
 # ANSI colours, disabled when not writing to a terminal
 _TTY = sys.stdout.isatty()
@@ -922,7 +925,7 @@ def cmd_wifi(args: argparse.Namespace) -> int:
             loc = f" ({vpn_info.egress_city}, {vpn_info.egress_country})" if vpn_info.egress_city else ""
             print(f"    - Public Egress : {vpn_info.egress_ip} | {vpn_info.egress_isp}{loc}")
     except Exception:
-        pass
+        logger.debug("VPN summary skipped", exc_info=True)
 
     return 0
 
@@ -1052,6 +1055,9 @@ def build_parser() -> argparse.ArgumentParser:
         description="Passive IPsec VPN protocol analyzer and security assessment framework",
     )
     ap.add_argument("--models", default="models", help="trained model directory")
+    ap.add_argument("--log-level", default="warning",
+                    choices=["debug", "info", "warning", "error"],
+                    help="how much diagnostic logging goes to stderr (default: warning)")
     sub = ap.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("analyze", help="assess a capture file")
@@ -1214,6 +1220,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    logging.basicConfig(level=args.log_level.upper(), stream=sys.stderr,
+                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     try:
         return args.func(args)
     except PolicyError as exc:
