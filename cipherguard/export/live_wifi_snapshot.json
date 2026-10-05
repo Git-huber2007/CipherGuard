@@ -1,36 +1,36 @@
 {
   "interface": {
     "name": "Wi-Fi",
-    "description": "MediaTek MT7921 Wi-Fi 6 802.11ax PCIe Adapter",
-    "mac_address": "2c:3b:70:fc:74:8b",
+    "description": "Example 802.11ax Wi-Fi adapter",
+    "mac_address": "00:00:5e:00:53:01",
     "state": "connected",
-    "ssid": "White devil \ud83d\ude08\ud83d\ude08 5g",
-    "bssid": "7c:a9:6b:74:ae:ca",
-    "band": "5 GHz",
-    "channel": 52,
-    "radio_type": "802.11ac",
+    "ssid": "CipherGuard-HQ-Secure",
+    "bssid": "00:00:5e:00:53:10",
+    "band": "2.4 GHz",
+    "channel": 10,
+    "radio_type": "802.11n",
     "authentication": "WPA2-Personal",
     "cipher": "CCMP",
-    "signal_percent": 89,
-    "rssi_dbm": -36,
-    "rx_rate_mbps": 866.7,
-    "tx_rate_mbps": 866.7,
+    "signal_percent": 84,
+    "rssi_dbm": -30,
+    "rx_rate_mbps": 300.0,
+    "tx_rate_mbps": 300.0,
     "dns_servers": [
       "1.1.1.1",
-      "103.177.234.10"
+      "1.0.0.1"
     ],
     "gateway_ip": "192.168.1.1",
-    "ipv4_address": "192.168.1.35"
+    "ipv4_address": "192.168.1.20"
   },
   "networks_in_range": [
     {
-      "ssid": "White devil \ud83d\ude08\ud83d\ude08 5g",
-      "bssid": "7c:a9:6b:74:ae:ca",
-      "signal_percent": 88,
-      "rssi_dbm": -56,
-      "channel": 52,
-      "band": "5 GHz",
-      "radio_type": "802.11ac",
+      "ssid": "CipherGuard-HQ-Secure",
+      "bssid": "00:00:5e:00:53:10",
+      "signal_percent": 90,
+      "rssi_dbm": -55,
+      "channel": 10,
+      "band": "2.4 GHz",
+      "radio_type": "802.11n",
       "authentication": "WPA2-Personal",
       "encryption": "CCMP",
       "security_grade": "B",
@@ -41,13 +41,13 @@
       "cipher": "CCMP"
     },
     {
-      "ssid": "BOTboi",
-      "bssid": "7c:a9:6b:74:ae:ce",
+      "ssid": "Lab-Guest",
+      "bssid": "00:00:5e:00:53:20",
       "signal_percent": 84,
       "rssi_dbm": -58,
-      "channel": 10,
+      "channel": 11,
       "band": "2.4 GHz",
-      "radio_type": "802.11n",
+      "radio_type": "802.11ax",
       "authentication": "WPA2-Personal",
       "encryption": "CCMP",
       "security_grade": "B",
@@ -58,8 +58,8 @@
       "cipher": "CCMP"
     },
     {
-      "ssid": "Kartik Sinha",
-      "bssid": "16:32:51:9c:5b:dd",
+      "ssid": "Lab-Guest",
+      "bssid": "00:00:5e:00:53:21",
       "signal_percent": 81,
       "rssi_dbm": -59,
       "channel": 44,
@@ -75,30 +75,13 @@
       "cipher": "CCMP"
     },
     {
-      "ssid": "BISHAL-3G",
-      "bssid": "38:94:e0:f4:e8:7d",
-      "signal_percent": 21,
-      "rssi_dbm": -89,
-      "channel": 5,
-      "band": "2.4 GHz",
-      "radio_type": "802.11n",
-      "authentication": "WPA2-Personal",
-      "encryption": "CCMP",
-      "security_grade": "B",
-      "connected": false,
-      "is_rogue": false,
-      "rogue_reason": "",
-      "notes": "",
-      "cipher": "CCMP"
-    },
-    {
-      "ssid": "(Hidden SSID)",
-      "bssid": "9e:a2:f4:aa:8e:84",
+      "ssid": "Annex-Printer",
+      "bssid": "00:00:5e:00:53:30",
       "signal_percent": 5,
       "rssi_dbm": -97,
-      "channel": 8,
+      "channel": 11,
       "band": "2.4 GHz",
-      "radio_type": "802.11ac",
+      "radio_type": "802.11n",
       "authentication": "WPA2-Personal",
       "encryption": "CCMP",
       "security_grade": "B",
@@ -111,16 +94,26 @@
   ],
   "score": 85,
   "grade": "B",
-  "started": "2026-09-26T18:12:28.275167+00:00",
+  "started": "2026-10-01T00:00:00+00:00",
   "findings": [
     {
       "severity": "medium",
       "rule_id": "WIFI-004",
       "title": "WPA2 Pre-Shared Key (PSK) Vulnerable to Offline Dictionary Attack",
-      "subject": "SSID: White devil \ud83d\ude08\ud83d\ude08 5g (WPA2-Personal)",
+      "subject": "SSID: CipherGuard-HQ-Secure (WPA2-Personal)",
       "detail": "WPA2 4-Way Handshake allows passive adversaries recording the handshake to execute offline dictionary and brute-force attacks against the pre-shared key (PMK/PTK).",
       "remediation": "Enable WPA3-Personal (SAE - Simultaneous Authentication of Equals) with Protected Management Frames (PMF / 802.11w) on your router.",
       "reference": "IEEE 802.11-2020 / NIST SP 800-162",
+      "inferred": false
+    },
+    {
+      "severity": "info",
+      "rule_id": "WIFI-011",
+      "title": "2.4 GHz Band In Use (Crowded Spectrum)",
+      "subject": "Band: 2.4 GHz · Channel 10",
+      "detail": "The 2.4 GHz spectrum has only 3 non-overlapping channels (1, 6, 11) and suffers significant co-channel interference from Bluetooth and microwave emitters.",
+      "remediation": "Migrate clients to 5 GHz or 6 GHz (Wi-Fi 6/6E) for higher bandwidth and isolated DFS channels.",
+      "reference": "IEEE 802.11ax / 802.11be",
       "inferred": false
     },
     {
@@ -139,16 +132,16 @@
     "high": 0,
     "medium": 1,
     "low": 0,
-    "info": 1
+    "info": 2
   },
-  "summary": "Connected to 'White devil \ud83d\ude08\ud83d\ude08 5g' on 5 GHz (Channel 52). Security: WPA2-Personal / CCMP with 89% signal. Score: 85/100 (Grade B).",
+  "summary": "Connected to 'CipherGuard-HQ-Secure' on 2.4 GHz (Channel 10). Security: WPA2-Personal / CCMP with 84% signal. Score: 85/100 (Grade B).",
   "dns_posture": {
     "dns_servers": [
       "1.1.1.1",
-      "103.177.234.10"
+      "1.0.0.1"
     ],
     "gateway": "192.168.1.1",
-    "ipv4": "192.168.1.35"
+    "ipv4": "192.168.1.20"
   },
   "quantum_risk": "Standard Classical (ECC/RSA Handshake at Risk to CRQC)",
   "rogue_aps": [],
@@ -164,16 +157,17 @@
     "dns_servers": [],
     "dns_leak_detected": false,
     "dns_leak_details": "",
-    "egress_ip": "103.120.62.239",
-    "egress_isp": "Udupi Fastnet Private Limited",
-    "egress_country": "India",
-    "egress_city": "Bengaluru",
+    "egress_ip": "",
+    "egress_isp": "",
+    "egress_country": "",
+    "egress_city": "",
+    "egress_queried": false,
     "findings": [
       {
         "severity": "info",
         "rule_id": "VPN-010",
         "title": "Direct Physical Egress (No Virtual VPN Tunnel)",
-        "subject": "Egress: Direct to ISP (Udupi Fastnet Private Limited)",
+        "subject": "Egress: Direct to ISP",
         "detail": "Device network traffic egresses directly through the local Wi-Fi router to the public ISP without an outer IPsec or WireGuard protective tunnel. Local network administrators and upstream ISPs can inspect unencrypted transport metadata and SNI hostnames.",
         "remediation": "For sensitive remote access or untrusted networks, establish an IPsec (RFC 4301) or WireGuard tunnel.",
         "reference": "NIST SP 800-77 / NIST SP 800-113",

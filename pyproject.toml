@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,8 @@ name = "cipherguard"
 version = "1.0.0"
 description = "Passive IPsec VPN protocol analyzer and security assessment framework"
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24",
@@ -43,9 +45,5 @@ markers = [
 ]
 
 [tool.pyright]
-extraPaths = [
-    "C:/Users/sujan/AppData/Local/Packages/PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0/LocalCache/local-packages/Python311/site-packages",
-    "."
-]
 reportMissingImports = "warning"
 

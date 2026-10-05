@@ -94,6 +94,13 @@ class IkeMessage:
     lifetime_seconds: int | None = None
     auth_method: str | None = None
     natt: bool = False
+    fragment: tuple[int, int] | None = None  # RFC 7383 (number, total)
+    # Key exchange hygiene (IKE-015, IKE-016). Only a SHA-256 digest of the KE
+    # public value and of the nonce is kept, plus the nonce length: enough to
+    # tell two values apart or equal, and nothing that reproduces either.
+    ke_digest: str | None = None
+    nonce_digest: str | None = None
+    nonce_len: int | None = None
     parse_errors: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -183,6 +190,57 @@ class IkeSession:
                     seen.append(n)
         return seen
 
+    def exchanges_seen(self, exchange: str) -> int:
+        """How many exchanges of this type were observed on the session.
+
+        Counted by message ID, so a request, its response and any
+        retransmission of either are one exchange.
+        """
+        return len({m.message_id for m in self.messages if m.exchange == exchange})
+
+    def key_exchange(self) -> dict[str, Any]:
+        """What the wire shows about how this SA's keys were established.
+
+        The method and any RFC 9370 additional key exchanges come from the
+        proposal the responder selected, which is cleartext in IKE_SA_INIT.
+        The additional exchanges themselves run inside IKE_INTERMEDIATE, which
+        is encrypted, so all that can be said of them is how many of those
+        exchanges were seen. Nothing here is inferred.
+        """
+        from .constants import ADDKE_TRANSFORM_TYPES, DH_GROUPS, TRANSFORM_KE
+
+        def describe(t: Transform) -> dict[str, Any]:
+            return {
+                "slot": t.type_name,
+                "group": t.value_id,
+                "name": t.name,
+                "post_quantum": DH_GROUPS.get(t.value_id, {}).get("kind") == "pq",
+            }
+
+        confirmed = self.negotiated("IKE", confirmed_only=True)
+        selected = confirmed.transforms if confirmed else []
+        method = next((describe(t) for t in selected if t.type_id == TRANSFORM_KE), None)
+        additional = [describe(t) for t in selected
+                      if t.type_id in ADDKE_TRANSFORM_TYPES and t.value_id != 0]
+
+        offered: list[dict[str, Any]] = []
+        for prop in self.offered("IKE"):
+            for t in prop.transforms:
+                if t.type_id in ADDKE_TRANSFORM_TYPES and t.value_id != 0:
+                    d = describe(t)
+                    if d not in offered:
+                        offered.append(d)
+
+        return {
+            "confirmed": confirmed is not None,
+            "method": method,
+            "additional": additional,
+            "additional_offered": offered,
+            "hybrid": bool(additional),
+            "intermediate_exchanges": self.exchanges_seen("IKE_INTERMEDIATE"),
+            "followup_ke_exchanges": self.exchanges_seen("IKE_FOLLOWUP_KE"),
+        }
+
     def vendor_family(self) -> str:
         from .constants import VENDOR_FAMILY
 
@@ -208,13 +266,27 @@ class IkeSession:
             "observed_bytes": self.observed_bytes,
             "observed_seconds": round(self.observed_seconds, 3),
             "strength": self.strength().to_dict(),
+            "key_exchange": self.key_exchange(),
         }
 
     def strength(self):
+        """Strength of the negotiated proposal, or of the offer if no response
+        was seen.
+
+        An offer is scored like a selection for everything except post-quantum
+        credit. Scoring a weak offer as weak errs toward raising a finding;
+        scoring a post-quantum offer as quantum-safe would err toward hiding
+        one, on the strength of a packet nobody was seen to answer.
+        """
+        from dataclasses import replace
+
         from .strength import score_proposal
 
         prop = self.negotiated("IKE")
-        return score_proposal(prop.transforms if prop else [])
+        strength = score_proposal(prop.transforms if prop else [])
+        if strength.kex_quantum_bits and not self.is_confirmed("IKE"):
+            strength = replace(strength, quantum_bits=0, kex_quantum_bits=0)
+        return strength
 
 
 @dataclass

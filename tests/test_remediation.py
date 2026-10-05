@@ -34,7 +34,7 @@ def test_hardening_plan_model_serialization():
         rollback_config="no crypto ikev2 policy TEST\n",
         syntax_valid=True,
         syntax_errors=[],
-        findings_addressed=4,
+        findings_addressed=[{"rule_id": "IKE-004"}],
         status="DRAFTED",
     )
     d = plan.to_dict()
@@ -165,17 +165,17 @@ set system host-name router-1
 
 
 def test_rollback_playbook_generation():
-    cisco_rb = generate_rollback("cisco", "crypto ikev2 proposal CG-PROPOSAL-HARDENED\n")
+    cisco_rb = generate_rollback("cisco")
     assert "no crypto ikev2" in cisco_rb
     assert "no crypto ipsec" in cisco_rb
 
-    swan_rb = generate_rollback("strongswan", "")
+    swan_rb = generate_rollback("strongswan")
     assert "swanctl" in swan_rb
 
-    forti_rb = generate_rollback("fortinet", "")
+    forti_rb = generate_rollback("fortinet")
     assert "delete" in forti_rb
 
-    juniper_rb = generate_rollback("juniper", "")
+    juniper_rb = generate_rollback("juniper")
     assert "delete security" in juniper_rb
 
 
@@ -208,6 +208,7 @@ def test_plan_store_crud_and_lifecycle():
     assert approved.approval_comment == "Signed off"
 
     staged = store.update_status("plan-xyz", "STAGED", actor="AutoEngine", comment="Dry run passed")
+    assert staged is not None
     assert staged.status == "STAGED"
 
     history = store.history("plan-xyz")

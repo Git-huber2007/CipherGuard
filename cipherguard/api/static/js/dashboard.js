@@ -105,6 +105,9 @@ window.Fmt = Fmt;
 const Glossary = (() => {
   const TERMS = [
     ["IKE_SA_INIT", "ike-sa-init"], ["IKE_AUTH", "ike-auth"],
+    ["IKE_INTERMEDIATE", "ike-intermediate"],
+    ["hybrid key exchange", "hybrid-kex"], ["Hybrid key exchange", "hybrid-kex"],
+    ["ML-KEM", "ml-kem"],
     ["Diffie-Hellman group", "dh-group"], ["DH group", "dh-group"],
     ["framing class", "framing-class"], ["Framing class", "framing-class"],
     ["harvest-now-decrypt-later", "hndl"], ["Harvest-now-decrypt-later", "hndl"],
@@ -246,10 +249,38 @@ function pickIkeProposal(s){
   return null;
 }
 
+/* RFC 9370 additional key exchanges: transform types 6 to 12 (ADDKE1-ADDKE7).
+   They take their IDs from the same registry as the key exchange (type 4). */
+function isAddKe(t){ return t.type_id >= 6 && t.type_id <= 12; }
+const PQ_GROUPS = [35, 36, 37];                 // ML-KEM-512 / 768 / 1024
+
 function pretty(t){
+  // an additional key exchange is shown with its slot, so "ML-KEM-768" as the
+  // second exchange of a hybrid does not read as the only one
+  if (isAddKe(t)) return `${t.type_name}: ${t.value_id === 0 ? "none" : t.name}`;
   let n = t.name.replace(/^ENCR_|^AUTH_|^PRF_/, "");
   if (t.key_length) n += "-" + t.key_length;
   return n;
+}
+
+/* The key exchange of a proposal as one label: the method, plus any additional
+   exchange that is not NONE. "Curve25519 + ML-KEM-768" for a hybrid. */
+function keyExchangeLabel(prop){
+  const base = prop.transforms.find(t => t.type_id === 4);
+  if (!base) return null;
+  const extra = prop.transforms.filter(t => isAddKe(t) && t.value_id !== 0).map(t => t.name);
+  return [base.name, ...extra].join(" + ");
+}
+
+/* A session's hybrid status, from the server's key_exchange block. Observed,
+   not inferred: the selection is cleartext in IKE_SA_INIT. The additional
+   exchange itself is encrypted, so this says how many IKE_INTERMEDIATE
+   exchanges were seen and claims nothing about what they carried. */
+function hybridNote(s){
+  const kx = s.key_exchange;
+  if (!kx || !kx.hybrid) return "";
+  const n = kx.intermediate_exchanges;
+  return ` · hybrid key exchange, ${n} IKE_INTERMEDIATE exchange${n === 1 ? "" : "s"} observed`;
 }
 
 /* Algorithm judgement, mirroring audit/policy.py so a badge colour and a
@@ -259,8 +290,10 @@ const BAD_HASH = /MD5/i;
 const WEAK_HASH = /SHA1|SHA_1/i;
 
 function algClass(t){
-  if (t.type_id === 4){                       // Diffie-Hellman group
+  if (t.type_id === 4 || isAddKe(t)){         // key exchange, first or additional
     const id = t.value_id;
+    if (id === 0) return "";                  // an additional slot left unused
+    if (PQ_GROUPS.includes(id)) return "good";
     if ([1, 2, 22, 25].includes(id)) return "bad";
     if ([5, 26].includes(id)) return "warn";
     return "good";
@@ -488,6 +521,8 @@ function openBackendModal(){
   if (input) {
     input.value = localStorage.getItem("cipherguard_backend_url") || (location.port === "8000" ? window.location.origin : "http://127.0.0.1:8000");
   }
+  const cmd = $("backend-start-cmd");
+  if (cmd) cmd.textContent = backendStartCommand();
   testBackendConnection().then(check => {
     updateBackendModalContent(check.ok, check);
   });
@@ -539,7 +574,7 @@ async function handleSaveBackendUrl(){
     if (feedback) {
       feedback.hidden = false;
       feedback.className = "backend-feedback error";
-      feedback.textContent = `✖ Connection failed (${test.latency}ms): ${test.error}. Verify server is running with CORS enabled.`;
+      feedback.textContent = `✖ Connection failed (${test.latency}ms): ${test.error}. Check the server is running and was started with --cors-origin ${window.location.origin}`;
     }
     showToast(`Backend connection failed: ${test.error}`, "error");
     updateBackendStatusPill(false);
@@ -559,8 +594,19 @@ function handleResetBackendUrl(){
   handleSaveBackendUrl();
 }
 
+/* The command that starts a backend this page can reach. Served by the backend
+ * itself, the page is same-origin and needs nothing extra. Served from anywhere
+ * else (the hosted static build), the backend answers this origin only if it is
+ * named with --cors-origin; cross-origin access is off by default. */
+function backendStartCommand(){
+  const base = "python -m cipherguard.cli serve";
+  const origin = window.location.origin;
+  const sameOrigin = location.port === "8000" || !/^https?:/.test(origin);
+  return sameOrigin ? base : `${base} --cors-origin ${origin}`;
+}
+
 function handleCopyBackendCmd(){
-  const cmd = "python -m uvicorn cipherguard.api.server:app --host 127.0.0.1 --port 8000";
+  const cmd = backendStartCommand();
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(cmd).then(() => {
       showToast("Command copied", "success");
@@ -861,7 +907,7 @@ function renderLinkDetail(a, link){
           ? prop.transforms.map(t => `<span class="alg ${algClass(t)}">${esc(pretty(t))}</span>`).join("")
           : `<span class="alg">proposal not observed</span>`;
         return `<div class="ld-rec">
-          <div class="meta">${esc(s.version)} · ${esc(s.vendor_family)} · ${s.messages.length} messages</div>
+          <div class="meta">${esc(s.version)} · ${esc(s.vendor_family)} · ${s.messages.length} messages${esc(hybridNote(s))}</div>
           <div class="ld-spi mono">initiator SPI ${esc(s.initiator_spi)}</div>
           <div class="algs">${algs}</div>
         </div>`;
@@ -993,7 +1039,7 @@ function renderSessions(a){
     return `<div class="rec">
       <div class="peers">${esc(s.peer_a)} &harr; ${esc(s.peer_b)}</div>
       <div class="meta">${esc(s.version)} · ${esc(s.vendor_family)} · `
-      + `${s.messages.length} messages${esc(notes)}${esc(retx)}</div>
+      + `${s.messages.length} messages${esc(notes)}${esc(retx)}${esc(hybridNote(s))}</div>
       <div class="algs">${algs}</div>
     </div>`;
   }).join("");
@@ -2082,7 +2128,9 @@ function renderPlaybookUI(){
     const st = currentPlan.status || "DRAFTED";
     statusBadge.className = "playbook-chip chip-status " + st.toLowerCase();
     if (st === "APPROVED") {
-      statusBadge.textContent = `Status: APPROVED (${currentPlan.approver || "Admin"})`;
+      // the name is whatever was typed; the API does not authenticate people
+      statusBadge.textContent = `Status: APPROVED (self-declared: ${currentPlan.approver || "no name"})`;
+      statusBadge.title = "The approver's name was typed in, not authenticated.";
     } else if (st === "STAGED") {
       statusBadge.textContent = "Status: STAGED (Dry-Run)";
     } else {
@@ -2848,7 +2896,8 @@ function extractSuiteInfo(assessment){
       else if (auth) ikePrf = pretty(auth);
       const dh = prop.transforms.find(t => t.type_id === 4);
       if (dh){
-        dhGroup = pretty(dh);
+        // with any additional key exchange, so a hybrid compares as a hybrid
+        dhGroup = keyExchangeLabel(prop);
         dhVal = dh.value_id;
       }
     }
@@ -3204,62 +3253,6 @@ function switchTab(tab){
 
 
 
-async function detectClientVpnEgress(data){
-  if (!data || !data.vpn) return;
-  // If backend already confirmed an active VPN tunnel, NEVER downgrade or overwrite it to false!
-  const backendConnected = !!data.vpn.connected;
-  if (backendConnected && data.vpn.egress_ip) {
-    return;
-  }
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 2400);
-    const res = await fetch("https://ipwho.is/", { signal: controller.signal, mode: "cors" });
-    clearTimeout(timer);
-    if (res.ok) {
-      const geo = await res.json();
-      if (geo && geo.success !== false && geo.ip) {
-        const isp = (geo.connection && geo.connection.isp) || geo.isp || "";
-        const org = (geo.connection && geo.connection.org) || geo.org || "";
-        const combined = `${isp} ${org}`.toLowerCase();
-        const isVpn = backendConnected || /proton|wireguard|mullvad|nord|expressvpn|surfshark|private internet|pia|cyberghost|tunnelbear|cloudflare|ovh|digitalocean|linode|vultr|datacenter|datacamp|hosting/i.test(combined);
-
-        data.vpn.egress_ip = geo.ip;
-        data.vpn.egress_isp = isp || data.vpn.egress_isp || "Public Egress";
-        data.vpn.egress_country = geo.country || data.vpn.egress_country || "";
-        data.vpn.egress_city = geo.city || data.vpn.egress_city || "";
-
-        if (backendConnected || isVpn) {
-          let vType = (data.vpn.vpn_type && data.vpn.vpn_type !== "None") ? data.vpn.vpn_type : "Encrypted VPN Tunnel";
-          if (!backendConnected) {
-            if (/proton/i.test(combined)) vType = "ProtonVPN (WireGuard)";
-            else if (/mullvad/i.test(combined)) vType = "Mullvad (WireGuard)";
-            else if (/nord/i.test(combined)) vType = "NordVPN (NordLynx)";
-            else if (/wireguard/i.test(combined)) vType = "WireGuard Tunnel";
-            else if (/cloudflare/i.test(combined)) vType = "Cloudflare WARP";
-          }
-
-          data.vpn.connected = true;
-          data.vpn.vpn_type = vType;
-          data.vpn.adapter_name = data.vpn.adapter_name || "ProTUN";
-          data.vpn.adapter_description = data.vpn.adapter_description || "VPN Virtual Tunnel Adapter";
-          data.vpn.is_default_route = true;
-          data.vpn.dns_servers = (data.vpn.dns_servers && data.vpn.dns_servers.length) ? data.vpn.dns_servers : ["10.2.0.1"];
-          data.vpn.dns_leak_detected = false;
-        } else {
-          data.vpn.connected = false;
-          data.vpn.vpn_type = "None";
-          data.vpn.adapter_name = "";
-          data.vpn.is_default_route = false;
-        }
-      }
-    }
-  } catch (e) {
-    console.debug("Client-side egress lookup skipped or timed out:", e);
-  }
-}
-
-
 function updateBackendStatusPill(isLive, details = {}) {
   const pill = $("backend-status-pill");
   const label = $("backend-status-label");
@@ -3302,13 +3295,14 @@ async function loadWifiAssessment(forceScan = false, silent = false){
       console.debug("Live backend endpoint unreachable, checking fallback:", apiErr);
     }
 
-    // 2. Fallback to static demo if live API was unreachable
+    // 2. Fallback to the bundled example scan if live API was unreachable. It
+    // is shown as it was saved: the page makes no lookup of its own, so it
+    // works with no internet connection and never rewrites what was saved.
     if (!data) {
       try {
         const res = await fetch("data/wifi_demo.json", { cache: "no-store" });
         if (res.ok) data = await res.json();
       } catch (e) {}
-      await detectClientVpnEgress(data);
     }
 
     state.wifiAssessment = data;
@@ -3324,10 +3318,9 @@ async function loadWifiAssessment(forceScan = false, silent = false){
         grade: data.grade
       });
     } else {
-      // a saved scan from export time, not this viewer's network: say so
-      const when = data.started ? new Date(data.started) : null;
-      $("wifi-last-scan").textContent = "Saved scan, recorded when this demo was built"
-        + (when && !isNaN(when) ? " · " + when.toLocaleString() : "");
+      // the bundled example, with invented networks: not this viewer's
+      // network and not anyone else's, so say so
+      $("wifi-last-scan").textContent = "Example scan · invented networks, not a real site";
       CipherGuardTelemetry.recordEvent("wifi_assessment_run", { mode: "demo", force_scan: forceScan });
     }
   } catch(err){
@@ -3583,10 +3576,16 @@ function renderVpnOverlay(vpn){
     egressVal.title = `${vpn.egress_ip}`;
     const loc = [vpn.egress_city, vpn.egress_country].filter(Boolean).join(", ");
     locationVal.textContent = `${vpn.egress_isp || "Public ISP"}${loc ? ` (${loc})` : ""}`;
-  } else {
-    egressVal.textContent = "Direct Egress";
+  } else if (vpn && vpn.egress_queried){
+    egressVal.textContent = "No answer";
     egressVal.removeAttribute("title");
-    locationVal.textContent = "Local Network Interface";
+    locationVal.textContent = "The lookup service did not respond";
+  } else {
+    // Off by default: finding the public address means asking an outside
+    // service, and the analyzer makes no outbound calls unless told to.
+    egressVal.textContent = "Not queried";
+    egressVal.title = "Set CIPHERGUARD_EGRESS_LOOKUP=1 on the server to look it up";
+    locationVal.textContent = "Outbound lookup is off";
   }
 }
 
@@ -4356,11 +4355,16 @@ function exportSecurityAuditReport(){
 
 // --- 2. LIVE WIRE PACKET SNIFFER & SSE STREAMING ENGINE ---
 const LiveSnifferEngine = (function() {
-  let eventSource = null;
+  let streamAbort = null;
   let isSniffing = false;
+  let currentMode = "idle";   // the server's word for it: live_socket | replay | idle
   const knownSpis = {};
 
-  async function startSniffing() {
+  /* `replay` is only ever true from the Replay button. A live capture that
+   * cannot start shows the server's reason and stays stopped; it is never
+   * swapped for sample traffic. */
+  async function startSniffing(replay) {
+    replay = replay === true;
     const ifaceSelect = $("sniffer-iface-select");
     const iface = ifaceSelect ? ifaceSelect.value : "All Interfaces";
 
@@ -4368,57 +4372,94 @@ const LiveSnifferEngine = (function() {
       const res = await api("/api/sniff/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ interface: iface }),
+        body: JSON.stringify({ interface: iface, replay }),
       });
-      const data = await res.json();
-      updateUIState(true);
-      connectSSE();
-      showToast("Live capture started", "info");
+      const st = await res.json();
+      resetFeed();
+      updateUIState(true, st.mode);
+      connectStream();
+      showToast(st.mode === "replay"
+        ? "Replaying the sample captures. This is not live traffic."
+        : "Live capture started", "info");
     } catch(err) {
-      showToast("Failed to start sniffer: " + err.message, "error");
+      updateUIState(false, "failed", err.message);
+      showToast((replay ? "Replay could not start: " : "Live capture could not start: ") + err.message, "error");
     }
   }
 
   async function stopSniffing() {
     try {
       await api("/api/sniff/stop", { method: "POST" });
-      updateUIState(false);
-      if (eventSource) {
-        eventSource.close();
-        eventSource = null;
-      }
-      showToast("Live capture stopped", "info");
+      disconnectStream();
+      updateUIState(false, "idle");
+      showToast("Capture stopped", "info");
     } catch(err) {
       showToast("Failed to stop sniffer: " + err.message, "error");
     }
   }
 
-  function connectSSE() {
-    if (eventSource) eventSource.close();
-    eventSource = new EventSource(resolveApiPath("/api/sniff/stream"));
+  function disconnectStream() {
+    if (streamAbort) streamAbort.abort();
+    streamAbort = null;
+  }
 
-    eventSource.addEventListener("packet", (e) => {
-      try {
-        const pkt = JSON.parse(e.data);
-        handlePacket(pkt);
-      } catch(err) {}
-    });
+  /* One server-sent event: "event: <name>" and "data: <json>" lines. */
+  function dispatchEvent(block) {
+    let name = "message", data = "";
+    for (const line of block.split("\n")) {
+      if (line.startsWith("event:")) name = line.slice(6).trim();
+      else if (line.startsWith("data:")) data += line.slice(5).trim();
+    }
+    if (!data) return;
+    let parsed;
+    try { parsed = JSON.parse(data); } catch (e) { return; }
+    if (name === "packet") handlePacket(parsed);
+    else if (name === "status" || name === "heartbeat") updateCounters(parsed);
+  }
 
-    eventSource.addEventListener("status", (e) => {
-      try {
-        const st = JSON.parse(e.data);
-        updateCounters(st);
-      } catch(err) {}
-    });
+  /* The stream is read with fetch(), not EventSource: EventSource cannot send
+   * an Authorization header, and the endpoint requires the token like every
+   * other data route. The token never goes in the URL. */
+  async function connectStream() {
+    disconnectStream();
+    const controller = new AbortController();
+    streamAbort = controller;
+    try {
+      const res = await fetch(resolveApiPath("/api/sniff/stream"), {
+        headers: authHeaders({ "Accept": "text/event-stream" }),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let cut;
+        while ((cut = buffer.indexOf("\n\n")) !== -1) {
+          dispatchEvent(buffer.slice(0, cut));
+          buffer = buffer.slice(cut + 2);
+        }
+      }
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      console.warn("Capture stream ended:", err);
+    }
+    // dropped while a capture is still running: try again, as EventSource did
+    if (streamAbort === controller && isSniffing) setTimeout(() => {
+      if (streamAbort === controller && isSniffing) connectStream();
+    }, 2000);
+  }
 
-    eventSource.addEventListener("heartbeat", (e) => {
-      try {
-        const st = JSON.parse(e.data);
-        updateCounters(st);
-      } catch(err) {}
-    });
-
-    eventSource.onerror = () => {};
+  function resetFeed() {
+    const feed = $("sniffer-live-feed");
+    if (feed) feed.innerHTML = "";
+    const grid = $("sniffer-spis-grid");
+    if (grid) grid.innerHTML = `<div class="empty">None seen yet.</div>`;
+    for (const k of Object.keys(knownSpis)) delete knownSpis[k];
   }
 
   function handlePacket(pkt) {
@@ -4491,23 +4532,61 @@ const LiveSnifferEngine = (function() {
     if ($("sniffer-rate-kbps")) $("sniffer-rate-kbps").innerHTML = `${st.rate_kbps || 0} <small>kbps</small>`;
     if ($("sniffer-total-pkts")) $("sniffer-total-pkts").textContent = String(st.packets_captured || 0);
     if ($("sniffer-active-spis")) $("sniffer-active-spis").textContent = String((st.active_spis || []).length);
+    // The label follows what the server says is running, so a capture that
+    // stopped on its own (the socket failed) does not stay marked as live.
+    if (isSniffing && st.running === false) {
+      disconnectStream();
+      updateUIState(false, st.error ? "failed" : "idle", st.error);
+    } else if (st.running && st.mode !== currentMode) {
+      updateUIState(true, st.mode);
+    }
   }
 
-  function updateUIState(active) {
+  /* What the status card says. Replay is spelled out as replay everywhere it
+   * appears, so sample traffic is never read as traffic from this machine. */
+  function statusLabel(active, mode) {
+    if (!active) {
+      return mode === "failed"
+        ? '<span class="hud-dot idle"></span> COULD NOT START'
+        : '<span class="hud-dot idle"></span> IDLE';
+    }
+    return mode === "replay"
+      ? '<span class="hud-dot replay"></span> REPLAY · SAMPLES, NOT LIVE'
+      : '<span class="hud-dot live"></span> LIVE CAPTURE';
+  }
+
+  function updateUIState(active, mode, reason) {
     isSniffing = active;
+    currentMode = active ? (mode || "live_socket") : "idle";
     const btnStart = $("btn-sniffer-start");
+    const btnReplay = $("btn-sniffer-replay");
     const btnStop = $("btn-sniffer-stop");
     const btnAnalyze = $("btn-sniffer-analyze");
     const statusVal = $("sniffer-status-val");
+    const notice = $("sniffer-source-notice");
 
     if (btnStart) btnStart.disabled = active;
+    if (btnReplay) btnReplay.disabled = active;
     if (btnStop) btnStop.disabled = !active;
     if (btnAnalyze) btnAnalyze.disabled = !active;
 
-    if (statusVal) {
-      statusVal.innerHTML = active
-        ? '<span class="hud-dot live"></span> LIVE SNIFFING'
-        : '<span class="hud-dot idle"></span> IDLE';
+    if (statusVal) statusVal.innerHTML = statusLabel(active, mode);
+
+    if (notice) {
+      if (active && mode === "replay") {
+        notice.hidden = false;
+        notice.className = "banner sniffer-source-notice";
+        notice.textContent = "Replaying the bundled sample captures. These packets are not " +
+          "live traffic from this machine, and anything assessed from them is labelled as a replay.";
+      } else if (!active && mode === "failed") {
+        notice.hidden = false;
+        notice.className = "banner sniffer-source-notice";
+        notice.textContent = (reason || "Live capture could not start.") +
+          " Nothing is being captured. To see the panel working without live traffic, choose Replay samples.";
+      } else {
+        notice.hidden = true;
+        notice.textContent = "";
+      }
     }
   }
 
@@ -4521,9 +4600,13 @@ const LiveSnifferEngine = (function() {
     try {
       const res = await api("/api/sniff/analyze", { method: "POST" });
       const data = await res.json();
-      showToast("Captured packets assessed", "success");
+      const fromReplay = data.capture_source === "replay";
+      showToast(fromReplay ? "Replayed sample packets assessed" : "Captured packets assessed", "success");
       switchIpsecMode("single");
-      renderAssessment(data);
+      await renderAssessment(data);
+      // after the render, which resets the banner for a fresh assessment
+      if (fromReplay) showBanner(
+        "This assessment is of replayed sample captures, not of live traffic from this machine.");
     } catch(err) {
       showToast("Snapshot analysis failed: " + err.message, "error");
     } finally {
@@ -4536,10 +4619,12 @@ const LiveSnifferEngine = (function() {
 
   function init() {
     const btnStart = $("btn-sniffer-start");
+    const btnReplay = $("btn-sniffer-replay");
     const btnStop = $("btn-sniffer-stop");
     const btnAnalyze = $("btn-sniffer-analyze");
 
-    if (btnStart) btnStart.addEventListener("click", startSniffing);
+    if (btnStart) btnStart.addEventListener("click", () => startSniffing(false));
+    if (btnReplay) btnReplay.addEventListener("click", () => startSniffing(true));
     if (btnStop) btnStop.addEventListener("click", stopSniffing);
     if (btnAnalyze) btnAnalyze.addEventListener("click", analyzeSnapshot);
   }
@@ -4710,7 +4795,7 @@ const CbomEngine = (function() {
     const currentCapture = (captureSelect && captureSelect.value) ? captureSelect.value : "";
     if (currentCapture && !state.isStaticHost) {
       try {
-        const resp = await fetch(`/api/cbom?capture=${encodeURIComponent(currentCapture)}`);
+        const resp = await api(`/api/cbom?capture=${encodeURIComponent(currentCapture)}`, { silent: true });
         if (resp.ok) {
           cachedCbom = await resp.json();
           return cachedCbom;
@@ -4991,8 +5076,8 @@ async function init(){
       alert("No active plan to approve.");
       return;
     }
-    const admin = prompt("Who is approving this plan? The name is recorded in the local plan store.", "");
-    if (!admin) return;
+    const admin = prompt("Who is approving this plan? The name is recorded as self-declared in the plan store and the audit log; this server does not authenticate individual people.", "");
+    if (!admin || !admin.trim()) return;
     try {
       const res = await api(`/api/remediation/${currentPlan.plan_id}/approve`, {
         method: "POST",
@@ -5003,8 +5088,10 @@ async function init(){
         })
       });
       if (res.ok) {
-        currentPlan.status = "APPROVED";
-        currentPlan.approver = admin;
+        // show what the server stored, which is the cleaned name
+        const saved = (await res.json()).plan || {};
+        currentPlan.status = saved.status || "APPROVED";
+        currentPlan.approver = saved.approver || admin.trim();
         renderPlaybookUI();
       }
     } catch(err) {

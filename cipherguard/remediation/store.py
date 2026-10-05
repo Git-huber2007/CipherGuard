@@ -123,8 +123,13 @@ class PlanStore:
         old_status = plan.status
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         plan.status = new_status
-        plan.approver = actor
-        plan.approval_comment = comment
+        # Only an approval names an approver. Every transition is still in
+        # plan_transitions with its own actor; overwriting these two fields on
+        # each one replaced the person who signed the plan off with whatever
+        # staged it afterwards.
+        if new_status == "APPROVED":
+            plan.approver = actor
+            plan.approval_comment = comment
         plan.updated_at = now
 
         with self._conn() as conn:
@@ -134,7 +139,7 @@ class PlanStore:
                     status = ?, approver = ?, approval_comment = ?, updated_at = ?
                 WHERE plan_id = ?
                 """,
-                (new_status, actor, comment, now, plan_id),
+                (new_status, plan.approver, plan.approval_comment, now, plan_id),
             )
             conn.execute(
                 """

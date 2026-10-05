@@ -39,9 +39,27 @@
       "grade": "E"
     },
     {
-      "name": "live_snapshot.pcap",
-      "file": "data/live_snapshot_pcap.json",
-      "cbom": "data/cbom/live_snapshot_pcap.cdx.json",
+      "name": "pqc_declined.pcap",
+      "file": "data/pqc_declined_pcap.json",
+      "cbom": "data/cbom/pqc_declined_pcap.cdx.json",
+      "size_bytes": 469426,
+      "size_kb": 458.4,
+      "score": 85,
+      "grade": "B"
+    },
+    {
+      "name": "pqc_hybrid.pcap",
+      "file": "data/pqc_hybrid_pcap.json",
+      "cbom": "data/cbom/pqc_hybrid_pcap.cdx.json",
+      "size_bytes": 488564,
+      "size_kb": 477.1,
+      "score": 100,
+      "grade": "A"
+    },
+    {
+      "name": "replay_snapshot.pcap",
+      "file": "data/replay_snapshot_pcap.json",
+      "cbom": "data/cbom/replay_snapshot_pcap.cdx.json",
       "size_bytes": 71612,
       "size_kb": 69.9,
       "score": 100,

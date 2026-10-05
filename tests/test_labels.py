@@ -106,8 +106,9 @@ def test_spi_entry_beats_peer_entry_and_peers_match_both_directions():
     forward = EspFlow(spi=7, src="10.0.0.1", dst="10.0.0.2")
     reverse = EspFlow(spi=8, src="10.0.0.2", dst="10.0.0.1")
     other = EspFlow(spi=9, src="10.0.0.3", dst="10.0.0.2")
-    assert label.entry_for(forward).suite == GCM
-    assert label.entry_for(reverse).suite == CBC
+    by_spi, by_peers = label.entry_for(forward), label.entry_for(reverse)
+    assert by_spi is not None and by_spi.suite == GCM
+    assert by_peers is not None and by_peers.suite == CBC
     assert label.entry_for(other) is None
 
 

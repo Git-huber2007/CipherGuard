@@ -40,6 +40,14 @@ WHY_IT_MATTERS: dict[str, str] = {
                "below the level required for sensitive information.",
     "IKE-013": "The encryption in use becomes unsafe after a certain amount of traffic, and this "
                "link has already carried enough to reach that point.",
+    "IKE-014": "The two ends agreed to add quantum-resistant protection, but the step that "
+               "carries it out was not seen in this recording, so it could not be confirmed.",
+    "IKE-015": "One end reused the same key-setup value for more than one connection, which the "
+               "standard allows but which means a single stolen secret could unlock several "
+               "recorded connections instead of one.",
+    "IKE-016": "A random value that should be long and different for every connection was too "
+               "short or was repeated, which weakens the keys and can mean the device's source "
+               "of randomness is broken.",
     "ESP-001": "Judging by the shape of the protected traffic, it is using weak encryption or "
                "none at all.",
     "ESP-002": "The traffic looks less random than properly encrypted data should, which "

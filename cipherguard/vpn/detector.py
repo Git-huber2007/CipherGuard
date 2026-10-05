@@ -39,6 +39,29 @@ VPN_PATTERNS: list[tuple[str, str]] = [
     (r"vpn", "Generic VPN"),
 ]
 
+# Opt-in switch for the one outbound call in the project. See _get_egress_info.
+EGRESS_LOOKUP_ENV = "CIPHERGUARD_EGRESS_LOOKUP"
+
+# HTTPS only: a plain-HTTP lookup would put the sensor's public address and the
+# fact that it runs CipherGuard in cleartext on the path.
+EGRESS_ENDPOINTS: list[tuple[str, str]] = [
+    ("https://ipwho.is/", "ipwho"),
+    ("https://api.ipify.org?format=json", "ipify"),
+    ("https://ipapi.co/json/", "ipapico"),
+]
+
+
+def egress_lookup_enabled() -> bool:
+    """True only when the operator has explicitly asked for the egress lookup.
+
+    CIPHERGUARD_NO_EGRESS_LOOKUP, the old opt-out, still wins if both are set.
+    """
+    def truthy(name: str) -> bool:
+        return os.environ.get(name, "").strip().lower() in ("1", "true", "yes")
+
+    return truthy(EGRESS_LOOKUP_ENV) and not truthy("CIPHERGUARD_NO_EGRESS_LOOKUP")
+
+
 _GLOBAL_EGRESS_CACHE: dict[str, Any] = {}
 _GLOBAL_EGRESS_CACHE_TS: float = 0.0
 _LAST_VPN_CONNECTED: bool | None = None
@@ -67,12 +90,15 @@ class VpnDetector:
         _LAST_VPN_CONNECTED = info.connected
 
         egress = self._get_egress_info()
+        info.egress_queried = egress_lookup_enabled()
         info.egress_ip = egress.get("ip", "")
         info.egress_isp = egress.get("isp", "")
         info.egress_country = egress.get("country", "")
         info.egress_city = egress.get("city", "")
 
-        # Heuristic fallback: If adapter inspection missed the tunnel but egress ISP is a confirmed VPN provider
+        # Heuristic fallback: If adapter inspection missed the tunnel but egress ISP is a confirmed VPN provider.
+        # Only reachable when the egress lookup is enabled; without it the
+        # verdict rests on adapter and route inspection alone.
         if not info.connected and info.egress_isp:
             isp_lower = info.egress_isp.lower()
             if any(p in isp_lower for p in ["proton", "mullvad", "nord", "expressvpn", "surfshark", "wireguard", "private internet"]):
@@ -391,18 +417,17 @@ class VpnDetector:
         return info
 
     def _get_egress_info(self) -> dict[str, Any]:
-        """Fetch current public IP, ISP, and Country with 15-second cache.
+        """Public IP, ISP and country from a third-party service, cached 30 s.
 
-        Respects CIPHERGUARD_NO_EGRESS_LOOKUP=1 for strict air-gapped or
-        privacy-sensitive audit environments where external queries are forbidden.
+        Off unless CIPHERGUARD_EGRESS_LOOKUP=1. The analyzer is meant to run on
+        isolated networks and to make no outbound calls, and this lookup tells
+        an outside service where the sensor sits. It used to run on every
+        dashboard load unless an operator knew to turn it off. When it is off
+        this returns nothing and makes no request; the caller records that the
+        egress was not queried instead of reporting a placeholder as a result.
         """
-        if os.environ.get("CIPHERGUARD_NO_EGRESS_LOOKUP", "").strip().lower() in ("1", "true", "yes"):
-            return {
-                "ip": "Protected (Air-gapped / Local Mode)",
-                "isp": "Local Privacy Mode Enforced",
-                "country": "Local",
-                "city": "Private",
-            }
+        if not egress_lookup_enabled():
+            return {}
 
         global _GLOBAL_EGRESS_CACHE, _GLOBAL_EGRESS_CACHE_TS
         now = time.time()
@@ -410,13 +435,7 @@ class VpnDetector:
             return _GLOBAL_EGRESS_CACHE
 
         info: dict[str, Any] = {}
-        # Prioritize fast, high-reliability HTTPS/HTTP endpoints
-        for endpoint, kind in [
-            ("https://ipwho.is/", "ipwho"),
-            ("http://ip-api.com/json/?fields=status,query,isp,org,country,city", "ipapi"),
-            ("https://api.ipify.org?format=json", "ipify"),
-            ("https://ipapi.co/json/", "ipapico"),
-        ]:
+        for endpoint, kind in EGRESS_ENDPOINTS:
             try:
                 req = urllib.request.Request(
                     endpoint,

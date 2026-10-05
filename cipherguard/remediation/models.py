@@ -30,4 +30,8 @@ class HardeningPlan:
     )
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        # The approver is a name someone typed. Nothing authenticated it, and
+        # every client that shows it has to be able to say so.
+        d["approver_identity"] = "self-declared" if self.approver else None
+        return d

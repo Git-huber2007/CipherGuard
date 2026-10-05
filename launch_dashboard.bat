@@ -8,6 +8,24 @@ chcp 65001 >nul 2>nul
 set "PYTHONIOENCODING=utf-8"
 set "PYTHONUTF8=1"
 
+REM -------------------------------------------------------------------------
+REM Arguments: --lan serves other devices on the network, behind a token.
+REM Without it the dashboard listens on this machine only. Everything else
+REM is passed through to "cipherguard serve".
+REM -------------------------------------------------------------------------
+set "LAN_MODE="
+set "SERVE_ARGS="
+:parse_args
+if "%~1"=="" goto :args_done
+if /i "%~1"=="--lan" (
+    set "LAN_MODE=1"
+) else (
+    set "SERVE_ARGS=!SERVE_ARGS! %1"
+)
+shift
+goto :parse_args
+:args_done
+
 REM Ensure we are running from the project directory containing cipherguard
 if exist "%~dp0cipherguard\cli.py" (
     cd /d "%~dp0"
@@ -171,7 +189,7 @@ REM Ensure PYTHONPATH includes current project directory for seamless module res
 set "PYTHONPATH=%CD%;!PYTHONPATH!"
 
 REM -------------------------------------------------------------------------
-REM Step 3: Verify trained ML models and synchronize live telemetry
+REM Step 3: Verify trained ML models
 REM -------------------------------------------------------------------------
 if not exist "models\cnn.npz" (
     echo [*] Pre-trained models not found in models/. Generating baseline model...
@@ -179,14 +197,8 @@ if not exist "models\cnn.npz" (
     echo.
 )
 
-if exist "scripts\sync_live_wifi.py" (
-    echo [*] Auditing local wireless RF spectrum and hardware telemetry...
-    !PY_EXE! scripts\sync_live_wifi.py
-    echo.
-)
-
 REM -------------------------------------------------------------------------
-REM Step 4: Ensure port 8000 is available and detect dynamic LAN IP
+REM Step 4: Ensure port 8000 is available and choose the bind address
 REM -------------------------------------------------------------------------
 for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr /c:":8000 " ^| findstr "LISTENING"') do (
     if not "%%p"=="0" if not "%%p"=="4" (
@@ -195,17 +207,42 @@ for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr /c:":8000 " ^| findstr
     )
 )
 
+REM The dashboard shows which links use weak cryptography, so it is served to
+REM this machine only unless --lan is given, and --lan always sets a token.
+REM It is never served to the network unauthenticated.
+set "BIND_HOST=127.0.0.1"
+if not defined LAN_MODE goto :bind_ready
+
+set "BIND_HOST=0.0.0.0"
+if defined CIPHERGUARD_TOKEN goto :token_ready
+for /f "usebackq delims=" %%t in (`!PY_EXE! -c "import secrets; print(secrets.token_hex(16))"`) do set "CIPHERGUARD_TOKEN=%%t"
+if not defined CIPHERGUARD_TOKEN (
+    echo [ERROR] Could not generate an access token, so LAN mode was not started.
+    echo         Run without --lan, or set CIPHERGUARD_TOKEN yourself and retry.
+    pause
+    exit /b 1
+)
+:token_ready
+
 set "LAN_IP="
 for /f "tokens=4" %%a in ('route print 0.0.0.0 2^>nul ^| findstr "\<0.0.0.0\>"') do (
     if not defined LAN_IP if not "%%a"=="0.0.0.0" set "LAN_IP=%%a"
 )
+:bind_ready
 
-echo [*] Launching CipherGuard Multi-Device Security Dashboard...
+echo [*] Launching CipherGuard Security Dashboard...
 echo [*] Local Workstation URL: http://127.0.0.1:8000/
-if defined LAN_IP (
-    echo [*] Multi-Device LAN URL:   http://!LAN_IP!:8000/  [Open on phones / tablets / other PCs]
+if defined LAN_MODE (
+    if defined LAN_IP (
+        echo [*] LAN URL:               http://!LAN_IP!:8000/  [phones / tablets / other PCs]
+    ) else (
+        echo [*] LAN URL:               http://YOUR-LAN-IP:8000/  [check ipconfig for the address]
+    )
+    echo [*] Access token:          !CIPHERGUARD_TOKEN!
+    echo [*] Every browser, this one included, is asked for the token once.
 ) else (
-    echo [*] Multi-Device LAN URL:   http://0.0.0.0:8000/  [Check local IP for LAN access]
+    echo [*] Listening on this machine only. Run "launch_dashboard.bat --lan" to
+    echo     serve other devices on the network, protected by an access token.
 )
 echo [*] Opening your default web browser...
 echo [*] (Keep this window open. Press Ctrl+C anytime to stop the server.)
@@ -215,8 +252,8 @@ echo.
 REM Open browser in background
 start "" "http://127.0.0.1:8000/"
 
-REM Start dashboard server bound to 0.0.0.0 with insecure-bind for multi-device LAN access
-!PY_EXE! -m cipherguard.cli serve --host 0.0.0.0 --port 8000 --insecure-bind %*
+REM Start the dashboard server. In LAN mode the token is read from CIPHERGUARD_TOKEN.
+!PY_EXE! -m cipherguard.cli serve --host !BIND_HOST! --port 8000 !SERVE_ARGS!
 
 REM If server exited abnormally (not from Ctrl+C / SIGINT 130 or STATUS_CONTROL_C_EXIT)
 if !errorlevel! neq 0 if !errorlevel! neq 130 if !errorlevel! neq -1073741510 (

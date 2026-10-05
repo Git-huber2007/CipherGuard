@@ -74,7 +74,7 @@ This document defines the strict operational boundaries, engineering standards, 
 
 CipherGuard supports two distinct operational frontend environments:
 1. **Static GitHub Pages / Air-Gapped Mode** (`docs/`): Operates without any backend server. Reads static pre-generated scenario JSON files.
-2. **Live Telemetry Server Mode** (`cipherguard/api/static/`): Communicates with the FastAPI backend over REST (`/api/v1/...`) and WebSocket streams.
+2. **Live Telemetry Server Mode** (`cipherguard/api/static/`): Communicates with the FastAPI backend over REST (`/api/...`, unversioned) and one server-sent event stream (`/api/sniff/stream`). There are no WebSocket routes.
 
 **Rule**: Any changes made to the user interface, styling, or client-side scripts must be maintained across both environments. Never break static offline execution when adding dynamic API features.
 

@@ -54,7 +54,8 @@ VERDICTS = {
     "new": "first confirmed sighting; established the baseline",
     "withheld": "new peer beyond the per-capture limit; no baseline created",
     "steady": "matched the baseline",
-    "downgrade": "weaker than the baseline",
+    "downgrade": "weaker than the baseline (classical bits)",
+    "downgrade-quantum": "weaker than the baseline (quantum bits)",
     "unconfirmed": "stronger than the baseline, not yet seen often enough to promote",
     "improvement": "stronger than the baseline, seen repeatedly; promoted",
 }
@@ -325,13 +326,19 @@ class BaselineStore:
             previous = json.loads(row["best_transforms"])
 
             if strength.classical_bits == best:
-                mark("steady", row)
+                # Check for quantum downgrade while classical bits unchanged
+                if strength.quantum_bits < row["best_quantum_bits"]:
+                    mark("downgrade-quantum", row)
+                    drifts.append(
+                        Drift(key, "downgrade-quantum", best, strength.classical_bits,
+                              previous, transforms, row["best_seen_at"]))
+                else:
+                    mark("steady", row)
             elif strength.classical_bits < best:
                 mark("downgrade", row)
                 drifts.append(
                     Drift(key, "downgrade", best, strength.classical_bits,
-                          previous, transforms, row["best_seen_at"])
-                )
+                          previous, transforms, row["best_seen_at"]))
             else:
                 # Promote only once the stronger suite has been seen enough
                 # times to be a configuration rather than an anomaly.

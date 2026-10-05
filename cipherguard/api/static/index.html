@@ -717,7 +717,7 @@ Rescan <span class="cta-badge">Alt + S</span>
         <div class="sniffer-panel-header">
           <div>
             <h2>Live capture</h2>
-            <div class="sub">IKE and ESP packets from a network interface as they arrive, grouped into security associations.</div>
+            <div class="sub">IKE and ESP packets from a network interface as they arrive, grouped into security associations. Start captures from this machine and needs raw-socket privileges; if it cannot start it says so. Replay samples plays back the bundled sample captures instead, and is labelled as a replay.</div>
           </div>
           <div class="sniffer-controls-wrap">
             <select id="sniffer-iface-select" class="sniffer-iface-select" aria-label="Select network interface">
@@ -725,6 +725,9 @@ Rescan <span class="cta-badge">Alt + S</span>
             </select>
             <button type="button" id="btn-sniffer-start" class="btn btn-primary">
 Start
+            </button>
+            <button type="button" id="btn-sniffer-replay" class="btn btn-subtle" title="Play back the bundled sample captures. Not live traffic.">
+Replay samples
             </button>
             <button type="button" id="btn-sniffer-stop" class="btn btn-subtle" disabled>
 Stop
@@ -734,6 +737,9 @@ Assess what was captured
             </button>
           </div>
         </div>
+
+        <!-- Says where the packets come from whenever that is not a live capture -->
+        <div id="sniffer-source-notice" class="banner sniffer-source-notice" role="status" hidden></div>
 
         <!-- Live Sniffer HUD Ticker Strip -->
         <div class="sniffer-hud-grid">
@@ -766,7 +772,7 @@ Assess what was captured
             <span class="sniffer-feed-status">newest last</span>
           </div>
           <div class="sniffer-live-feed" id="sniffer-live-feed">
-            <div class="feed-placeholder">Select Start to capture from the chosen interface.</div>
+            <div class="feed-placeholder">Select Start to capture from this machine.</div>
           </div>
         </div>
 
@@ -884,11 +890,11 @@ Assess what was captured
 
           <div class="action-meta">
             <strong>Start Backend Engine from Terminal</strong>
-            <p>Run this command on your machine to start the live FastAPI telemetry server:</p>
+            <p>Run this command on your machine to start the live FastAPI telemetry server. It listens on this machine only. A page served from somewhere else can reach it only if that page's origin is named with <code>--cors-origin</code>.</p>
           </div>
         </div>
         <div class="code-snippet-box">
-          <code>python -m uvicorn cipherguard.api.server:app --host 127.0.0.1 --port 8000</code>
+          <code id="backend-start-cmd">python -m cipherguard.cli serve</code>
           <button type="button" id="btn-copy-backend-cmd" class="btn-copy-cmd" title="Copy command to clipboard">Copy</button>
         </div>
       </div>

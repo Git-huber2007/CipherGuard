@@ -1,0 +1,9 @@
+CipherGuard
+Copyright 2026 CipherGuard Contributors (Smart India Hackathon SIH26160 / NTRO)
+
+Licensed under the Apache License, Version 2.0. See the LICENSE file.
+
+This product bundles the IBM Plex Sans and IBM Plex Mono typefaces,
+Copyright (c) 2017 IBM Corp. with Reserved Font Name "Plex", licensed under
+the SIL Open Font License, Version 1.1. The licence text is alongside the
+fonts in cipherguard/api/static/fonts/.

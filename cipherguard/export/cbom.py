@@ -24,11 +24,12 @@ import hashlib
 import json
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
 from ..audit.policy import framing_class_of
 from ..core import constants as C
 from ..core.models import Assessment
-from ..core.strength import DH_STRENGTH, score_proposal
+from ..core.strength import DH_STRENGTH
 
 SPEC_VERSION = "1.6"
 
@@ -57,6 +58,20 @@ CRYPTO_FUNCTIONS = {
     4: ["keygen", "key-derive"],
 }
 
+# ML-KEM is a key-encapsulation mechanism, which CycloneDX inventories as its
+# own primitive with its own functions, whichever transform type carried it.
+KEM_FUNCTIONS = ["keygen", "encapsulate", "decapsulate"]
+
+
+def _in_use(transforms) -> list:
+    """Transforms that name an algorithm actually in use.
+
+    An RFC 9370 additional key exchange set to NONE is an empty slot, and an
+    inventory entry for "NONE" would be an asset that does not exist.
+    """
+    return [t for t in transforms
+            if not (t.type_id in C.ADDKE_TRANSFORM_TYPES and t.value_id == 0)]
+
 
 def _bom_ref(*parts: str) -> str:
     digest = hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
@@ -67,23 +82,28 @@ def _algorithm_component(name: str, transform, peer: str, sess) -> dict:
     """One cryptographic-asset component for a negotiated transform."""
     tid = transform.type_id
     param = str(transform.key_length) if transform.key_length else None
-    if tid == 4:
+    # type 4 and the RFC 9370 additional key exchanges (6-12) are all key
+    # establishment, drawn from one registry
+    is_kex = tid in C.KE_TRANSFORM_TYPES
+    if is_kex:
         classical, quantum, family = DH_STRENGTH.get(transform.value_id, (0, 0, "unknown"))
         param = C.DH_GROUPS.get(transform.value_id, {}).get("name")
     else:
         classical = quantum = 0
         family = None
+    is_kem = family == "ml-kem"
 
-    props = {
-        "primitive": PRIMITIVE.get(tid, "other"),
+    props: dict[str, Any] = {
+        "primitive": "kem" if is_kem else PRIMITIVE.get(4 if is_kex else tid, "other"),
         "executionEnvironment": "hardware" if sess.vendor_family() in
                                 ("cisco", "juniper", "fortinet") else "software",
         "implementationPlatform": "generic",
-        "cryptoFunctions": CRYPTO_FUNCTIONS.get(tid, ["other"]),
+        "cryptoFunctions": KEM_FUNCTIONS if is_kem
+                           else CRYPTO_FUNCTIONS.get(4 if is_kex else tid, ["other"]),
     }
     if param:
         props["parameterSetIdentifier"] = param
-    if tid == 4:
+    if is_kex:
         props["nistQuantumSecurityLevel"] = _nist_level(classical, quantum)
         props["classicalSecurityLevel"] = classical
 
@@ -123,7 +143,8 @@ _OIDS = {
 
 def _protocol_component(sess, assessment: Assessment) -> dict:
     prop = sess.negotiated("IKE")
-    strength = score_proposal(prop.transforms) if prop else None
+    # the session's figure, which gives an unanswered offer no post-quantum credit
+    strength = sess.strength() if prop else None
     peer = f"{sess.peer_a} <-> {sess.peer_b}"
 
     props = [
@@ -139,7 +160,19 @@ def _protocol_component(sess, assessment: Assessment) -> dict:
              "value": str(strength.quantum_bits)},
             {"name": "cipherguard:quantumSafe",
              "value": "true" if strength.quantum_safe else "false"},
+            {"name": "cipherguard:responderConfirmed",
+             "value": "true" if sess.is_confirmed("IKE") else "false"},
         ]
+        if strength.hybrid:
+            kex = sess.key_exchange()
+            props += [
+                {"name": "cipherguard:hybridKeyExchange",
+                 "value": " + ".join(c["name"] for c in strength.kex_components)},
+                # the additional exchanges are encrypted; this is how many of
+                # the exchanges that carry them were seen, and nothing more
+                {"name": "cipherguard:intermediateExchangesObserved",
+                 "value": str(kex["intermediate_exchanges"])},
+            ]
 
     return {
         "type": "cryptographic-asset",
@@ -151,7 +184,8 @@ def _protocol_component(sess, assessment: Assessment) -> dict:
                 "type": "ipsec",
                 "version": "2.0" if sess.version == "IKEv2" else "1.0",
                 "cryptoRefArray": [
-                    _bom_ref("alg", t.label(), peer) for t in (prop.transforms if prop else [])
+                    _bom_ref("alg", t.label(), peer)
+                    for t in _in_use(prop.transforms if prop else [])
                 ],
             },
         },
@@ -201,7 +235,7 @@ def build_cbom(assessment: Assessment, serial: str | None = None) -> dict:
         peer = f"{sess.peer_a} <-> {sess.peer_b}"
         components.append(_protocol_component(sess, assessment))
         prop = sess.negotiated("IKE")
-        for transform in (prop.transforms if prop else []):
+        for transform in _in_use(prop.transforms if prop else []):
             ref = _bom_ref("alg", transform.label(), peer)
             if ref in seen:
                 continue

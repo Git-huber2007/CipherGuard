@@ -1,25 +1,41 @@
-"""Tests for Live Network Interface Packet Sniffer & Telemetry Streamer."""
+"""Tests for Live Network Interface Packet Sniffer & Telemetry Streamer.
+
+These drive the sniffer through its explicit replay source, because a raw
+socket needs privileges a test run does not have. What happens when the live
+source cannot start, and what the live path keeps, is in test_guarantees.py.
+"""
 
 from __future__ import annotations
 
 import os
-import queue
 import time
 import pytest
 
+from cipherguard.capture import live_sniffer
 from cipherguard.capture.live_sniffer import LiveSniffer
 from cipherguard.dissector.pcap import read_packets
 
 pytestmark = pytest.mark.no_model
 
 
-def test_sniffer_lifecycle_simulated():
+@pytest.fixture(autouse=True)
+def _samples(tmp_path, monkeypatch):
+    """Replay from a generated capture, not from whatever is in samples/."""
+    from cipherguard.lab import pcapgen
+
+    samples = tmp_path / "samples"
+    samples.mkdir()
+    pcapgen.scenario_hardened(str(samples / "hardened.pcap"))
+    monkeypatch.setattr(live_sniffer, "_samples_dir", lambda: str(samples))
+
+
+def test_sniffer_lifecycle_replay():
     sniffer = LiveSniffer()
     assert not sniffer.running
 
-    st = sniffer.start(force_simulation=True)
+    st = sniffer.start(replay=True)
     assert st["running"] is True
-    assert st["mode"] == "simulated_wire"
+    assert st["mode"] == "replay"
 
     # Let sniffer generate a few packets
     time.sleep(0.35)
@@ -39,7 +55,7 @@ def test_sniffer_subscriber_queue():
     q = sniffer.subscribe()
     assert q in sniffer.subscribers
 
-    sniffer.start(force_simulation=True)
+    sniffer.start(replay=True)
     time.sleep(0.35)
     sniffer.stop()
 
@@ -60,7 +76,7 @@ def test_sniffer_subscriber_queue():
 
 def test_sniffer_snapshot_to_pcap(tmp_path):
     sniffer = LiveSniffer()
-    sniffer.start(force_simulation=True)
+    sniffer.start(replay=True)
     time.sleep(0.4)
     sniffer.stop()
 
@@ -68,6 +84,7 @@ def test_sniffer_snapshot_to_pcap(tmp_path):
     res = sniffer.snapshot_to_pcap(snapshot_file)
     assert res["success"] is True
     assert res["packets_written"] > 0
+    assert res["source"] == "replay"
     assert os.path.exists(snapshot_file)
     assert os.path.getsize(snapshot_file) > 24
 
@@ -78,8 +95,8 @@ def test_sniffer_snapshot_to_pcap(tmp_path):
 
 def test_sniffer_idempotent():
     sniffer = LiveSniffer()
-    s1 = sniffer.start(force_simulation=True)
-    s2 = sniffer.start(force_simulation=True)
+    s1 = sniffer.start(replay=True)
+    s2 = sniffer.start(replay=True)
     assert s1["running"] is True
     assert s2["running"] is True
 

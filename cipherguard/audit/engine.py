@@ -24,10 +24,12 @@ from __future__ import annotations
 from typing import Callable
 
 from ..core import constants as C
+from ..core.grouping import pair_key
 from ..core.models import (
     Assessment,
     EspFlow,
     Finding,
+    IkeMessage,
     IkeSession,
     Proposal,
     Severity,
@@ -37,9 +39,14 @@ from . import policy as P
 
 IkeRule = Callable[[IkeSession], list[Finding]]
 EspRule = Callable[[EspFlow], list[Finding]]
+# A capture rule sees every IKE session in one capture at once, for checks that
+# only mean something across sessions. Its scope is that one capture: nothing
+# is carried between captures.
+CaptureRule = Callable[[list[IkeSession]], list[Finding]]
 
 IKE_RULES: list[tuple[str, IkeRule]] = []
 ESP_RULES: list[tuple[str, EspRule]] = []
+CAPTURE_RULES: list[tuple[str, CaptureRule]] = []
 
 
 def ike_rule(rule_id: str):
@@ -53,6 +60,14 @@ def ike_rule(rule_id: str):
 def esp_rule(rule_id: str):
     def wrap(fn: EspRule) -> EspRule:
         ESP_RULES.append((rule_id, fn))
+        return fn
+
+    return wrap
+
+
+def capture_rule(rule_id: str):
+    def wrap(fn: CaptureRule) -> CaptureRule:
+        CAPTURE_RULES.append((rule_id, fn))
         return fn
 
     return wrap
@@ -295,18 +310,78 @@ def rule_dh_group(sess: IkeSession) -> list[Finding]:
     return out
 
 
+def _key_exchanges(prop: Proposal | None) -> list:
+    """The key exchange transforms of a proposal that are actually in use: type
+    4, and any RFC 9370 additional key exchange that is not NONE."""
+    if not prop:
+        return []
+    return [t for t in prop.transforms
+            if t.type_id in C.KE_TRANSFORM_TYPES and t.value_id != 0]
+
+
+def _addke_labels(prop: Proposal | None) -> list[str]:
+    return [f"{t.type_name}={t.name}" for t in _key_exchanges(prop)
+            if t.type_id in C.ADDKE_TRANSFORM_TYPES]
+
+
 @ike_rule("IKE-007")
 def rule_post_quantum(sess: IkeSession) -> list[Finding]:
-    """Harvest-now-decrypt-later exposure on long-lived government links."""
-    prop = _ike_proposal(sess)
-    groups = {t.value_id for t in prop.by_type(4)} if prop else set()
-    groups |= {m.ke_group for m in sess.messages if m.ke_group is not None}
-    notifies = set(sess.all_notifies())
+    """Harvest-now-decrypt-later exposure on long-lived government links.
 
-    has_pq_group = bool(groups & P.DH_PQ_GROUPS)
-    has_ppk = bool(notifies & {"USE_PPK", "PPK_IDENTITY"})
-    if has_pq_group or has_ppk:
+    A link counts as quantum-resistant only on what a responder was seen to
+    agree to: a post-quantum group as the key exchange, or as one of the RFC
+    9370 additional key exchanges, in the selected proposal; or USE_PPK in a
+    response. What an initiator merely offered does not count. Anyone on the
+    mirrored segment can send an offer, and a responder that declines it has
+    negotiated a classical exchange whatever was on the table. The same rule,
+    for the same reason, governs what the baseline store will record.
+    """
+    confirmed = sess.negotiated("IKE", confirmed_only=True)
+    selected = _key_exchanges(confirmed)
+    pq_selected = [t for t in selected if t.value_id in P.DH_PQ_GROUPS]
+    has_ppk = any("USE_PPK" in m.notifies for m in sess.messages if m.is_response)
+    if pq_selected or has_ppk:
         return []
+
+    offered_pq = sorted({
+        f"{t.name} ({t.type_name})"
+        for prop in sess.offered("IKE")
+        for t in _key_exchanges(prop)
+        if t.value_id in P.DH_PQ_GROUPS
+    })
+    # what the finding is about: the selection if one was seen, else the offer
+    basis = confirmed or _ike_proposal(sess)
+    groups = {t.value_id for t in _key_exchanges(basis)}
+    groups |= {m.ke_group for m in sess.messages if m.is_response and m.ke_group}
+
+    detail = (
+        "The SA relies entirely on classical Diffie-Hellman. Traffic "
+        "recorded today can be decrypted once a cryptanalytically relevant "
+        "quantum computer exists, which matters for material whose "
+        "sensitivity outlives the hardware."
+    )
+    remediation = (
+        "Deploy an RFC 8784 post-quantum pre-shared key now, and enable a "
+        "hybrid ML-KEM key exchange (Group 35-37) as gateway firmware allows."
+    )
+    if offered_pq and confirmed:
+        detail += (
+            " The initiator offered " + ", ".join(offered_pq) + " and the responder "
+            "did not select it, so the association was negotiated without it. "
+            "That usually means the responder does not support RFC 9370 or is not "
+            "configured for it."
+        )
+        remediation = (
+            "The initiator already offers a post-quantum exchange: enable RFC 9370 "
+            "hybrid key exchange with ML-KEM on the responder so it is selected. "
+            "An RFC 8784 post-quantum pre-shared key covers the link until then."
+        )
+    elif offered_pq:
+        detail += (
+            " A post-quantum exchange was offered (" + ", ".join(offered_pq) + "), "
+            "but no response was observed in this capture, so it is not confirmed "
+            "as negotiated and is not credited."
+        )
 
     return [
         Finding(
@@ -314,18 +389,17 @@ def rule_post_quantum(sess: IkeSession) -> list[Finding]:
             title="No quantum-resistant key establishment",
             severity=Severity.MEDIUM,
             subject=_peer(sess),
-            detail=(
-                "The SA relies entirely on classical Diffie-Hellman. Traffic "
-                "recorded today can be decrypted once a cryptanalytically relevant "
-                "quantum computer exists, which matters for material whose "
-                "sensitivity outlives the hardware."
-            ),
+            detail=detail,
             reference="NIST FIPS 203 (ML-KEM); RFC 8784; RFC 9370",
-            remediation=(
-                "Deploy an RFC 8784 post-quantum pre-shared key now, and enable a "
-                "hybrid ML-KEM key exchange (Group 35-37) as gateway firmware allows."
-            ),
-            evidence={"groups": sorted(g for g in groups if g), "ppk": has_ppk},
+            remediation=remediation,
+            evidence={
+                "groups": sorted(groups),
+                "ppk": has_ppk,
+                "responder_confirmed": confirmed is not None,
+                "addke_selected": _addke_labels(confirmed),
+                "pq_offered": offered_pq,
+                "intermediate_exchanges_seen": sess.exchanges_seen("IKE_INTERMEDIATE"),
+            },
         )
     ]
 
@@ -475,7 +549,7 @@ def rule_weakest_link(sess: IkeSession) -> list[Finding]:
     if strength.classical_bits >= 112:
         return []
 
-    weakest = min(strength.detail, key=strength.detail.get)
+    weakest = min(strength.detail, key=lambda k: strength.detail[k])
     severity = Severity.CRITICAL if strength.classical_bits < 80 else Severity.HIGH
     return [
         Finding(
@@ -568,6 +642,239 @@ def rule_sweet32(sess: IkeSession) -> list[Finding]:
             evidence=exposure,
         )
     ]
+
+
+@ike_rule("IKE-014")
+def rule_additional_exchange_not_observed(sess: IkeSession) -> list[Finding]:
+    """An additional key exchange was negotiated but none was seen to run.
+
+    The selection is cleartext; the exchange that carries it out is an
+    encrypted IKE_INTERMEDIATE. When the responder selects an additional key
+    exchange and no IKE_INTERMEDIATE appears on the session, the capture shows
+    the agreement and not its execution. That is usually a capture that ended
+    between the two, so this is informational: it says what was and was not
+    observed, and changes no score.
+    """
+    confirmed = sess.negotiated("IKE", confirmed_only=True)
+    addke = _addke_labels(confirmed)
+    seen = sess.exchanges_seen("IKE_INTERMEDIATE")
+    if not addke or seen:
+        return []
+    return [
+        Finding(
+            rule_id="IKE-014",
+            title="Additional key exchange negotiated but not observed",
+            severity=Severity.INFO,
+            subject=_peer(sess),
+            detail=(
+                "The responder selected " + ", ".join(addke) + ", which RFC 9370 "
+                "carries out in IKE_INTERMEDIATE exchanges between IKE_SA_INIT and "
+                "IKE_AUTH. None was observed on this session. The negotiated "
+                "selection is reported as negotiated; that the additional exchange "
+                "completed is not something this capture shows."
+            ),
+            reference="RFC 9370 s2.2.2; RFC 9242",
+            remediation=(
+                "Extend the capture window to cover the whole handshake. If the "
+                "tunnel carries traffic and still shows no IKE_INTERMEDIATE, check "
+                "the gateway's own log for the negotiated key exchange methods."
+            ),
+            evidence={
+                "addke_selected": addke,
+                "intermediate_exchanges_seen": seen,
+                "messages_seen": len(sess.messages),
+            },
+        )
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Key exchange hygiene — capture scope
+# ---------------------------------------------------------------------------
+
+# RFC 7296 s2.10: at least 128 bits; s3.9: Nonce Data between 16 and 256 octets.
+MIN_NONCE_BYTES = 16
+
+
+def _by_distinct_sa(
+    sessions: list[IkeSession], key: Callable[[IkeMessage], tuple | None]
+) -> dict[tuple, dict[str, tuple[IkeSession, IkeMessage]]]:
+    """Group sightings of a value by the distinct IKE SAs that carried it.
+
+    An SA is its initiator SPI. A retransmission, and an IKE_SA_INIT retried
+    after a COOKIE or INVALID_KE_PAYLOAD response, keep the same SPI (RFC 7296
+    s2.6, s2.6.1), so they collapse into one SA here and can never count as
+    reuse on their own.
+    """
+    out: dict[tuple, dict[str, tuple[IkeSession, IkeMessage]]] = {}
+    for sess in sessions:
+        for msg in sess.messages:
+            k = key(msg)
+            if k is not None:
+                out.setdefault(k, {}).setdefault(sess.sid, (sess, msg))
+    return out
+
+
+def _one_per_link(sightings: list[tuple[IkeSession, IkeMessage]]) -> list[IkeSession]:
+    """One session per peer pair, so a reuse spanning several links is reported
+    on each of them rather than only on whichever came first."""
+    first: dict[tuple[str, str], IkeSession] = {}
+    for sess, _ in sightings:
+        first.setdefault(pair_key(sess.peer_a, sess.peer_b), sess)
+    return list(first.values())
+
+
+@capture_rule("IKE-015")
+def rule_ke_reuse(sessions: list[IkeSession]) -> list[Finding]:
+    """The same key exchange public value from one peer in two or more IKE SAs.
+
+    RFC 7296 s2.12 allows an endpoint to reuse its Diffie-Hellman exponential,
+    so this is not a protocol violation and is medium, not high. It is still a
+    forward secrecy cost worth knowing about: whoever recovers that one private
+    value can recompute the key exchange of every SA that used it. Distinct
+    SAs are distinct initiator SPIs, so retransmissions and COOKIE retries,
+    which resend the same KE payload on the same SPI, never trigger it.
+    """
+    reused = _by_distinct_sa(
+        sessions, lambda m: (m.src, m.ke_digest) if m.ke_digest else None)
+    out = []
+    for (peer, digest), by_sa in reused.items():
+        if len(by_sa) < 2:
+            continue
+        sightings = list(by_sa.values())
+        spis = sorted(by_sa)
+        groups = sorted({m.ke_group for _, m in sightings if m.ke_group})
+        for sess in _one_per_link(sightings):
+            out.append(
+                Finding(
+                    rule_id="IKE-015",
+                    title="Key exchange public value reused across IKE SAs",
+                    severity=Severity.MEDIUM,
+                    subject=_peer(sess),
+                    detail=(
+                        f"{peer} sent the same key exchange public value in "
+                        f"{len(by_sa)} distinct IKE SAs in this capture. RFC 7296 "
+                        "s2.12 permits an endpoint to reuse its Diffie-Hellman "
+                        "exponential, so this is not a protocol violation, but it "
+                        "weakens forward secrecy: anyone who later recovers that "
+                        "one private value can recompute the key exchange of every "
+                        "SA that used it, not just one. The same symptom can also "
+                        "come from a random number generator that repeats itself."
+                    ),
+                    reference="RFC 7296 s2.12",
+                    remediation=(
+                        f"Configure {peer} to generate a fresh key exchange value "
+                        "for every IKE SA, or confirm that its reuse window is "
+                        "short and deliberate. If reuse is not configured, check "
+                        "the device's random number source."
+                    ),
+                    evidence={
+                        "peer": peer,
+                        "ke_sha256": digest,
+                        "groups": groups,
+                        "distinct_sas": len(by_sa),
+                        "initiator_spis": spis,
+                        "frames": sorted(m.frame for _, m in sightings),
+                        "scope": "this capture",
+                    },
+                )
+            )
+    return out
+
+
+@capture_rule("IKE-016")
+def rule_nonce_hygiene(sessions: list[IkeSession]) -> list[Finding]:
+    """A nonce shorter than 16 bytes, or the same nonce in two different SAs.
+
+    RFC 7296 s2.10 requires IKEv2 nonces of at least 128 bits and s3.9 says
+    nonce values MUST NOT be reused. The length floor is applied to IKEv2
+    only, because it is an IKEv2 requirement; IKEv1 is held to the reuse
+    check. Reuse is counted across distinct initiator SPIs for the same reason
+    as IKE-015, and across all senders, since two devices producing one nonce
+    is as much a failure as one device repeating it.
+    """
+    out = []
+    for sess in sessions:
+        if sess.version != "IKEv2":
+            continue
+        short: dict[str, int] = {}
+        frames = []
+        for msg in sess.messages:
+            if msg.nonce_len is not None and msg.nonce_len < MIN_NONCE_BYTES:
+                short[msg.src] = min(msg.nonce_len, short.get(msg.src, msg.nonce_len))
+                frames.append(msg.frame)
+        if not short:
+            continue
+        who = ", ".join(f"{src} sent {n} bytes" for src, n in sorted(short.items()))
+        out.append(
+            Finding(
+                rule_id="IKE-016",
+                title="Nonce shorter than 128 bits",
+                severity=Severity.HIGH,
+                subject=_peer(sess),
+                detail=(
+                    f"A nonce below the {MIN_NONCE_BYTES}-byte minimum was observed "
+                    f"({who}). RFC 7296 s2.10 requires IKEv2 nonces to be randomly "
+                    "chosen and at least 128 bits long. They feed the key derivation "
+                    "and make each exchange fresh, so a short one weakens both, and "
+                    "it marks an implementation that is not following the standard."
+                ),
+                reference="RFC 7296 s2.10, s3.9",
+                remediation=(
+                    "Update or reconfigure the sending device so it emits nonces of "
+                    "at least 32 bytes, which also covers the s2.10 rule that a nonce "
+                    "be at least half the key size of the negotiated PRF."
+                ),
+                evidence={
+                    "short_nonces": short,
+                    "minimum_bytes": MIN_NONCE_BYTES,
+                    "frames": frames,
+                    "spi": sess.sid,
+                },
+            )
+        )
+
+    reused = _by_distinct_sa(
+        sessions, lambda m: (m.nonce_digest,) if m.nonce_digest else None)
+    for (digest,), by_sa in reused.items():
+        if len(by_sa) < 2:
+            continue
+        sightings = list(by_sa.values())
+        senders = sorted({m.src for _, m in sightings})
+        for sess in _one_per_link(sightings):
+            out.append(
+                Finding(
+                    rule_id="IKE-016",
+                    title="Nonce reused across IKE SAs",
+                    severity=Severity.HIGH,
+                    subject=_peer(sess),
+                    detail=(
+                        f"The same nonce appeared in {len(by_sa)} distinct IKE SAs "
+                        f"in this capture, sent by {', '.join(senders)}. RFC 7296 "
+                        "s3.9 says nonce values MUST NOT be reused. Nonces are what "
+                        "make each SA's keys unique; a repeat points to a broken "
+                        "random number generator, which also puts the key exchange "
+                        "values from the same device in doubt, or to replayed "
+                        "handshake messages."
+                    ),
+                    reference="RFC 7296 s2.10, s3.9",
+                    remediation=(
+                        "Treat the sending device's random number source as suspect: "
+                        "check for a firmware fix and for adequate entropy at boot, "
+                        "and rule out replay by checking whether the device logged "
+                        "these SAs itself."
+                    ),
+                    evidence={
+                        "nonce_sha256": digest,
+                        "senders": senders,
+                        "distinct_sas": len(by_sa),
+                        "initiator_spis": sorted(by_sa),
+                        "frames": sorted(m.frame for _, m in sightings),
+                        "scope": "this capture",
+                    },
+                )
+            )
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -740,6 +1047,24 @@ def evaluate(assessment: Assessment, disabled: set[str] | None = None) -> Assess
                     )
                 )
 
+    for rule_id, fn in CAPTURE_RULES:
+        if rule_id in disabled:
+            continue
+        try:
+            findings.extend(fn(assessment.sessions))
+        except Exception as exc:
+            findings.append(
+                Finding(
+                    rule_id=rule_id,
+                    title=f"Rule {rule_id} failed to evaluate",
+                    severity=Severity.INFO,
+                    subject=assessment.capture,
+                    detail=f"{type(exc).__name__}: {exc}",
+                    reference="internal",
+                    remediation="Report with the capture that triggered it.",
+                )
+            )
+
     for flow in assessment.flows:
         for rule_id, fn in ESP_RULES:
             if rule_id in disabled:
@@ -766,11 +1091,13 @@ def evaluate(assessment: Assessment, disabled: set[str] | None = None) -> Assess
 
 def rule_catalogue() -> list[dict]:
     out = []
-    for rule_id, fn in IKE_RULES + ESP_RULES:
+    for rule_id, fn in IKE_RULES + CAPTURE_RULES + ESP_RULES:
         out.append(
             {
                 "id": rule_id,
-                "scope": "ike" if (rule_id, fn) in IKE_RULES else "esp",
+                "scope": "esp" if (rule_id, fn) in ESP_RULES else "ike",
+                "per": ("capture" if (rule_id, fn) in CAPTURE_RULES
+                        else "flow" if (rule_id, fn) in ESP_RULES else "session"),
                 "function": fn.__name__,
                 "doc": (fn.__doc__ or "").strip(),
             }

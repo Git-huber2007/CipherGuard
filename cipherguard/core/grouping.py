@@ -125,6 +125,7 @@ def _strength(sessions: list["IkeSession"]) -> dict[str, Any] | None:
         "classical_grade": weakest.classical_grade,
         "quantum_safe": weakest.quantum_safe,
         "kex_family": weakest.kex_family,
+        "hybrid": weakest.hybrid,
         "source": "negotiated IKE proposal",
     }
 

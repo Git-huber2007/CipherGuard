@@ -110,7 +110,7 @@ def test_upload_errors_are_the_endpoints_own_words(tmp_path):
 @pytest.mark.no_model
 def test_upload_control_is_hidden_unless_it_can_work():
     html = _read("index.html")
-    zone = re.search(r'<section class="upload-zone"[^>]*>', html).group(0)
+    zone = re.findall(r'<section class="upload-zone"[^>]*>', html)[0]
     assert "hidden" in zone                                   # hidden until proven usable
     up = module("Upload", dashboard_js())
     assert "!staticMode.active" in up and "state.health.uploads === true" in up
@@ -287,7 +287,7 @@ def test_a_failed_assessment_keeps_the_previous_result():
 @pytest.mark.no_model
 def test_placeholders_are_static_under_reduced_motion():
     css = _read("css", "dashboard.css")
-    base = re.search(r"\n\.skeleton \{(.*?)\}", css, re.S).group(1)
+    base = re.findall(r"\n\.skeleton \{(.*?)\}", css, re.S)[0]
     assert "animation" not in base                             # static by default
     assert re.search(r"@media \(prefers-reduced-motion: no-preference\) \{\s*\.skeleton \{ animation",
                      css)

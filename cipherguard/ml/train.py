@@ -4,15 +4,22 @@ from __future__ import annotations
 
 import argparse
 import time
-from typing import Callable
+from typing import Callable, Protocol
 
 import numpy as np
 
+from ..core.models import EspFlow
 from . import features as F
-from .classifier import SuiteClassifier, corpus_composition
+from .classifier import Prediction, SuiteClassifier, corpus_composition
 from .synth import build_corpus
 
 DEFAULT_MODEL_DIR = "models"
+
+
+class FlowScorer(Protocol):
+    """What cross-validation needs from a fitted model: one flow in, one prediction out."""
+
+    def predict_one(self, flow: EspFlow) -> Prediction: ...
 
 
 def _print_real_corpus(corpus, directory: str) -> None:
@@ -70,7 +77,7 @@ class LeakageError(AssertionError):
 
 def leave_one_capture_out(
     samples: list,
-    fit: Callable[[list], SuiteClassifier],
+    fit: Callable[[list], FlowScorer],
     verbose: bool = False,
 ) -> dict:
     """Score every labelled real flow with a model that never saw its capture.

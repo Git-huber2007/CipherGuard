@@ -5,6 +5,8 @@ References:
   RFC 4303  IP Encapsulating Security Payload (ESP)
   RFC 2409  The Internet Key Exchange (IKEv1)
   RFC 8247  Algorithm Implementation Requirements for IKEv2
+  RFC 9242  Intermediate Exchange in IKEv2
+  RFC 9370  Multiple Key Exchanges in IKEv2
   IANA "Internet Key Exchange Version 2 (IKEv2) Parameters"
 """
 
@@ -23,6 +25,12 @@ EXCHANGE_TYPES_V2 = {
     35: "IKE_AUTH",
     36: "CREATE_CHILD_SA",
     37: "INFORMATIONAL",
+    # RFC 9242: carries data too large for IKE_SA_INIT, between it and IKE_AUTH.
+    # RFC 9370 uses it for each additional key exchange. Encrypted from the
+    # first byte after the header, so only its occurrence is observable.
+    43: "IKE_INTERMEDIATE",
+    # RFC 9370: additional key exchanges after a CREATE_CHILD_SA. Also encrypted.
+    44: "IKE_FOLLOWUP_KE",
 }
 
 EXCHANGE_TYPES_V1 = {
@@ -61,10 +69,12 @@ PAYLOAD_V2 = {
     46: "SK",
     47: "CP",
     48: "EAP",
+    53: "SKF",
 }
 
 PAYLOAD_SA_V2 = 33
 PAYLOAD_KE_V2 = 34
+PAYLOAD_NONCE_V2 = 40
 PAYLOAD_NOTIFY_V2 = 41
 PAYLOAD_VID_V2 = 43
 
@@ -87,6 +97,8 @@ PAYLOAD_V1 = {
 }
 
 PAYLOAD_SA_V1 = 1
+PAYLOAD_KE_V1 = 4
+PAYLOAD_NONCE_V1 = 10
 PAYLOAD_VID_V1 = 13
 
 PROTOCOL_IDS = {1: "IKE", 2: "AH", 3: "ESP", 4: "FC_ESP_HEADER"}
@@ -95,7 +107,19 @@ PROTOCOL_IDS = {1: "IKE", 2: "AH", 3: "ESP", 4: "FC_ESP_HEADER"}
 # IKEv2 transform types and IDs (RFC 7296 s3.3.2)
 # --------------------------------------------------------------------------
 
-TRANSFORM_TYPE = {1: "ENCR", 2: "PRF", 3: "INTEG", 4: "DH", 5: "ESN"}
+# RFC 9370 s2 adds seven "Additional Key Exchange" transform types, 6 to 12.
+# Each names one more key exchange to run after the first, and takes its
+# transform IDs from the same registry as type 4. ID 0 (NONE) in one of them
+# means that slot is not used.
+TRANSFORM_KE = 4
+ADDKE_TRANSFORM_TYPES = (6, 7, 8, 9, 10, 11, 12)
+KE_TRANSFORM_TYPES = (TRANSFORM_KE,) + ADDKE_TRANSFORM_TYPES
+
+TRANSFORM_TYPE = {
+    1: "ENCR", 2: "PRF", 3: "INTEG", 4: "DH", 5: "ESN",
+    6: "ADDKE1", 7: "ADDKE2", 8: "ADDKE3", 9: "ADDKE4",
+    10: "ADDKE5", 11: "ADDKE6", 12: "ADDKE7",
+}
 
 ENCR = {
     1: "ENCR_DES_IV64",
@@ -187,7 +211,9 @@ DH_GROUPS = {
 
 ESN = {0: "NO_ESN", 1: "ESN"}
 
-TRANSFORM_TABLES = {1: ENCR, 2: PRF, 3: INTEG, 4: None, 5: ESN}
+# None: the key exchange types are named from DH_GROUPS, not from a flat table.
+TRANSFORM_TABLES = {1: ENCR, 2: PRF, 3: INTEG, 4: None, 5: ESN,
+                    **{t: None for t in ADDKE_TRANSFORM_TYPES}}
 
 ATTR_KEY_LENGTH = 14  # RFC 7296 s3.3.5
 

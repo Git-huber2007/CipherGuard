@@ -1,10 +1,10 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:c27cb51d-376d-4981-a059-343767bb09a8",
+  "serialNumber": "urn:uuid:390313bd-a7a0-4628-8a72-e9cec704eeeb",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-09-26T18:02:56+00:00",
+    "timestamp": "2026-10-02T06:45:11+00:00",
     "tools": {
       "components": [
         {
@@ -78,6 +78,10 @@
         {
           "name": "cipherguard:quantumSafe",
           "value": "false"
+        },
+        {
+          "name": "cipherguard:responderConfirmed",
+          "value": "true"
         }
       ]
     },

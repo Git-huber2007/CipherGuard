@@ -39,6 +39,14 @@ SEEDS = [
     lambda: pcapgen.ikev1_message(
         b"\x07" * 8, b"\x00" * 8, 4,
         [(1, pcapgen.ikev1_sa_payload(0, 5, 1, 1, 2, 172800))]),
+    # RFC 9370: additional key exchange transforms, two proposals, and the
+    # encrypted IKE_INTERMEDIATE exchange that carries the extra key exchange
+    lambda: pcapgen.ikev2_sa_init(
+        b"\x08" * 8, b"\x00" * 8,
+        dict(encr=20, key_bits=256, prf=6, dh=31, esn=1,
+             addke={6: [36, 0], 7: [37]}, classical_fallback=True), False,
+        extra_notifies=[16430, 16438]),
+    lambda: pcapgen.ikev2_intermediate(b"\x09" * 8, b"\x0a" * 8, True, 1, 1088),
 ]
 
 

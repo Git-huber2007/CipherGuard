@@ -123,6 +123,44 @@ def ike_header(
 T_ENCR, T_PRF, T_INTEG, T_DH, T_ESN = 1, 2, 3, 4, 5
 
 
+# RFC 9370 s2: Additional Key Exchange 1..7 are transform types 6..12, and take
+# their transform IDs from the key exchange registry that type 4 uses.
+T_ADDKE1 = 6
+KE_ML_KEM_768 = 36
+KE_NONE = 0
+
+# FIPS 203 sizes for ML-KEM-768: the initiator sends an encapsulation key, the
+# responder answers with a ciphertext. They set the size of the encrypted
+# IKE_INTERMEDIATE messages, which is all a passive observer sees of them.
+ML_KEM_768_ENCAPSULATION_KEY = 1184
+ML_KEM_768_CIPHERTEXT = 1088
+
+
+def _suite_transforms(suite: dict, with_addke: bool = True) -> list[bytes]:
+    """The transform substructures of one IKE proposal, in registry order.
+
+    `suite["addke"]` maps an additional key exchange transform type (6-12) to
+    the transform IDs listed for it. An initiator that makes the additional
+    exchange optional lists the method and NONE (0); a responder lists the one
+    it selected.
+    """
+    aead = suite["encr"] in {18, 19, 20, 28, 14, 15, 16}
+    items: list[tuple[int, int, int | None]] = [(T_ENCR, suite["encr"], suite.get("key_bits"))]
+    items.append((T_PRF, suite["prf"], None))
+    if not aead:
+        items.append((T_INTEG, suite["integ"], None))
+    items.append((T_DH, suite["dh"], None))
+    if with_addke:
+        for ttype in sorted(suite.get("addke", {})):
+            items.extend((ttype, tid, None) for tid in suite["addke"][ttype])
+    items.append((T_ESN, suite.get("esn", 0), None))
+
+    return [
+        v2_transform(ttype, tid, last=(i == len(items) - 1), key_bits=bits)
+        for i, (ttype, tid, bits) in enumerate(items)
+    ]
+
+
 def ikev2_sa_init(
     ispi: bytes,
     rspi: bytes,
@@ -132,19 +170,19 @@ def ikev2_sa_init(
     vendor: bytes | None = None,
 ) -> bytes:
     """Build one IKE_SA_INIT message carrying the IKE SA proposal in the clear."""
-    transforms: list[bytes] = []
-    aead = suite["encr"] in {18, 19, 20, 28, 14, 15, 16}
-    items: list[tuple[int, int, int | None]] = [(T_ENCR, suite["encr"], suite.get("key_bits"))]
-    items.append((T_PRF, suite["prf"], None))
-    if not aead:
-        items.append((T_INTEG, suite["integ"], None))
-    items.append((T_DH, suite["dh"], None))
-    items.append((T_ESN, suite.get("esn", 0), None))
+    transforms = _suite_transforms(suite)
 
-    for i, (ttype, tid, bits) in enumerate(items):
-        transforms.append(v2_transform(ttype, tid, last=(i == len(items) - 1), key_bits=bits))
+    # a responder echoes the number of the proposal it selected
+    proposals = [v2_proposal(suite.get("proposal_num", 1), 1, transforms, last=True)]
 
-    proposals = [v2_proposal(1, 1, transforms, last=True)]
+    # RFC 9370 s2.2.2: a responder that predates the additional key exchange
+    # transform types has to reject a proposal containing them, so an initiator
+    # that wants to interoperate also sends the same suite without them.
+    if suite.get("classical_fallback"):
+        proposals = [
+            v2_proposal(1, 1, transforms, last=False),
+            v2_proposal(2, 1, _suite_transforms(suite, with_addke=False), last=True),
+        ]
 
     # a legacy gateway also advertises a broken fallback proposal
     if suite.get("legacy_fallback"):
@@ -180,17 +218,39 @@ def ikev2_sa_init(
     return ike_header(ispi, rspi, C.PAYLOAD_SA_V2, C.IKE_VERSION_2, 34, flags, 0, len(body)) + body
 
 
-def ikev2_auth(ispi: bytes, rspi: bytes, response: bool) -> bytes:
+def ikev2_auth(ispi: bytes, rspi: bytes, response: bool, message_id: int = 1) -> bytes:
     """IKE_AUTH: everything of interest is inside the encrypted SK payload.
 
     This is the message that carries the Child/ESP SA proposal, and it is exactly
     why passive ESP inference is necessary — the analyzer can see that IKE_AUTH
     happened and nothing about what it agreed.
+
+    `message_id` is 1 unless IKE_INTERMEDIATE exchanges came first, each of
+    which takes the next ID (RFC 9242 s3.2).
     """
     sk_body = struct.pack("!8s", os.urandom(8)) + os.urandom(220)
     body = _generic(0, sk_body)  # payload type 46 = SK
     flags = C.FLAG_RESPONSE if response else C.FLAG_INITIATOR
-    return ike_header(ispi, rspi, 46, C.IKE_VERSION_2, 35, flags, 1, len(body)) + body
+    return ike_header(ispi, rspi, 46, C.IKE_VERSION_2, 35, flags, message_id, len(body)) + body
+
+
+def ikev2_intermediate(ispi: bytes, rspi: bytes, response: bool, message_id: int,
+                       ke_data_len: int) -> bytes:
+    """IKE_INTERMEDIATE (RFC 9242, exchange type 43) carrying one additional
+    key exchange (RFC 9370 s2.2.2).
+
+    The header is followed by a single Encrypted (SK) payload, protected with
+    the keys from the first key exchange. Inside it is a KE payload holding
+    `ke_data_len` bytes of key exchange data. None of that is readable without
+    keys: what crosses the wire in the clear is the header, the exchange type
+    and the size. The SK payload's Next Payload field names the first payload
+    inside it (RFC 7296 s3.14), which is KE.
+    """
+    inner = 4 + 4 + ke_data_len + 1          # KE payload, then the pad-length byte
+    sk_body = os.urandom(8) + os.urandom(inner) + os.urandom(16)   # IV, ciphertext, ICV
+    body = _generic(C.PAYLOAD_KE_V2, sk_body)
+    flags = C.FLAG_RESPONSE if response else C.FLAG_INITIATOR
+    return ike_header(ispi, rspi, 46, C.IKE_VERSION_2, 43, flags, message_id, len(body)) + body
 
 
 # ---------------------------------------------------------------------------
@@ -244,6 +304,12 @@ SUITE_HARDENED = dict(encr=20, key_bits=256, prf=5, integ=12, dh=31, esn=1)
 SUITE_TRANSITIONAL = dict(encr=12, key_bits=128, prf=2, integ=2, dh=14, esn=0,
                           legacy_fallback=True)
 SUITE_WEAK = dict(encr=3, prf=1, integ=1, dh=2, esn=0)
+# AES-GCM-256 / SHA2-384 on Curve25519, with ML-KEM-768 as Additional Key
+# Exchange 1: the hybrid the roadmap recommends.
+SUITE_HYBRID = dict(encr=20, key_bits=256, prf=6, dh=31, esn=1,
+                    addke={T_ADDKE1: [KE_ML_KEM_768]})
+# The same suite with no additional key exchange.
+SUITE_CLASSICAL_384 = dict(encr=20, key_bits=256, prf=6, dh=31, esn=1)
 
 
 def _write_ike_pair(w: PcapWriter, t: float, a: str, b: str, req: bytes, resp: bytes,
@@ -450,12 +516,82 @@ def scenario_downgrade(path: str) -> str:
     return path
 
 
+def scenario_pqc_hybrid(path: str) -> str:
+    """IKEv2 with an RFC 9370 hybrid key exchange: Curve25519, then ML-KEM-768.
+
+    The proposal, and the responder's selection of ML-KEM-768 as Additional Key
+    Exchange 1, are in the clear in IKE_SA_INIT. The ML-KEM exchange itself runs
+    in an IKE_INTERMEDIATE exchange, encrypted under the Curve25519 keys, so the
+    capture shows that it took place and how large it was, and nothing else.
+    IKE_AUTH follows with the next message ID.
+    """
+    a, b = "203.0.113.130", "198.51.100.140"
+    ispi, rspi = os.urandom(8), os.urandom(8)
+    rng = random.Random(53)
+
+    # 16438 = INTERMEDIATE_EXCHANGE_SUPPORTED (RFC 9242), sent by both ends
+    req = ikev2_sa_init(ispi, b"\x00" * 8, SUITE_HYBRID, response=False,
+                        extra_notifies=[16430, 16438, 16388, 16389],
+                        vendor=b"strongSwan")
+    resp = ikev2_sa_init(ispi, rspi, SUITE_HYBRID, response=True,
+                         extra_notifies=[16430, 16438, 16389])
+
+    with PcapWriter(path) as w:
+        t = _write_ike_pair(w, BASE_TS, a, b, req, resp)
+        t = _write_ike_pair(
+            w, t, a, b,
+            ikev2_intermediate(ispi, rspi, False, 1, ML_KEM_768_ENCAPSULATION_KEY),
+            ikev2_intermediate(ispi, rspi, True, 1, ML_KEM_768_CIPHERTEXT),
+            ident=2)
+        t = _write_ike_pair(w, t, a, b,
+                            ikev2_auth(ispi, rspi, False, message_id=2),
+                            ikev2_auth(ispi, rspi, True, message_id=2), ident=4)
+        _write_esp_flow(w, t + 0.02, a, b, "AES-GCM-256 (ICV 16)", rng,
+                        packets=700, profile="mixed")
+    return path
+
+
+def scenario_pqc_declined(path: str) -> str:
+    """The same hybrid offer, to a responder that selects the classical proposal.
+
+    The initiator sends two proposals, the hybrid and the same suite without
+    the additional key exchange, as RFC 9370 s2.2.2 describes for reaching a
+    responder that does not implement it. The responder picks the second. No
+    IKE_INTERMEDIATE follows and the association is classical, whatever was
+    offered. An analyzer that credits the offer reads this link as
+    quantum-resistant; it is not.
+    """
+    a, b = "203.0.113.131", "198.51.100.141"
+    ispi, rspi = os.urandom(8), os.urandom(8)
+    rng = random.Random(59)
+
+    offer = dict(SUITE_HYBRID, classical_fallback=True)
+    selected = dict(SUITE_CLASSICAL_384, proposal_num=2)
+    req = ikev2_sa_init(ispi, b"\x00" * 8, offer, response=False,
+                        extra_notifies=[16430, 16438, 16388, 16389],
+                        vendor=b"strongSwan")
+    resp = ikev2_sa_init(ispi, rspi, selected, response=True,
+                         extra_notifies=[16430, 16389])
+
+    with PcapWriter(path) as w:
+        t = _write_ike_pair(w, BASE_TS, a, b, req, resp)
+        t = _write_ike_pair(w, t, a, b, ikev2_auth(ispi, rspi, False),
+                            ikev2_auth(ispi, rspi, True), ident=2)
+        _write_esp_flow(w, t + 0.02, a, b, "AES-GCM-256 (ICV 16)", rng,
+                        packets=640, profile="mixed")
+    return path
+
+
 SCENARIOS = {
     "legacy": (scenario_legacy, "IKEv1 Aggressive Mode, 3DES/MD5/PSK, DH Group 2"),
     "transitional": (scenario_transitional, "IKEv2 AES-CBC-128/SHA-1, DH 14, 3DES fallback"),
     "hardened": (scenario_hardened, "IKEv2 AES-GCM-256, Curve25519, NAT-T"),
     "downgrade": (scenario_downgrade, "The hardened peer pair, later, renegotiated weaker"),
     "backbone": (scenario_mixed_backbone, "Four gateways on one mirror port"),
+    "pqc_hybrid": (scenario_pqc_hybrid,
+                   "IKEv2 AES-GCM-256, Curve25519 + ML-KEM-768 hybrid (RFC 9370)"),
+    "pqc_declined": (scenario_pqc_declined,
+                     "The same hybrid offer; the responder selects the classical proposal"),
 }
 
 

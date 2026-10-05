@@ -15,8 +15,12 @@ vendor-ID fingerprint identified. Output is deliberately conservative:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from ..core.models import Assessment, Finding, Severity
+
+if TYPE_CHECKING:
+    from .models import HardeningPlan
 
 TARGET = {
     "encryption": "AES-GCM-256",

@@ -104,10 +104,11 @@ def test_ikev2_sa_init_transforms_are_recovered():
 
     prop = msg.proposals[0]
     encr = prop.first(1)
+    assert encr is not None
     assert encr.name == "ENCR_AES_GCM_16"
     assert encr.key_length == 256
-    assert prop.first(2).name == "PRF_HMAC_SHA2_256"
-    assert prop.first(4).value_id == 31
+    assert prop.by_type(2)[0].name == "PRF_HMAC_SHA2_256"
+    assert prop.by_type(4)[0].value_id == 31
     assert msg.ke_group == 31
 
 
@@ -115,6 +116,7 @@ def test_ikev2_aead_proposal_omits_integrity():
     """AEAD suites carry no INTEG transform; inventing one would be a false read."""
     suite = dict(encr=20, key_bits=256, prf=5, integ=12, dh=19)
     msg = _parse_single(pcapgen.ikev2_sa_init(b"\x03" * 8, b"\x04" * 8, suite, True))
+    assert msg is not None
     assert msg.proposals[0].by_type(3) == []
 
 
@@ -125,6 +127,7 @@ def test_ikev2_notifies_and_vendor_id():
         extra_notifies=[16430, 16388], vendor=b"strongSwan",
     )
     msg = _parse_single(raw)
+    assert msg is not None
     assert "IKEV2_FRAGMENTATION_SUPPORTED" in msg.notifies
     assert "NAT_DETECTION_SOURCE_IP" in msg.notifies
     assert "strongSwan" in msg.vendor_ids
@@ -133,8 +136,9 @@ def test_ikev2_notifies_and_vendor_id():
 def test_ikev2_multiple_proposals_are_all_parsed():
     suite = dict(encr=12, key_bits=128, prf=2, integ=2, dh=14, legacy_fallback=True)
     msg = _parse_single(pcapgen.ikev2_sa_init(b"\x07" * 8, b"\x08" * 8, suite, False))
+    assert msg is not None
     assert len(msg.proposals) == 2
-    assert msg.proposals[1].first(1).name == "ENCR_3DES"
+    assert msg.proposals[1].by_type(1)[0].name == "ENCR_3DES"
 
 
 def test_ikev1_attributes_are_recovered():
@@ -142,12 +146,13 @@ def test_ikev1_attributes_are_recovered():
     raw = pcapgen.ikev1_message(b"\x09" * 8, b"\x00" * 8, 4, [(1, sa)])
     msg = _parse_single(raw)
 
+    assert msg is not None
     assert msg.version == "IKEv1"
     assert "Aggressive" in msg.exchange
     assert msg.auth_method == "PRE_SHARED_KEY"
     assert msg.lifetime_seconds == 172800
     assert msg.ke_group == 2
-    assert msg.proposals[0].first(1).name == "3DES_CBC"
+    assert msg.proposals[0].by_type(1)[0].name == "3DES_CBC"
 
 
 def test_natt_non_esp_marker_required_on_4500():
@@ -306,7 +311,9 @@ def _assess(path: str, model_dir: str | None = None, **kw) -> Assessment:
     the session-trained model applies."""
     import cipherguard.pipeline as pipeline
 
-    return pipeline.analyze(path, model_dir=model_dir, **kw)
+    if model_dir is not None:
+        kw["model_dir"] = model_dir
+    return pipeline.analyze(path, **kw)
 
 
 def test_legacy_capture_raises_the_expected_rules(tmp_path):
@@ -550,6 +557,7 @@ def test_sweet32_scales_with_observed_volume():
     assert sweet32_exposure(128, 10**12, 100, 86400) is None  # AES is unaffected
     quiet = sweet32_exposure(64, 10**6, 3600, 86400)
     busy = sweet32_exposure(64, 10**11, 3600, 86400)
+    assert quiet is not None and busy is not None
     assert quiet["ratio_to_threshold"] < busy["ratio_to_threshold"]
     assert busy["exceeds"] and not quiet["exceeds"]
 
@@ -857,7 +865,7 @@ def test_fleet_endpoint_takes_no_caller_supplied_path():
 
     app = create_app()
     route = next(r for r in app.routes if getattr(r, "path", "") == "/api/fleet")
-    params = inspect.signature(route.endpoint).parameters
+    params = inspect.signature(getattr(route, "endpoint")).parameters
     assert "db" not in params
     assert not params, "no request-controlled parameters may reach the store path"
 
@@ -1532,8 +1540,10 @@ def test_packaging_includes_every_static_asset():
 
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     pyproject = open(os.path.join(root, "pyproject.toml"), encoding="utf-8").read()
-    block = re.search(r"\[tool\.setuptools\.package-data\](.*?)(\n\[|\Z)",
-                      pyproject, re.S).group(1)
+    found = re.search(r"\[tool\.setuptools\.package-data\](.*?)(\n\[|\Z)",
+                      pyproject, re.S)
+    assert found is not None
+    block = found.group(1)
     for pattern in ("static/*.html", "static/css/*.css", "static/js/*.js"):
         assert pattern in block, f"{pattern} is not declared as package data"
 

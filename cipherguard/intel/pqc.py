@@ -60,6 +60,11 @@ class LinkExposure:
     priority: int
     mosca_gap_years: float
     rationale: str
+    # Key establishment alone. A link whose key exchange is post-quantum but
+    # whose cipher key is short is exposed for a different reason, and needs a
+    # different fix, from one whose key exchange is classical.
+    kex_quantum_bits: int = 0
+    hybrid: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -74,6 +79,8 @@ class LinkExposure:
             "priority": self.priority,
             "mosca_gap_years": self.mosca_gap_years,
             "rationale": self.rationale,
+            "kex_quantum_bits": self.kex_quantum_bits,
+            "hybrid": self.hybrid,
         }
 
 
@@ -119,16 +126,23 @@ def assess_links(
         prop = sess.negotiated("IKE")
         if not prop:
             continue
-        strength = score_proposal(prop.transforms)
+        # the session's own figure: an offer no responder was seen to accept
+        # earns no post-quantum credit
+        strength = sess.strength()
+        uncredited = score_proposal(prop.transforms).kex_quantum_bits > strength.kex_quantum_bits
         nbytes, duration = _link_bytes(assessment, sess)
         rate_mbps = (nbytes * 8 / 1e6 / duration) if duration > 0 else 0.0
 
         if strength.quantum_safe:
             index = 0.0
+            how = ("a hybrid of " + " and ".join(c["name"] for c in strength.kex_components)
+                   if strength.hybrid else strength.kex_family.upper())
+            # quantum_bits is the association's figure, capped by the cipher's
+            # Grover margin, so it is stated of the association, not the exchange
             rationale = (
-                f"Key exchange is {strength.kex_family.upper()} with "
-                f"{strength.quantum_bits}-bit quantum strength. Recorded traffic on "
-                "this link is not retroactively decryptable."
+                f"Key exchange is {how}, and the association keeps "
+                f"{strength.quantum_bits} bits against a quantum attacker. Recorded "
+                "traffic on this link is not retroactively decryptable."
             )
         else:
             # Volume term is logarithmic: a link carrying ten times the traffic
@@ -140,12 +154,29 @@ def assess_links(
             weakness_term = max(1.0, 128 / max(strength.classical_bits, 8))
             urgency_term = max(0.5, 1.0 + gap / 10.0)
             index = round(volume_term * weakness_term * urgency_term, 2)
-            rationale = (
-                f"{strength.kex_family.upper()} key exchange at "
-                f"{strength.classical_bits} classical bits and zero quantum bits. "
-                f"Every session key on this link is recoverable by Shor's algorithm "
-                f"from recorded traffic."
-            )
+            if uncredited:
+                rationale = (
+                    "A post-quantum key exchange was offered on this link, but no "
+                    "response was observed, so it is not confirmed as negotiated and "
+                    "is not credited. Capture the full handshake to confirm it."
+                )
+            elif strength.kex_quantum_bits >= 128:
+                # Shor is not the problem here, and saying it was would send
+                # the operator to fix a key exchange that is already fixed.
+                rationale = (
+                    f"Key exchange is {strength.kex_family.upper()} and resists "
+                    f"Shor's algorithm at {strength.kex_quantum_bits} bits, but the "
+                    f"cipher key leaves {strength.quantum_bits} bits against Grover's "
+                    "search, below the 128-bit level. The cipher is the limit on "
+                    "this link, not key establishment."
+                )
+            else:
+                rationale = (
+                    f"{strength.kex_family.upper()} key exchange at "
+                    f"{strength.classical_bits} classical bits and zero quantum bits. "
+                    f"Every session key on this link is recoverable by Shor's algorithm "
+                    f"from recorded traffic."
+                )
 
         results.append(
             LinkExposure(
@@ -160,6 +191,8 @@ def assess_links(
                 priority=0,
                 mosca_gap_years=round(gap, 1),
                 rationale=rationale,
+                kex_quantum_bits=strength.kex_quantum_bits,
+                hybrid=strength.hybrid,
             )
         )
 
@@ -184,8 +217,14 @@ def roadmap(
     phases = []
     if exposed:
         immediate = [l for l in exposed if l.classical_bits < 112]
-        near = [l for l in exposed if 112 <= l.classical_bits < 128]
-        planned = [l for l in exposed if l.classical_bits >= 128]
+        # Past the classical floor, a link whose key exchange is already
+        # post-quantum does not belong in the key-exchange phases: telling it to
+        # deploy a PPK or enable ML-KEM would be advice it has already taken.
+        rest = [l for l in exposed if l.classical_bits >= 112]
+        cipher_limited = [l for l in rest if l.kex_quantum_bits >= 128]
+        rest = [l for l in rest if l.kex_quantum_bits < 128]
+        near = [l for l in rest if l.classical_bits < 128]
+        planned = [l for l in rest if l.classical_bits >= 128]
 
         if immediate:
             phases.append({
@@ -224,6 +263,18 @@ def roadmap(
                     "if either primitive fails."
                 ),
                 "target": "Hybrid ML-KEM-768 (Group 36) + Curve25519 (Group 31)",
+            })
+        if cipher_limited:
+            phases.append({
+                "phase": 4,
+                "window": "next change window",
+                "links": [l.peer for l in cipher_limited],
+                "action": (
+                    "Key establishment on these links is already post-quantum. "
+                    "What remains is the cipher: raise it to a 256-bit key, so that "
+                    "Grover's search leaves a 128-bit margin."
+                ),
+                "target": "AES-GCM-256 or ChaCha20-Poly1305",
             })
 
     return {

@@ -251,20 +251,21 @@ def _read_all(log) -> list[dict]:
 def test_audit_log_rotates_by_size(tmp_path):
     from cipherguard.core.audit_log import AuditLog
 
-    log = AuditLog(str(tmp_path / "audit.jsonl"), max_bytes=2048, backups=3)
+    path = str(tmp_path / "audit.jsonl")
+    log = AuditLog(path, max_bytes=2048, backups=3)
     for i in range(200):
         log.denied(reason=f"r{i:04d}")
 
     gens = log.generations()
-    assert gens == [log.path] + [f"{log.path}.{i}" for i in (1, 2, 3)]
-    assert not os.path.exists(f"{log.path}.4")
+    assert gens == [path] + [f"{path}.{i}" for i in (1, 2, 3)]
+    assert not os.path.exists(f"{path}.4")
     assert all(os.path.getsize(g) <= 2048 for g in gens)
 
     # what survives is a contiguous run ending at the newest record: rotation
     # discards whole old generations, never a line from the middle
     seq = [int(r["reason"][1:]) for r in _read_all(log)]
     assert seq == list(range(seq[0], 200))
-    with open(log.path, encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         assert json.loads(fh.readlines()[-1])["reason"] == "r0199"
 
 
@@ -274,10 +275,11 @@ def test_the_latest_assessment_record_is_never_rotated_away(tmp_path):
     in the active file, even when writing it is what triggered rotation."""
     from cipherguard.core.audit_log import AuditLog
 
-    log = AuditLog(str(tmp_path / "audit.jsonl"), max_bytes=600, backups=1)
+    path = str(tmp_path / "audit.jsonl")
+    log = AuditLog(path, max_bytes=600, backups=1)
     for i in range(50):
         log.export("cbom", f"capture-{i}.pcap", None)
-        with open(log.path, encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             assert json.loads(fh.readlines()[-1])["capture"] == f"capture-{i}.pcap"
 
 
@@ -285,13 +287,14 @@ def test_the_latest_assessment_record_is_never_rotated_away(tmp_path):
 def test_an_oversized_record_is_written_whole(tmp_path):
     from cipherguard.core.audit_log import AuditLog, retention_ceiling
 
-    log = AuditLog(str(tmp_path / "audit.jsonl"), max_bytes=100, backups=2)
+    path = str(tmp_path / "audit.jsonl")
+    log = AuditLog(path, max_bytes=100, backups=2)
     for i in range(5):
         log.denied(reason="x" * 150, detail=str(i))
     records = _read_all(log)
     assert [r["detail"] for r in records] == ["2", "3", "4"]
     total = sum(os.path.getsize(g) for g in log.generations())
-    assert total <= retention_ceiling(100, 2, largest_record=os.path.getsize(log.path))
+    assert total <= retention_ceiling(100, 2, largest_record=os.path.getsize(path))
 
 
 @pytest.mark.no_model
@@ -439,7 +442,7 @@ def test_library_sensor_loop_bounds_its_evidence(tmp_path, monkeypatch):
     pcaps = [n for n in kept if n.endswith(".pcap")]
     assert len(results) == 12
     assert len(pcaps) == 3
-    newest = os.path.basename(results[-1].evidence_path)
+    newest = os.path.basename(results[-1].evidence_path or "")
     assert newest in pcaps, "the latest window's evidence was pruned"
     assert all(n.startswith("window-Local_Area_Connection_2-") for n in pcaps)
     state = read_sensor_state(str(evidence))

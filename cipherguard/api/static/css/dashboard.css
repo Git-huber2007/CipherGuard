@@ -3684,6 +3684,13 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
 .hud-dot.live {
   background: var(--dk-bg-10b981, #10b981);
 }
+/* Replay of sample captures: deliberately not the "live" green. */
+.hud-dot.replay {
+  background: var(--high);
+}
+.sniffer-source-notice {
+  margin: 0 0 14px;
+}
 
 /* Streaming Packet Feed Terminal */
 .sniffer-feed-card {

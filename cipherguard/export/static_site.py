@@ -11,6 +11,12 @@ from .cbom import build_cbom
 from .payload import build_payload
 
 def _get_default_demo_wifi() -> dict:
+    """The example Wi-Fi scan shown by the static build.
+
+    Every network in it is invented: the addresses come from the range RFC 7042
+    reserves for documentation. A real scan must never be saved here, because
+    this file is committed and published with the hosted page.
+    """
     snapshot_path = os.path.join(os.path.dirname(__file__), "live_wifi_snapshot.json")
     if os.path.exists(snapshot_path):
         try:
@@ -22,9 +28,9 @@ def _get_default_demo_wifi() -> dict:
             pass
     return {
         "interface": {
-            "name": "Wi-Fi (Intel Wireless)",
-            "ssid": "Svyasa-Staff",
-            "bssid": "58:61:63:11:cf:a6",
+            "name": "Wi-Fi",
+            "ssid": "CipherGuard-HQ-Secure",
+            "bssid": "00:00:5e:00:53:10",
             "state": "connected",
             "signal_percent": 83,
             "rssi_dbm": -58,
@@ -197,45 +203,12 @@ def export(
         codes = " then ".join(str(c["exit_code"]) for c in demo["commands"])
         print(f"  baked the posture replay demo (watch exit codes {codes})")
 
-# Pre-generate Wi-Fi & VPN posture for static demo deployment
-    try:
-        from ..wifi.auditor import WifiAuditor
-        from ..vpn.detector import VpnDetector
-        auditor = WifiAuditor()
-        wifi_data = auditor.audit_current().to_dict()
-        # If running in cloud CI runner or headless environment without active Wi-Fi hardware, use rich demo dataset
-        if not wifi_data.get("networks_in_range") or not wifi_data.get("interface") or wifi_data.get("interface", {}).get("state") != "connected":
-            wifi_data = _get_default_demo_wifi()
-        else:
-            try:
-                vpn_det = VpnDetector()
-                w_name = wifi_data.get("interface", {}).get("name", "Wi-Fi") if wifi_data.get("interface") else "Wi-Fi"
-                w_dns = wifi_data.get("interface", {}).get("dns_servers", []) if wifi_data.get("interface") else []
-                vpn_res = vpn_det.detect_current(wifi_iface_name=w_name, wifi_dns=w_dns)
-                wifi_data["vpn"] = vpn_res.to_dict()
-            except Exception:
-                wifi_data["vpn"] = None
-        # Sanitize personal/devil SSIDs for hosted demo so demo always shows clean authorized AP
-        if wifi_data.get("interface"):
-            s_name = wifi_data["interface"].get("ssid", "")
-            if "devil" in s_name.lower():
-                wifi_data["interface"]["ssid"] = "CipherGuard-HQ-Secure"
-                for net in wifi_data.get("networks_in_range", []):
-                    if "devil" in net.get("ssid", "").lower():
-                        net["ssid"] = "CipherGuard-HQ-Secure"
-                for finding in wifi_data.get("findings", []):
-                    if "devil" in finding.get("subject", "").lower():
-                        finding["subject"] = "SSID: CipherGuard-HQ-Secure (WPA2-Personal)"
-                if "devil" in wifi_data.get("summary", "").lower():
-                    wifi_data["summary"] = wifi_data["summary"].replace(s_name, "CipherGuard-HQ-Secure")
-
-        with open(os.path.join(data_dir, "wifi_demo.json"), "w", encoding="utf-8") as fh:
-            json.dump(wifi_data, fh, indent=2)
-    except Exception as exc:
-        if verbose:
-            print(f"  Note: wifi demo export fallback ({exc})")
-        with open(os.path.join(data_dir, "wifi_demo.json"), "w", encoding="utf-8") as fh:
-            json.dump(_get_default_demo_wifi(), fh, indent=2)
+    # The static page's Wi-Fi view is the bundled example scan, never a scan of
+    # the machine running the export. The output is published, and a real scan
+    # carries the operator's adapter address and their neighbours' network
+    # names; this used to audit the local adapter and write the result here.
+    with open(os.path.join(data_dir, "wifi_demo.json"), "w", encoding="utf-8") as fh:
+        json.dump(_get_default_demo_wifi(), fh, indent=2)
 
     # Tell GitHub Pages not to run the output through Jekyll, which would
     # otherwise ignore any file or directory beginning with an underscore.

@@ -6,6 +6,9 @@ payloads (IKEv2 SK, IKEv1 phase-2 after the HASH) are counted, never decrypted â
 the analyzer holds no keys and requests none.
 
   RFC 7296 s3.1-3.3  IKEv2 header, generic payload header, SA payload
+  RFC 7296 s3.4/3.9  KE and Nonce payloads, reduced to digests on the way in
+  RFC 9242           IKE_INTERMEDIATE exchange (recognised; its body is encrypted)
+  RFC 9370 s2        additional key exchange transforms (types 6-12), IKE_FOLLOWUP_KE
   RFC 2408 s3        ISAKMP payload formats used by IKEv1
   RFC 2409 App. A    IKEv1 phase-1 SA attribute classes
   RFC 3947           UDP encapsulation and the non-ESP marker on port 4500
@@ -13,6 +16,7 @@ the analyzer holds no keys and requests none.
 
 from __future__ import annotations
 
+import hashlib
 import struct
 
 from ..core import constants as C
@@ -111,6 +115,27 @@ def _fingerprint_vendor(payload: bytes) -> str:
     return f"unknown:{hexed[:16]}"
 
 
+def _digest(value: bytes) -> str:
+    """SHA-256 of a public value or nonce. The hygiene rules only need to know
+    whether two values are equal, so the bytes themselves are never kept."""
+    return hashlib.sha256(value).hexdigest()
+
+
+def _record_ke(value: bytes, msg: IkeMessage) -> None:
+    # first KE payload only; an empty one is not a public value to compare
+    if msg.ke_digest is None and value:
+        msg.ke_digest = _digest(value)
+
+
+def _record_nonce(value: bytes, msg: IkeMessage) -> None:
+    # a zero-length nonce is recorded as length 0 (short) but has no digest,
+    # so two empty payloads cannot also read as one nonce reused
+    if msg.nonce_len is None:
+        msg.nonce_len = len(value)
+        if value:
+            msg.nonce_digest = _digest(value)
+
+
 # ---------------------------------------------------------------------------
 # IKEv2
 # ---------------------------------------------------------------------------
@@ -130,8 +155,10 @@ def _parse_v2_transforms(data: bytes, count: int, msg: IkeMessage) -> list[Trans
         attrs = _parse_attributes(data[off + 8 : off + tlen])
         key_len = next((v for t, v, _ in attrs if t == C.ATTR_KEY_LENGTH), None)
 
-        if ttype == 4:
-            name = C.DH_GROUPS.get(tid, {}).get("name", f"GROUP_{tid}")
+        if ttype in C.KE_TRANSFORM_TYPES:
+            # the additional key exchanges of RFC 9370 (types 6-12) share the
+            # key exchange registry with type 4
+            name = str(C.DH_GROUPS.get(tid, {}).get("name", f"GROUP_{tid}"))
         else:
             table = C.TRANSFORM_TABLES.get(ttype)
             name = (table or {}).get(tid, f"TYPE{ttype}_ID{tid}")
@@ -191,6 +218,10 @@ def _parse_v2_payloads(data: bytes, first: int, msg: IkeMessage) -> None:
             msg.proposals.extend(_parse_v2_sa(body, msg))
         elif next_payload == C.PAYLOAD_KE_V2 and len(body) >= 4:
             msg.ke_group = struct.unpack_from("!H", body, 0)[0]
+            # RFC 7296 s3.4: group (2), reserved (2), then the public value
+            _record_ke(body[4:], msg)
+        elif next_payload == C.PAYLOAD_NONCE_V2:
+            _record_nonce(body, msg)
         elif next_payload == C.PAYLOAD_NOTIFY_V2 and len(body) >= 4:
             _proto, spi_size, ntype = struct.unpack_from("!BBH", body, 0)
             label = NOTIFY_TYPES.get(ntype, f"NOTIFY_{ntype}")
@@ -226,7 +257,7 @@ def _parse_v2_payloads(data: bytes, first: int, msg: IkeMessage) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _parse_v1_transform(data: bytes, msg: IkeMessage) -> Transform | None:
+def _parse_v1_transform(data: bytes, msg: IkeMessage) -> tuple[Transform, ...] | None:
     """IKEv1 bundles the whole phase-1 suite into attributes of one transform."""
     if len(data) < 4:
         return None
@@ -265,7 +296,7 @@ def _parse_v1_transform(data: bytes, msg: IkeMessage) -> Transform | None:
         type_id=4,
         type_name="DH",
         value_id=group or 0,
-        name=C.DH_GROUPS.get(group, {}).get("name", f"GROUP_{group}"),
+        name=str(C.DH_GROUPS.get(group or 0, {}).get("name", f"GROUP_{group}")),
     )
 
 
@@ -325,8 +356,12 @@ def _parse_v1_payloads(data: bytes, first: int, msg: IkeMessage) -> None:
             vid = _fingerprint_vendor(body)
             if vid not in msg.vendor_ids:
                 msg.vendor_ids.append(vid)
-        elif next_payload == 4 and msg.ke_group is None:
-            pass  # IKEv1 carries the group in the SA attributes, not the KE payload
+        elif next_payload == C.PAYLOAD_KE_V1:
+            # IKEv1 carries the group in the SA attributes, not the KE payload;
+            # the KE body is the public value alone (RFC 2408 s3.7)
+            _record_ke(body, msg)
+        elif next_payload == C.PAYLOAD_NONCE_V1:
+            _record_nonce(body, msg)
 
         off += plen
         next_payload = nxt

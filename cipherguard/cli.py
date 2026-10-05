@@ -65,9 +65,19 @@ def print_report(a: Assessment, verbose: bool = False) -> None:
         print(_c("1", "  Negotiated IKE security associations (parsed from the wire)"))
         for s in a.sessions:
             prop = s.negotiated("IKE")
-            algs = ", ".join(t.label() for t in prop.transforms) if prop else "not observed"
+            # an RFC 9370 additional key exchange is printed with its slot, so
+            # the second exchange of a hybrid is not read as an alternative
+            algs = ", ".join(
+                f"{t.type_name}={t.label()}" if t.type_name.startswith("ADDKE") else t.label()
+                for t in prop.transforms
+            ) if prop else "not observed"
             print(f"    {s.peer_a} <-> {s.peer_b}   {s.version}   [{s.vendor_family()}]")
             print(f"      {algs}")
+            kx = s.key_exchange()
+            if kx["hybrid"]:
+                n = kx["intermediate_exchanges"]
+                print(_c("90", f"      hybrid key exchange (RFC 9370); {n} IKE_INTERMEDIATE "
+                               f"exchange{'' if n == 1 else 's'} observed, contents encrypted"))
         print()
 
     if a.flows:
@@ -816,16 +826,27 @@ def cmd_serve(args: argparse.Namespace) -> int:
     if not loopback and not token:
         print(_c("1;31", f"WARNING: serving unauthenticated on {args.host}"))
 
-    app = create_app(
-        model_dir=args.models,
-        capture_dir=args.captures,
-        baseline_db=args.db,
-        allow_upload=not args.no_upload,
-        auth_token=token,
-        audit_log=args.audit_log,
-    )
+    # Cross-origin access is off unless origins are named, here or in the
+    # environment. See create_app for why a wildcard is not accepted.
+    cors = list(args.cors_origin or [])
+    cors += [o for o in os.environ.get("CIPHERGUARD_CORS_ORIGINS", "").split(",") if o.strip()]
+    try:
+        app = create_app(
+            model_dir=args.models,
+            capture_dir=args.captures,
+            baseline_db=args.db,
+            allow_upload=not args.no_upload,
+            auth_token=token,
+            audit_log=args.audit_log,
+            cors_origins=cors,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     print(f"Authentication {'enabled' if token else 'disabled (loopback only)'}"
           f"  ·  audit log {args.audit_log or 'off'}")
+    if cors:
+        print(f"Cross-origin access allowed for: {', '.join(c.strip() for c in cors)}")
     print(f"Dashboard at http://{args.host}:{args.port}")
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
     return 0
@@ -1160,6 +1181,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--insecure-bind", action="store_true",
                    help="allow binding a non-loopback address without authentication")
     p.add_argument("--token", help="bearer token (or set CIPHERGUARD_TOKEN)")
+    p.add_argument("--cors-origin", action="append", metavar="ORIGIN",
+                   help="allow this web origin to call the API from a browser, e.g. "
+                        "https://example.github.io (repeatable; or set "
+                        "CIPHERGUARD_CORS_ORIGINS, comma-separated). Off by default.")
     p.add_argument("--audit-log", default="cipherguard-audit.jsonl",
                    help="JSON Lines audit trail path; use '' to disable")
     p.set_defaults(func=cmd_serve)

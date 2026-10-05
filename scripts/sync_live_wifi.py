@@ -1,8 +1,12 @@
 """CipherGuard Live Wi-Fi & VPN Telemetry Synchronizer.
 
 Runs a real-time active RF spectrum audit and VPN routing inspection
-of the local machine and updates docs/data/wifi_demo.json and
-live_wifi_snapshot.json.
+of the local machine and saves the result to wifi_scan.local.json, which
+git ignores.
+
+It must not write into docs/ or cipherguard/export/: those files are committed
+and published, and a real scan holds this machine's adapter address and the
+names of every network in range.
 """
 
 from __future__ import annotations
@@ -52,11 +56,10 @@ def sync_live_wifi(force_scan: bool = True, verbose: bool = True) -> dict:
         if verbose:
             print(f"[!] VPN inspection notice: {exc}")
 
-    # Synchronize to docs/data/wifi_demo.json and live_wifi_snapshot.json
+    # Local only: see the module docstring for why this is not a tracked path
     base_dir = _REPO_ROOT
     targets = [
-        os.path.join(base_dir, "docs", "data", "wifi_demo.json"),
-        os.path.join(base_dir, "cipherguard", "export", "live_wifi_snapshot.json"),
+        os.path.join(base_dir, "wifi_scan.local.json"),
     ]
 
     for target in targets:
@@ -72,7 +75,9 @@ def sync_live_wifi(force_scan: bool = True, verbose: bool = True) -> dict:
         ch = iface.get("channel", "N/A")
         score = data.get("score", "N/A")
         grade = data.get("grade", "N/A")
-        egress = data.get("vpn", {}).get("egress_isp", "Direct ISP")
+        vpn = data.get("vpn") or {}
+        # the public-address lookup is off unless CIPHERGUARD_EGRESS_LOOKUP=1
+        egress = vpn.get("egress_isp") or ("no answer" if vpn.get("egress_queried") else "not queried")
         print(f"[OK] Live Wi-Fi posture synchronized: '{ssid}' (Ch {ch}) | Score {score}/100 (Grade {grade}) | Egress: {egress}")
 
     return data

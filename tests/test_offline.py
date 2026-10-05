@@ -47,14 +47,14 @@ def test_stylesheet_fetches_nothing_remote():
 def test_fonts_are_bundled_declared_and_licensed():
     css = _read("css", "dashboard.css")
     faces = re.findall(r"@font-face\{(.*?)\}", css, re.S)
-    declared = {(re.search(r'font-family:"([^"]+)"', f).group(1),
-                 int(re.search(r"font-weight:(\d+)", f).group(1))) for f in faces}
+    declared = {(re.findall(r'font-family:"([^"]+)"', f)[0],
+                 int(re.findall(r"font-weight:(\d+)", f)[0])) for f in faces}
     # the weights this stylesheet actually uses, so nothing is faux-bolded
     assert declared >= {("IBM Plex Sans", w) for w in (400, 500, 600)}
     assert declared >= {("IBM Plex Mono", w) for w in (400, 500)}
     for f in faces:
         assert "font-display:swap" in f
-        src = re.search(r'url\("\.\./fonts/([^"]+)"\)', f).group(1)
+        src = re.findall(r'url\("\.\./fonts/([^"]+)"\)', f)[0]
         path = os.path.join(STATIC, "fonts", src)
         assert os.path.isfile(path), src
         with open(path, "rb") as fh:

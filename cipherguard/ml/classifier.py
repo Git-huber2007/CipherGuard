@@ -300,7 +300,7 @@ class SuiteClassifier:
 
     def _blend(self, X: np.ndarray) -> np.ndarray:
         assert self.rf is not None and self.cnn is not None
-        rf_p = self.rf.predict_proba(X)
+        rf_p = np.asarray(self.rf.predict_proba(X))
         cnn_p = self.cnn.predict_proba(X[:, : F.SIGNAL_LEN])
         # RandomForest may have seen fewer classes than the label space
         if rf_p.shape[1] != len(self.labels):

@@ -2,8 +2,8 @@
 
 **System:** CipherGuard (AI-Powered Passive Network & RF Security Framework)  
 **Problem Statement:** SIH26160 · National Technical Research Organisation (NTRO)  
-**Active Workspace Root:** `c:\SIH-\final\cipherguard`  
-**Last Updated:** 2026-09-23  
+**Active Workspace Root:** the repository root  
+**Last Updated:** 2026-10-05  
 
 ---
 
@@ -23,14 +23,14 @@ CipherGuard audits the cryptographic posture of IPsec VPN deployments and ambien
 
 ## 2. Active Documentation Suite
 
-The complete 6-document AI context and governance system is active in `c:\SIH-\final\cipherguard\`:
+The complete 6-document AI context and governance system is active in the repository root:
 
-- [PRD.md](file:///c:/SIH-/final/cipherguard/PRD.md): Product Requirements, User Personas, Functional & Non-Functional Requirements.
-- [Architecture.md](file:///c:/SIH-/final/cipherguard/Architecture.md): System Data Flow, Epistemic Domain Model, Directory Layout, Tech Stack.
-- [Rules.md](file:///c:/SIH-/final/cipherguard/Rules.md): AI Operational Boundaries, Coding Conventions, Security Invariants.
-- [Phases.md](file:///c:/SIH-/final/cipherguard/Phases.md): Phased Milestone Roadmap (Phases 1–5 Complete, Phase 6 Upcoming).
-- [Design.md](file:///c:/SIH-/final/cipherguard/Design.md): Visual Design Tokens, IBM Plex Typography, Tactical HUD & Audio Synthesizer.
-- [Memory.md](file:///c:/SIH-/final/cipherguard/Memory.md): This dynamic session state and task tracking file.
+- [PRD.md](PRD.md): Product Requirements, User Personas, Functional & Non-Functional Requirements.
+- [Architecture.md](Architecture.md): System Data Flow, Epistemic Domain Model, Directory Layout, Tech Stack.
+- [Rules.md](Rules.md): AI Operational Boundaries, Coding Conventions, Security Invariants.
+- [Phases.md](Phases.md): Phased Milestone Roadmap (Phases 1–5 Complete, Phase 6 In Progress).
+- [Design.md](Design.md): Visual Design Tokens, IBM Plex Typography, Tactical HUD & Audio Synthesizer.
+- [Memory.md](Memory.md): This dynamic session state and task tracking file.
 
 ---
 
@@ -46,11 +46,11 @@ The complete 6-document AI context and governance system is active in `c:\SIH-\f
 - **`cipherguard.export`**: CycloneDX v1.6 CBOM JSON generator, air-gapped compliance dossier exporter.
 - **`cipherguard.capture`**: Linux `AF_PACKET` raw socket bounded sniffer with ring buffer spool.
 - **`cipherguard.lab`**: Reproducible synthetic scenario generator (`legacy`, `hardened`, `backbone`, `downgrade`).
-- **`cipherguard.api` & `docs/`**: FastAPI backend server + static Single-Page Tactical HUD with 360° Polar RF Radar, Cyber Terminal drawer (`~`), and procedural Web Audio synthesizer.
+- **`cipherguard.api` & `docs/`**: FastAPI backend server + static single-page dashboard. The polar RF radar, terminal drawer and Web Audio effects were removed; only empty stubs remain in `dashboard.js`.
 
 ### Automated Testing Baseline
 - Test runner: `pytest tests/`
-- Test count: ~151 tests covering dissection, ML inference, compliance scoring, downgrade detection, and API endpoints.
+- Test count: 421 tests collected, covering dissection, ML inference, compliance scoring, downgrade detection, and API endpoints.
 
 ---
 
@@ -72,7 +72,7 @@ The complete 6-document AI context and governance system is active in `c:\SIH-\f
    - Design mTLS edge telemetry push daemon for multi-site remote TAPs.
 2. **eBPF Ingress Acceleration**:
    - Research and prototype Linux eBPF/XDP bypass for 100 Gbps optical transit links.
-3. **PQC Extension Dissection**:
-   - Add parsing for RFC 9370 post-quantum hybrid key exchange transforms (ML-KEM / ML-DSA).
+3. **PQC Extension Dissection** (delivered, see Phases.md Phase 6 item 4):
+   - RFC 9370 post-quantum hybrid key exchange transforms (ML-KEM) are parsed. ML-DSA is negotiated inside the encrypted `IKE_AUTH`, so a passive dissector cannot parse it.
 4. **Autonomous Degradation Fuzzing**:
    - Implement simulated state-sponsored downgrade packet injection for SOC cyber drill training.

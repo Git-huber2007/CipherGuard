@@ -53,8 +53,10 @@ stays small and the captures are reproducible.
 python -m cipherguard.cli lab
 ```
 
-Writes four scenarios into `samples/`: a legacy IKEv1 gateway, a partially
-modernised one, a hardened one, a mixed backbone, plus a downgrade capture.
+Writes seven scenarios into `samples/`: a legacy IKEv1 gateway, a partially
+modernised one, a hardened one, a mixed backbone, a downgrade capture, and two
+post-quantum ones: an RFC 9370 hybrid key exchange, and the same offer declined
+by the responder.
 
 ---
 
@@ -190,7 +192,7 @@ pip install pytest httpx
 python -m pytest tests/ -q
 ```
 
-151 tests, about 50 seconds (140 plus 7 real-capture tests that skip until step 3 of the demo sequence). The first run trains a small model, so it is slower.
+421 tests, about 4 minutes. The real-capture tests skip until step 3 of the demo sequence. The first run trains a small model, so it is slower.
 
 ---
 
@@ -297,8 +299,18 @@ Start it with a token, since the API is unauthenticated by default:
 
 ```bash
 CIPHERGUARD_TOKEN=$(openssl rand -hex 32) \
-  cipherguard serve --host 0.0.0.0 --port $PORT
+  cipherguard serve --host 0.0.0.0 --port $PORT \
+  --cors-origin https://git-huber2007.github.io
 ```
+
+`--cors-origin` is what lets the Pages build call this backend from a browser;
+cross-origin access is off for every origin that is not named. The bundled
+`render.yaml` and Dockerfile follow the same rule: neither starts the server
+until `CIPHERGUARD_TOKEN` is set.
+
+On Windows, `launch_dashboard.bat` serves the dashboard to this machine only.
+`launch_dashboard.bat --lan` serves other devices on the network and prints the
+access token each browser is asked for.
 
 For a hackathon, the Pages build plus a local demo on your own laptop is
 usually the better combination: nothing to go wrong on the day, and a link you

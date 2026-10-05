@@ -7,7 +7,7 @@ Research Organisation (NTRO) · Theme: Blockchain & Cybersecurity
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-1b6e8c?style=for-the-badge&logo=googlechrome&logoColor=white)](https://git-huber2007.github.io/CipherGuard/)
 [![Repository](https://img.shields.io/badge/GitHub-CipherGuard-14212b?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Git-huber2007/CipherGuard)
-[![License](https://img.shields.io/badge/License-MIT-38bdf8?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache%202.0-38bdf8?style=for-the-badge)](LICENSE)
 
 > 🌐 **Live Web Application (GitHub Pages)**: [https://git-huber2007.github.io/CipherGuard/](https://git-huber2007.github.io/CipherGuard/)  
 > ⚡ **Local Telemetry Engine Dashboard**: [http://127.0.0.1:8000/](http://127.0.0.1:8000/)  
@@ -428,6 +428,43 @@ ML-KEM under RFC 9370. The exposure index is a transparent weighted product,
 documented in full so a reviewer can disagree with the weights rather than
 reverse-engineer them.
 
+**Recognising a link that has migrated.** A roadmap that recommends hybrid
+ML-KEM has to be able to tell when a gateway has done it. Under RFC 9370 the
+peers negotiate one or more *additional key exchanges* (transform types 6–12,
+ADDKE1–ADDKE7) alongside the usual one, then run each in an encrypted
+`IKE_INTERMEDIATE` exchange (RFC 9242) between `IKE_SA_INIT` and `IKE_AUTH`:
+
+```
+$ cipherguard analyze samples/pqc_hybrid.pcap
+  Posture  100/100  grade A
+    203.0.113.130 <-> 198.51.100.140   IKEv2   [strongswan]
+      ENCR_AES_GCM_16-256, PRF_HMAC_SHA2_384, Curve25519, ADDKE1=ML-KEM-768, ESN
+      hybrid key exchange (RFC 9370); 1 IKE_INTERMEDIATE exchange observed, contents encrypted
+  No findings.
+```
+
+- **What is read.** The proposal and the responder's selection, both cleartext
+  in `IKE_SA_INIT`, and the fact that `IKE_INTERMEDIATE` exchanges took place.
+- **What is not.** The additional key exchange itself. Its public key and
+  ciphertext are inside the encrypted payload, so the tool reports how many
+  such exchanges it saw and nothing about what they carried. If an additional
+  exchange was negotiated and none was seen (a capture that ended early), that
+  is reported as an informational note, IKE-014.
+- **Only the responder's selection counts.** An initiator that offers ML-KEM to
+  a responder that picks the classical proposal has a classical link. The
+  finding says the exchange was offered and not selected, and nothing credits
+  the offer: not the finding, not the strength figure, not the roadmap. The
+  same holds for an offer no response was seen to, and for `USE_PPK` sent only
+  by the initiator. `samples/pqc_declined.pcap` is that case; it carries the
+  same offer as the hybrid capture and gets the opposite verdict.
+- **Strength.** A hybrid is scored at its strongest component against each
+  adversary, because both shared secrets go into the keys and an attacker has
+  to break both. Curve25519 with ML-KEM-768 is 192 bits of key exchange and
+  192 against a quantum attacker; two classical groups together are still zero.
+  The association is then bounded by its weakest other component as before, so
+  a hybrid on a 128-bit cipher is reported as limited by the cipher, and the
+  roadmap files it under "raise the cipher key", not "enable ML-KEM".
+
 **The harvest clock.** The dashboard's post-quantum panel shows the same
 arithmetic as two instrument readings:
 
@@ -508,7 +545,8 @@ python -m cipherguard.cli serve                 # dashboard on :8000
 | `validate` | Cross-model validation and the mask/model ablation |
 | `lab` | Write reference testbed captures |
 | `rules` | List the audit rule catalogue |
-| `serve` | Run the assessment dashboard |
+| `serve` | Run the assessment dashboard (this machine only, by default) |
+| `serve --cors-origin URL` | Let a page served from that origin call the API; off otherwise |
 
 ### Example
 
@@ -544,7 +582,14 @@ the data work; the page renders what it is given.
 - **Works offline.** IBM Plex is bundled under `static/fonts/` (SIL Open Font
   License alongside) instead of loaded from Google Fonts, so the page renders
   on an isolated network or from a static export opened with no internet
-  connection. A test fails if `index.html` references any external domain.
+  connection. A test fails if `index.html` or `dashboard.js` references any
+  external domain.
+- **No outbound calls.** Neither the server nor the page contacts anything
+  outside the machine by default. The one lookup that would (the public
+  address and ISP shown beside the VPN status, asked of a third-party service)
+  is off unless the operator sets `CIPHERGUARD_EGRESS_LOOKUP=1`, and uses HTTPS
+  only. With it off the panel reads "Not queried"; it does not show a
+  placeholder as if it were a result.
 - **Light by default, dark on request.** A Theme picker in the masthead offers
   Light, Dark and System; the choice is kept per browser and applied before
   first paint (`static/js/theme-init.js`), so a dark OS no longer forces a
@@ -572,7 +617,16 @@ the data work; the page renders what it is given.
   cockpit, canned hex inspector, MITRE heatmap, compliance score and Wi-Fi
   threat simulator were removed, along with the server's
   `/api/wifi/simulate-rogue` endpoint. The static build labels its Wi-Fi view
-  as a saved scan with the time it was recorded.
+  as an example scan of invented networks; a scan of a real site is never
+  bundled or published.
+- **Live capture is live, or it says it is not.** *Start* opens a receive-only
+  raw socket on the machine running the server and keeps IKE and ESP only. That
+  needs Administrator on Windows or `CAP_NET_RAW` on Linux; without it the
+  panel reports that the capture could not start, and why. *Replay samples* is
+  a separate button that plays back the bundled sample captures. The status
+  reads "REPLAY · SAMPLES, NOT LIVE", a notice stays on the panel, the snapshot
+  is saved as `replay_snapshot.pcap`, and an assessment made from it carries a
+  banner saying so. Rates are computed from the bytes seen.
 - **Upload** a capture by file picker or by dropping it on the page. The control
   appears only when the server reports uploads enabled (never in the static
   build), and errors show the server's own reason, such as the size limit or a
@@ -592,7 +646,8 @@ capture (pcap/pcapng)
         ├─► dissector/pcap.py    pure-Python reader, Ethernet/SLL/RAW, IPv4+IPv6
         │
         ├─► dissector/ike.py     IKEv1 + IKEv2 → proposals, transforms, DH group,
-        │                        notifies, vendor fingerprints, lifetimes
+        │                        RFC 9370 additional key exchanges, notifies,
+        │                        vendor fingerprints, lifetimes
         │                        (stops at the SK payload, by design)
         │
         └─► dissector/esp.py     per-SA flow metadata: lengths, sequence numbers,
@@ -647,7 +702,8 @@ authentication · prohibited encryption · prohibited/deprecated integrity and
 PRF · weak DH groups · **no quantum-resistant key establishment** · residual
 downgrade surface · excessive SA lifetime · negotiation-failure patterns ·
 fragmentation not negotiated · **weakest-link security level** ·
-**quantified Sweet32 birthday exposure**.
+**quantified Sweet32 birthday exposure** · additional key exchange negotiated
+but not observed (informational).
 
 **Inferred** (ESP side-channel): prohibited framing class · payload entropy
 below the ciphertext floor · anti-replay discontinuities · insufficient sample.
@@ -660,15 +716,21 @@ observation shows what is genuinely reachable.
 Post-quantum readiness is treated as a live finding, not a footnote. Any SA
 relying purely on classical Diffie-Hellman is flagged for harvest-now-decrypt-later
 exposure, with remediation pointing at RFC 8784 pre-shared keys today and
-ML-KEM hybrid groups (FIPS 203) as firmware allows.
+ML-KEM hybrid groups (FIPS 203) as firmware allows. The finding is withdrawn
+only on what a responder was seen to agree to: a post-quantum group as the key
+exchange or as an RFC 9370 additional key exchange in the selected proposal,
+or `USE_PPK` in a response.
 
 ---
 
 ## Reference testbed
 
-`cipherguard lab` writes four scenarios offline: a legacy IKEv1 Aggressive Mode
+`cipherguard lab` writes seven scenarios offline: a legacy IKEv1 Aggressive Mode
 gateway, a partially modernised IKEv2 gateway, a hardened AES-GCM gateway over
-NAT-T, and a mixed backbone with all of them on one mirror port. The IKE packets
+NAT-T, the hardened pair later renegotiated weaker, a mixed backbone with
+several gateways on one mirror port, an RFC 9370 hybrid (Curve25519 with
+ML-KEM-768, including its `IKE_INTERMEDIATE` exchange), and the same hybrid
+offer to a responder that selects the classical proposal. The IKE packets
 are constructed from the RFC field layouts independently of the dissector, so a
 misread field surfaces as a round-trip test failure rather than silently
 agreeing with itself.
@@ -687,7 +749,7 @@ python -m cipherguard.cli analyze docker/captures/weak.pcap
 ## Tests
 
 ```bash
-python -m pytest tests/ -q                 # 346 passed, 14 skipped without real captures
+python -m pytest tests/ -q                 # 407 passed, 14 skipped without real captures
 python -m pytest tests/ -q -m "not soak"   # skip the ~90 s of soak tests
 ```
 
@@ -711,7 +773,8 @@ certificate-bearing exchanges, and retransmission counting so a lossy link does 
 artificially inflate negotiation metrics.
 
 Also verified: weakest-link scoring, the fundamental invariant that **every classical key
-exchange has zero quantum strength**, Sweet32 scaling with observed volume,
+exchange has zero quantum strength** (alone or in any combination of RFC 9370
+additional key exchanges), Sweet32 scaling with observed volume,
 direction-independent peer identity, temporal baselines retaining the best-ever cryptographic state
 rather than merely the latest, Mosca sign conventions, and CycloneDX 1.6 CBOM structural validity
 with full provenance on every asset.
@@ -937,7 +1000,9 @@ to prevent misspellings from silently bypassing security checks.
 | Custody and accountability | JSON Lines audit trail: records assessor identity, timestamp, and capture SHA-256 (findings are logged as rule ID and subject only, preventing duplicate intelligence leakage). |
 | Model provenance | Every model records training time, library versions, corpus and a feature-schema hash. |
 | Silent feature drift | Loading refuses if the schema hash differs. This is the failure that matters: array shapes stay compatible, the model loads, and predictions are quietly computed from columns that no longer mean what the model was fitted on. Nothing raises and the output looks plausible. |
-| Network exposure | Non-loopback binds refused unless authenticated or explicitly overridden. |
+| Network exposure | Non-loopback binds refused unless authenticated or explicitly overridden. `launch_dashboard.bat` listens on `127.0.0.1`; `launch_dashboard.bat --lan` binds the network and always sets a token, which it prints. The Dockerfile and `render.yaml` start the server without the override, so a container or hosted instance does not start until `CIPHERGUARD_TOKEN` is set. |
+| Cross-origin access | Off by default. `--cors-origin` (or `CIPHERGUARD_CORS_ORIGINS`) names the origins allowed to call the API from a browser; a wildcard is rejected. The hosted static page reaching a local engine is the one case that needs it. |
+| Outbound calls | None by default. `CIPHERGUARD_EGRESS_LOOKUP=1` enables the public-address lookup beside the VPN status. |
 | Resource bounds | Flow-table capacity limits, capture length validation, upload ceilings. |
 | Unattended operation | Observation retention, audit log rotation, evidence retention that never removes the latest assessment's capture, `cipherguard healthcheck` (exit 0/1/2), a sandboxed systemd unit, and a soak test. See [Running unattended](#running-unattended). |
 
@@ -964,13 +1029,21 @@ codebase, all fixed and covered by regression tests:
 | Capture filename interpolated into generated router config | A name containing a newline ends the comment, and the remainder becomes a live configuration directive an operator pastes into a gateway. | All untrusted text flattened and length-bounded before it enters generated config. |
 | Upload endpoint unbounded, overwriting, path-rewriting | Disk exhaustion; silent destruction of evidence a prior assessment relied on. | 512 MB cap with partial-file cleanup, 409 on existing names, explicit rejection of path-bearing names rather than silent `basename()` rewriting. |
 | Dashboard unauthenticated on any bind address | Publishes a map of which national links are cryptographically weak: exactly the targeting information an attacker wants. | Non-loopback binds refused unless explicitly overridden. |
+| **The project's own launchers used the override** | `launch_dashboard.bat`, the Dockerfile and `render.yaml` all started the server on `0.0.0.0` with `--insecure-bind` and no token. The refusal above was correct and every shipped way of starting the server switched it off. | The launcher binds loopback, and its `--lan` mode generates a token. The Dockerfile and `render.yaml` dropped the override, so the server's own refusal applies to them. |
+| Every origin allowed to read the API | CORS answered `*`. With the default tokenless loopback bind, any web page open in the analyst's browser could fetch `http://127.0.0.1:8000/api/fleet` and read which links are weak, or start a capture. The loopback bind was a boundary only against other machines. | No cross-origin access unless specific origins are configured; a wildcard is rejected at startup. |
+| Packet stream had no token check | `/api/sniff/stream` was left unguarded because `EventSource` cannot send a header, so on an authenticated deployment the live packet feed (peers, SPIs, rates) was readable without the token. | Guarded like every other route. The page reads the stream with `fetch()` and sends the token in `Authorization`; it is never put in the URL. A test fails if any `/api/` route other than `/api/health` lacks the guard. |
+| Outbound lookups by default | The server asked four public services for the sensor's address on every dashboard load, one over plain HTTP, and the page asked one itself in static mode. That discloses where the sensor sits and contradicts the offline guarantee. | Off unless `CIPHERGUARD_EGRESS_LOOKUP=1`, HTTPS only. The page's own lookup is removed. |
+| Sample traffic presented as a live capture | When the raw socket could not be opened (any unprivileged workstation), the sniffer silently replayed the sample captures and the page labelled them live. On the live path it also counted every UDP datagram on the host as ESP, read port numbers as an SPI, buffered all of the host's traffic for the snapshot, and reported throughput as packets × 800 bytes. | A capture that cannot start reports the failure and the reason. Replay runs only on an explicit request and is labelled everywhere. The live path keeps IKE and ESP only and computes rates from bytes seen. |
+| Plan approval gated nothing | `/api/remediation/{id}/apply` staged any plan, approved or not; an approval with no name was recorded as "Security Administrator"; and staging overwrote the approver. | Staging requires an approved plan (409 otherwise). An approval needs a name, which is stored and shown as self-declared. Approvals and dry-runs are written to the audit log by plan ID, without the configuration text. |
 
 Authentication and audit logging are implemented (`require_token` with
 `hmac.compare_digest` on every route except `/api/health` and `/static`, plus
 `core/audit_log.py`). Both are opt-in, and the loopback-only default is what
 makes that safe by construction rather than by documentation. What is still
 missing is TLS termination and per-user identity; the API is designed to sit
-behind an authenticating reverse proxy for those.
+behind an authenticating reverse proxy for those. Until it does, the name on a
+plan approval is whatever the caller typed, and the dashboard and the audit log
+both label it self-declared.
 
 ## Limitations
 
@@ -980,6 +1053,19 @@ than none.
 - **Exact ESP suite identification is impossible for framing-identical suites.**
   The tool reports the class and names the candidates.
 - **Payload content is never recoverable.** No keys, no decryption, by design.
+- **A hybrid key exchange is seen as a negotiation, not as an exchange.** The
+  selection of an RFC 9370 additional key exchange is cleartext; the exchange
+  is not. The tool cannot check that the ML-KEM step used the parameters that
+  were negotiated, or that it succeeded, only that an `IKE_INTERMEDIATE`
+  exchange followed. Hybrid dissection is validated against the lab generator,
+  which is built from the RFC layouts; it has not been run against a capture
+  from a real RFC 9370 implementation. `IKE_FOLLOWUP_KE`, used when rekeying,
+  is recognised and counted but no rule reads it. Whether an RFC 8784 PPK was
+  actually used is likewise decided inside the encrypted `IKE_AUTH`.
+- **The baseline does not yet register the loss of a hybrid as a downgrade.**
+  Drift is compared on classical strength. A link that goes from Curve25519
+  with ML-KEM-768 to Curve25519 alone keeps its classical figure, so `watch`
+  records it as steady. The single-capture finding (IKE-007) does fire.
 - **Inference needs volume.** Under ~60 packets the length distribution is not
   stable and findings are marked provisional.
 - **Throughput is measured, not claimed.** On a 146 MB capture, single-threaded:
@@ -993,6 +1079,12 @@ than none.
   because a rate measured over a few milliseconds is noise.
 - **Live capture is Linux-only** and needs `CAP_NET_RAW`. It degrades with an
   explanation rather than a traceback elsewhere.
+- **The dashboard's own live-capture panel is a separate, simpler path** (a raw
+  IPv4 socket, not the `sensor` command's `AF_PACKET` capture). It needs
+  Administrator on Windows, sees only this host's traffic, ignores the interface
+  selector, and has not been exercised against real IPsec traffic: its packet
+  handling is tested with constructed datagrams. It has not been tried on
+  Linux; use `sensor` there.
 - **The IKE dissector is validated against five real captures**, and the
   **ESP inference model can now be validated against real tunnels using sidecar labels**
   (`cipherguard label-check` and `verify-real`). The public Wireshark corpus

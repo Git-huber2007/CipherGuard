@@ -37,6 +37,7 @@ from ..dissector.pcap import LINKTYPE_ETHERNET, LINKTYPE_RAW, Packet, PcapWriter
 ETH_P_ALL = 0x0003
 SO_ATTACH_FILTER = 26
 SO_RCVBUF = 8
+SOL_PACKET = 263
 
 DEFAULT_SNAPLEN = 2048
 
@@ -170,13 +171,15 @@ class LiveCapture:
                 f"live capture needs Linux AF_PACKET or Windows raw socket; this host is {sys.platform}. "
                 "Capture with tcpdump and analyse the file instead."
             )
-        if not hasattr(socket, "AF_PACKET"):
+        self._open_packet_socket()
+
+    def _open_packet_socket(self) -> None:
+        af_packet = getattr(socket, "AF_PACKET", None)
+        if af_packet is None:
             raise CaptureUnavailable("this Python build has no AF_PACKET support")
 
         try:
-            sock = socket.socket(
-                socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL)
-            )
+            sock = socket.socket(af_packet, socket.SOCK_RAW, socket.htons(ETH_P_ALL))
         except PermissionError as exc:
             raise CaptureUnavailable(
                 "live capture needs CAP_NET_RAW. Grant it narrowly rather than "
@@ -235,8 +238,10 @@ class LiveCapture:
         silently lost 40% of its packets is not a weaker assessment, it is a
         misleading one, and the operator has to be told.
         """
+        if self.sock is None:
+            return
         try:
-            raw = self.sock.getsockopt(socket.SOL_PACKET, 6, 16)  # PACKET_STATISTICS
+            raw = self.sock.getsockopt(SOL_PACKET, 6, 16)  # PACKET_STATISTICS
             _received, dropped = struct.unpack("II", raw[:8])
             self.stats.dropped = dropped
         except (OSError, AttributeError, struct.error):
@@ -343,10 +348,15 @@ def available() -> tuple[bool, str]:
             return False, str(exc)
     if not sys.platform.startswith("linux"):
         return False, f"needs Linux AF_PACKET or Windows raw socket; this host is {sys.platform}"
-    if not hasattr(socket, "AF_PACKET"):
+    return _packet_socket_available()
+
+
+def _packet_socket_available() -> tuple[bool, str]:
+    af_packet = getattr(socket, "AF_PACKET", None)
+    if af_packet is None:
         return False, "this Python build has no AF_PACKET support"
     try:
-        s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL))
+        s = socket.socket(af_packet, socket.SOCK_RAW, socket.htons(ETH_P_ALL))
         s.close()
         return True, "ready"
     except PermissionError:

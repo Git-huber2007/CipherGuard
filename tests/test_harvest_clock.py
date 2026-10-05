@@ -256,7 +256,7 @@ def test_mounted_clock_recomputes_on_class_change_and_states_the_assumption():
 
     assert first["disabled"] is False
     assert re.findall(r'value="(\w+)"', first["options"]) == sorted(
-        SECRECY_LIFETIME, key=SECRECY_LIFETIME.get)
+        SECRECY_LIFETIME, key=lambda k: SECRECY_LIFETIME[k])
     assert 'value="official" selected' in first["options"]
 
     assert "planning assumption, not a forecast" in first["note"]

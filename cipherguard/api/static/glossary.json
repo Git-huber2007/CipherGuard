@@ -13,6 +13,18 @@
       "term": "IKE_AUTH",
       "definition": "The second round, in which each side proves who it is. It is already encrypted, so an observer cannot read it."
     },
+    "ike-intermediate": {
+      "term": "IKE_INTERMEDIATE",
+      "definition": "An extra round between the first two, used to carry messages too large for the first one. It is encrypted, so an observer can see that it happened but not what it carried."
+    },
+    "ml-kem": {
+      "term": "ML-KEM",
+      "definition": "A method for agreeing a shared secret that is designed to stay safe against future quantum computers. It was published as a United States federal standard in 2024."
+    },
+    "hybrid-kex": {
+      "term": "Hybrid key exchange",
+      "definition": "Agreeing the tunnel's secret with two different methods at once, an established one and a quantum-resistant one. An attacker has to break both to read the traffic."
+    },
     "esp": {
       "term": "ESP",
       "definition": "The format that carries the protected traffic itself once the tunnel is open. The contents are hidden; only the size and timing of each packet can be seen."

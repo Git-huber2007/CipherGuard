@@ -41,6 +41,21 @@ MAX_UPLOAD_BYTES = 512 << 20
 # longer "peer key" is not one.
 MAX_PEER_KEY = 256
 
+# A plan can be dry-run once it has been approved; a staged plan was approved.
+APPLY_ALLOWED_FROM = ("APPROVED", "STAGED")
+
+# The sniffer's snapshot is written under a name that says where the packets
+# came from, so the capture list can never show replayed samples as live.
+SNAPSHOT_NAMES = {"live": "live_snapshot.pcap", "replay": "replay_snapshot.pcap"}
+
+
+def _clean_label(value: object, limit: int = 80) -> str:
+    """Caller-supplied text bound for the plan store, the audit log and the
+    page: one line, printable, bounded."""
+    if not isinstance(value, str):
+        return ""
+    return " ".join("".join(c if c.isprintable() else " " for c in value).split())[:limit]
+
 
 class AnalyzeRequest(BaseModel):
     capture: str
@@ -60,6 +75,7 @@ def create_app(
     allow_upload: bool = True,
     auth_token: str | None = None,
     audit_log: str | None = None,
+    cors_origins: list[str] | None = None,
 ) -> FastAPI:
     """Build the app.
 
@@ -93,7 +109,6 @@ def create_app(
     guard = [Depends(require_token)]
 
     from contextlib import asynccontextmanager
-    from fastapi.middleware.cors import CORSMiddleware
 
     @asynccontextmanager
     async def lifespan(app_instance: FastAPI):
@@ -119,13 +134,27 @@ def create_app(
         lifespan=lifespan,
     )
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    # Cross-origin access is off unless specific origins are configured. The
+    # app used to answer every origin, and with the default tokenless loopback
+    # bind that meant any web page open in the analyst's browser could read
+    # this API through 127.0.0.1 — the fleet's weak links included — and start
+    # a capture. The loopback-only bind is only a boundary if other origins
+    # cannot read through it. The one legitimate cross-origin client is the
+    # hosted static dashboard connecting back to a local engine, and that
+    # origin has to be named.
+    origins = [o.strip().rstrip("/") for o in (cors_origins or []) if o and o.strip()]
+    if "*" in origins:
+        raise ValueError("cors_origins must list specific origins; '*' is not accepted")
+    if origins:
+        from fastapi.middleware.cors import CORSMiddleware
+
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins,
+            allow_credentials=False,  # the token travels in a header, not a cookie
+            allow_methods=["GET", "POST"],
+            allow_headers=["Authorization", "Content-Type"],
+        )
 
     def _resolve(name: str) -> str:
         """Resolve a capture name inside capture_dir, refusing path traversal."""
@@ -386,37 +415,58 @@ def create_app(
             out.append(p.to_dict())
         return {"capture": capture, "plans": out}
 
-    @app.post("/api/remediation/{plan_id}/approve", dependencies=guard)
-    async def approve_plan_endpoint(plan_id: str, request: Request) -> dict:
-        data = {}
+    async def _json_body(request: Request) -> dict:
         try:
             data = await request.json()
         except Exception:
-            pass
-        actor = data.get("actor") or "Security Administrator"
-        comment = data.get("comment") or "Approved for change-window deployment"
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    @app.post("/api/remediation/{plan_id}/approve", dependencies=guard)
+    async def approve_plan_endpoint(plan_id: str, request: Request) -> dict:
+        """Record who signed a plan off.
+
+        The name is whatever the caller typed. The API authenticates a shared
+        token at most, never a person, so the approver is stored and returned
+        as self-declared. No default name is filled in: an approval nobody put
+        a name to is not recorded as somebody's.
+        """
+        data = await _json_body(request)
+        actor = _clean_label(data.get("actor"))
+        if not actor:
+            raise HTTPException(400, "an approver name is required")
+        comment = _clean_label(data.get("comment"), 200)
         plan = plan_store.update_status(plan_id, "APPROVED", actor=actor, comment=comment)
         if not plan:
             raise HTTPException(404, f"No plan found with id {plan_id}")
+        log.remediation("approve", plan, declared_actor=actor)
         return {"status": "success", "plan": plan.to_dict()}
 
     @app.post("/api/remediation/{plan_id}/apply", dependencies=guard)
     async def apply_plan_endpoint(plan_id: str, request: Request) -> dict:
-        data = {}
-        try:
-            data = await request.json()
-        except Exception:
-            pass
+        """Dry-run an approved plan. Nothing is ever sent to a gateway.
+
+        A plan that was not approved is refused: staging one used to work on
+        any plan id, which made the approval step decorative.
+        """
+        data = await _json_body(request)
         dry_run = data.get("dry_run", True)
-        target = data.get("target", "")
+        target = _clean_label(data.get("target"))
         plan = plan_store.get_plan(plan_id)
         if not plan:
             raise HTTPException(404, f"No plan found with id {plan_id}")
+        if plan.status not in APPLY_ALLOWED_FROM:
+            log.remediation("apply", plan, outcome="refused: not approved")
+            raise HTTPException(
+                409, f"plan {plan_id} is {plan.status}; it must be approved before it can be staged")
 
         result = apply_plan(plan, dry_run=dry_run, target_host=target)
         if result.get("success"):
-            new_status = "STAGED" if dry_run else "APPLIED"
-            plan_store.update_status(plan_id, new_status, actor="Automated Hardening Engine", comment=f"Executed ({result.get('mode')})")
+            # the dispatcher only ever succeeds in dry-run; a live apply is refused there
+            plan = plan_store.update_status(
+                plan_id, "STAGED", actor="api", comment=f"Executed ({result.get('mode')})") or plan
+        log.remediation("apply", plan, declared_actor=plan.approver,
+                        outcome=str(result.get("mode", "")))
         return result
 
     @app.get("/api/remediation-plans", dependencies=guard)
@@ -482,15 +532,18 @@ def create_app(
     from ..capture.live_sniffer import global_sniffer
 
     @app.post("/api/sniff/start", dependencies=guard)
-    async def start_sniff(request: Request) -> dict:
-        data = {}
-        try:
-            data = await request.json()
-        except Exception:
-            pass
-        interface = data.get("interface")
-        force_sim = data.get("force_simulation", False)
-        return global_sniffer.start(interface=interface, force_simulation=force_sim)
+    async def start_sniff(request: Request) -> JSONResponse:
+        """Start a live capture, or a replay of the sample captures when the
+        body says `"replay": true`. A capture that cannot start is an error
+        with the reason; it is never swapped for a replay."""
+        data = await _json_body(request)
+        status = global_sniffer.start(
+            interface=_clean_label(data.get("interface")) or None,
+            replay=data.get("replay") is True,
+        )
+        if status["mode"] == "failed":
+            return JSONResponse({"detail": status["error"], "status": status}, status_code=503)
+        return JSONResponse(status)
 
     @app.post("/api/sniff/stop", dependencies=guard)
     def stop_sniff() -> dict:
@@ -500,7 +553,10 @@ def create_app(
     def sniff_status() -> dict:
         return global_sniffer.get_status()
 
-    @app.get("/api/sniff/stream")
+    # Guarded like every other data route. It was the one exception, on the
+    # grounds that EventSource cannot send a header; the page now reads the
+    # stream with fetch() so the token goes in Authorization, not in the URL.
+    @app.get("/api/sniff/stream", dependencies=guard)
     async def sniff_stream() -> StreamingResponse:
         q = global_sniffer.subscribe()
 
@@ -524,16 +580,19 @@ def create_app(
 
     @app.post("/api/sniff/analyze", dependencies=guard)
     def analyze_sniff_snapshot() -> dict:
-        snapshot_name = "live_snapshot.pcap"
-        snapshot_path = os.path.join(capture_dir, snapshot_name)
+        source = global_sniffer.buffer_source
+        if source not in SNAPSHOT_NAMES or not global_sniffer.packet_buffer:
+            raise HTTPException(409, "no IKE or ESP packets have been captured yet")
+        snapshot_path = os.path.join(capture_dir, SNAPSHOT_NAMES[source])
         global_sniffer.snapshot_to_pcap(snapshot_path)
 
         from ..export.payload import build_payload
 
         a = analyze(snapshot_path, model_dir=model_dir, min_esp_packets=1)
-        return build_payload(a, snapshot_path, model_dir)
-
-
+        payload = build_payload(a, snapshot_path, model_dir)
+        # "live" or "replay": the page labels a replay-derived assessment
+        payload["capture_source"] = source
+        return payload
 
 
     @app.get("/api/model", dependencies=guard)

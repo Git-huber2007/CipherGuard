@@ -24,6 +24,9 @@ class VpnTunnelInfo:
     egress_isp: str = ""
     egress_country: str = ""
     egress_city: str = ""
+    # False when no outbound lookup was made, so empty egress fields read as
+    # "not queried" and never as "nothing found".
+    egress_queried: bool = False
     findings: list[SecurityFinding] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -43,6 +46,7 @@ class VpnTunnelInfo:
             "egress_isp": self.egress_isp,
             "egress_country": self.egress_country,
             "egress_city": self.egress_city,
+            "egress_queried": self.egress_queried,
             "findings": [f.to_dict() for f in self.findings],
         }
 

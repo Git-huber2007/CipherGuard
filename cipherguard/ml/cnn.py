@@ -21,6 +21,8 @@ that peak means the same thing wherever the padding alignment puts it.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 
@@ -232,11 +234,12 @@ class EspCNN:
     # -- persistence --------------------------------------------------------
 
     def save(self, path: str) -> None:
+        arrays: dict[str, Any] = {f"p{i}": p for i, p in enumerate(self._params())}
         np.savez_compressed(
             path,
             n_classes=self.n_classes,
             signal_len=self.signal_len,
-            **{f"p{i}": p for i, p in enumerate(self._params())},
+            **arrays,
         )
 
     @classmethod

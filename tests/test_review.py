@@ -261,10 +261,10 @@ def _read(*parts):
 def test_ribbon_text_is_at_least_13px_and_the_seam_label_is_not_rotated():
     css = _read("css", "dashboard.css")
     for selector in (r"\.field \.fname\{", r"\.field \.fval\{", r"\.seam-label\{"):
-        block = re.search(selector + r"(.*?)\}", css, re.S).group(1)
-        size = float(re.search(r"font-size:([\d.]+)rem", block).group(1))
+        block = re.findall(selector + r"(.*?)\}", css, re.S)[0]
+        size = float(re.findall(r"font-size:([\d.]+)rem", block)[0])
         assert size * 16 >= 13, (selector, size)
-    seam = re.search(r"\n\.seam\{(.*?)\}", css, re.S).group(1)
+    seam = re.findall(r"\n\.seam\{(.*?)\}", css, re.S)[0]
     assert "rotate" not in seam and "absolute" not in seam
     assert ".seam::after" not in css
 
@@ -278,7 +278,7 @@ def test_renderer_reads_server_structures_and_never_truncates_spis():
     assert "history.replaceState" in js and "hashchange" in js
     html = _read("index.html")
     assert 'data-fview="rule"' in html and 'data-fview="link"' in html
-    lede = re.search(r'<p class="ribbon-lede">(.*?)</p>', html, re.S).group(1)
+    lede = re.findall(r'<p class="ribbon-lede">(.*?)</p>', html, re.S)[0]
     # the visible text: tags removed (not turned into spaces, which counted
     # inline markup such as glossary terms as extra characters), spaces collapsed
     visible = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", lede)).strip()

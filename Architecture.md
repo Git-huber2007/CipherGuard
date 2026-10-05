@@ -46,7 +46,7 @@ flowchart TD
         direction TB
         COMPLIANCE & PQC_MOSCA & MITRE_MAP --> SYNTH["Remediation Playbook Synthesizer<br/>(Cisco &bull; Fortinet &bull; strongSwan &bull; Rollbacks)"]
         COMPLIANCE & PQC_MOSCA & MITRE_MAP --> CBOM["CycloneDX CBOM v1.6 Exporter"]
-        COMPLIANCE & PQC_MOSCA & RF_ANOMALY --> DASHBOARD["Tactical HUD Dashboard<br/>(Web Audio &bull; Polar Radar &bull; CLI Drawer)"]
+        COMPLIANCE & PQC_MOSCA & RF_ANOMALY --> DASHBOARD["Assessment Dashboard<br/>(Static Export &bull; Live API)"]
         COMPLIANCE & PQC_MOSCA & RF_ANOMALY --> CLI_EXEC["CipherGuard CLI Terminal Engine"]
     end
 
@@ -84,92 +84,108 @@ Every database record, UI badge, wire ribbon segment, and JSON key carries this 
 ## 3. Directory & Component Structure
 
 ```
-c:\SIH-\final\cipherguard\
+cipherguard/                       # Repository root
+├── README.md                      # Overview, method, validation, limitations
+├── GETTING-STARTED.md             # Install and demo walkthrough
 ├── PRD.md                         # Product Requirements Document
 ├── Architecture.md                # System Architecture & Specifications (this file)
 ├── Rules.md                       # AI Engineering Boundaries & Invariants
 ├── Phases.md                      # Phased Implementation Roadmap
 ├── Design.md                      # UI/UX & Visual Design Tokens
 ├── Memory.md                      # Dynamic Project State Tracker
+├── LICENSE, NOTICE                # Apache License 2.0 and attributions
 ├── pyproject.toml                 # Packaging, build system & metadata
-├── requirements.txt               # Production Python dependencies
+├── requirements.txt               # Runtime, dashboard and test dependencies
 ├── Dockerfile                     # Container deployment image
-├── launch_dashboard.bat           # One-click Windows telemetry launcher
+├── render.yaml                    # Render deployment blueprint
+├── launch_dashboard.bat           # One-click Windows launcher
 │
-├── cipherguard/                   # Core Python Package Root
-│   ├── __init__.py                # Package version & exports
-│   ├── cli.py                     # Unified CLI entrypoint (15+ commands)
-│   ├── pipeline.py                # End-to-end orchestration pipeline
+├── cipherguard/                   # Core Python package
+│   ├── cli.py                     # CLI entry point (18 subcommands)
+│   ├── pipeline.py                # Capture file in, scored assessment out
+│   │
+│   ├── core/                      # Shared model and arithmetic
+│   │   ├── models.py              # Data model shared by dissector, audit, inference and API
+│   │   ├── constants.py           # IANA registry tables for IKEv1 / IKEv2 / ESP
+│   │   ├── framing.py             # RFC 4303 framing arithmetic
+│   │   ├── strength.py            # Quantified security strength
+│   │   ├── grouping.py            # Findings grouped by rule, per-link views
+│   │   ├── audit_log.py           # Structured audit logging
+│   │   ├── health.py              # Sensor health checks
+│   │   └── retention.py           # Evidence retention for window captures
 │   │
 │   ├── dissector/                 # Protocol Dissection Engine
-│   │   ├── pcap.py                # Zero-copy binary PCAP/PCAPNG streamer
-│   │   ├── ipsec.py               # IPv4/IPv6 & UDP 500/4500 router
-│   │   ├── ikev1.py               # IKEv1 Main, Aggressive, Quick mode parser
-│   │   ├── ikev2.py               # IKEv2 SA_INIT, IKE_AUTH, CREATE_CHILD parser
-│   │   ├── esp.py                 # RFC 4303 ESP framing extractor
-│   │   └── models.py              # Dissection data dataclasses & typing
+│   │   ├── pcap.py                # Capture file I/O and L2/L3/L4 decoding
+│   │   ├── ike.py                 # IKEv1 and IKEv2 dissector (one module)
+│   │   ├── esp.py                 # ESP flow tracking
+│   │   └── wire_inspector.py      # ESP wire framing and raw hex inspector
 │   │
-│   ├── ml/                        # AI & Inference Subsystem
-│   │   ├── features.py            # Modulo residues & flow feature extractor
-│   │   ├── rfc_mask.py            # Deterministic block-size modulo mask
-│   │   ├── model.py               # Random Forest & 1D-CNN estimators
-│   │   ├── evaluate.py            # Accuracy & confusion matrix validation
-│   │   └── train.py               # Model training script & artifact serializer
+│   ├── ml/                        # ESP Inference Subsystem
+│   │   ├── features.py            # Side-channel features for encrypted ESP flows
+│   │   ├── synth.py               # Labelled ESP flows for training and calibration
+│   │   ├── classifier.py          # Inference engine: Random Forest plus the modulo mask
+│   │   ├── cnn.py                 # 1D-CNN implemented directly on NumPy
+│   │   ├── train.py               # Model training & artifact serializer
+│   │   └── validate.py            # Cross-model validation and mask ablation
 │   │
 │   ├── audit/                     # Compliance & Posture Engine
-│   │   ├── engine.py              # Scorer (0-100) & rule executor
-│   │   ├── rules.py               # NIST SP 800-77 & NSA CNSA 2.0 rules
-│   │   ├── cve_map.py             # Known IPsec CVE vulnerability mapping
-│   │   └── models.py              # Finding severities & compliance schemas
+│   │   ├── engine.py              # Rules, 0-100 scoring and the rule catalogue
+│   │   ├── policy.py              # Cryptographic policy baseline
+│   │   ├── policy_config.py       # External policy overlay
+│   │   └── plain.py               # One plain-language sentence per rule
 │   │
-│   ├── intel/                     # Sovereign Threat Intel & Storage
-│   │   ├── store.py               # SQLite baseline database (fleet.db)
-│   │   ├── downgrade.py           # Peer-pair cryptographic drift detector
-│   │   └── pqc.py                 # Mosca theorem (X + Y > Z) risk calculator
+│   ├── intel/                     # Baseline & Post-Quantum Exposure
+│   │   ├── baseline.py            # SQLite baseline store and downgrade detection
+│   │   └── pqc.py                 # Mosca theorem (X + Y > Z) exposure and sequencing
 │   │
-│   ├── wifi/                      # 802.11 Passive RF Spectrometry
-│   │   ├── wlan_native.py         # OS kernel wrapper (netsh / iw / nmcli)
-│   │   ├── auditor.py             # Evil Twin & Rogue AP detector
-│   │   └── models.py              # AP telemetry & spectrum data structures
+│   ├── wifi/                      # Wi-Fi Posture Auditing
+│   │   ├── wlan_native.py         # Native Windows WLAN AutoConfig scanner
+│   │   ├── auditor.py             # Wi-Fi posture auditor, Evil Twin & Rogue AP detector
+│   │   └── models.py              # Wi-Fi assessment data structures
+│   │
+│   ├── vpn/                       # VPN Tunnel & Overlay Detection
+│   │   ├── detector.py            # Active tunnels, route redirects, DNS leaks
+│   │   └── models.py              # VPN detection data structures
 │   │
 │   ├── remediation/               # Vendor Configuration Synthesis
-│   │   ├── generator.py           # Multi-vendor playbook coordinator
-│   │   ├── cisco.py               # Cisco ASA CLI configuration & rollback
-│   │   ├── fortinet.py            # FortiOS CLI configuration & rollback
-│   │   ├── strongswan.py          # strongSwan swanctl.conf & rollback
-│   │   └── linux.py               # iproute2 / XFRM shell configuration
+│   │   ├── synth.py               # Playbook synthesis for every supported platform
+│   │   ├── rollback.py            # Rollback playbook synthesis
+│   │   ├── syntax.py              # Syntax verification of generated playbooks
+│   │   ├── dispatcher.py          # Dry-run validation and execution dispatcher
+│   │   ├── store.py               # SQLite plan store with maker-checker approvals
+│   │   └── models.py              # Remediation plan data structures
 │   │
 │   ├── export/                    # Machine-Readable Artifact Generation
 │   │   ├── cbom.py                # CycloneDX v1.6 CBOM JSON serializer
-│   │   └── dossier.py             # Air-gapped JSON audit dossier
+│   │   ├── payload.py             # The analysis payload, built once for every client
+│   │   ├── static_site.py         # `export-demo`: writes the static dashboard
+│   │   └── live_wifi_snapshot.json  # Example Wi-Fi scan (invented networks)
 │   │
-│   ├── capture/                   # Live Wire Sensor (Linux)
-│   │   ├── live.py                # AF_PACKET raw socket sniffer
-│   │   └── ring.py                # Bounded disk spool & memory ring buffer
+│   ├── capture/                   # Live Capture
+│   │   ├── live.py                # Live capture from a network interface
+│   │   ├── live_sniffer.py        # Dashboard packet sniffer and event stream
+│   │   └── sensor.py              # Continuous sensor mode
 │   │
-│   ├── lab/                       # Synthetic Protocol Laboratory
-│   │   └── generator.py           # Deterministic PCAP scenario generator
+│   ├── lab/                       # Reference Testbed & Validation
+│   │   ├── pcapgen.py             # Reference testbed capture generator
+│   │   ├── labels.py              # User-labelled real captures
+│   │   ├── realworld.py           # Validation against a public capture corpus
+│   │   ├── fieldmodel.py          # Independent traffic model for cross-validation
+│   │   └── bench.py               # Reproducible throughput benchmark
 │   │
-│   └── api/                       # Local FastAPI Telemetry Server
-│       ├── server.py              # FastAPI app definition & route bindings
-│       ├── routes.py              # REST API endpoints & WebSocket handlers
-│       └── static/                # Mirror of frontend assets for local serving
+│   └── api/                       # Local FastAPI Server
+│       ├── server.py              # FastAPI app and every route (REST under /api/)
+│       └── static/                # The dashboard: index.html, 404.html,
+│                                  #   css/dashboard.css, js/dashboard.js,
+│                                  #   js/theme-init.js, fonts/, img/
 │
-├── docs/                          # Static Web Dashboard (GitHub Pages root)
-│   ├── index.html                 # Tactical HUD single-page application
-│   ├── css/
-│   │   └── dashboard.css          # Vanilla CSS design system (tokens & HUD)
-│   ├── js/                        # Modular frontend JavaScript controllers
-│   │   ├── app.js                 # State manager & view orchestrator
-│   │   ├── radar.js               # Polar 360° RF radar Canvas renderer
-│   │   ├── terminal.js            # Interactive cyber terminal drawer (`~`)
-│   │   ├── audio.js               # Offline Web Audio sound synthesizer
-│   │   └── telemetry.js           # Live API bridge & WebSocket client
-│   └── data/                      # Bundled offline scenario JSON datasets
-│
-├── tests/                         # Automated Pytest Suite (150+ tests)
+├── docs/                          # Output of `cipherguard export-demo` (GitHub Pages root):
+│                                  #   a copy of api/static/ plus precomputed data/
+├── tests/                         # Automated Pytest suite (421 tests)
+├── scripts/                       # Release, soak, capture-fetch and export helpers
+├── deploy/                        # systemd unit for the sensor
 ├── samples/                       # Reproducible sample PCAP captures
-├── models/                        # Serialized ML model weights (.joblib)
+├── models/                        # Serialized model weights (rf.joblib, cnn.npz)
 └── docker/                        # strongSwan interoperability lab
 ```
 
@@ -219,11 +235,10 @@ Tracks the historical cryptographic trajectory of all audited peer pairs:
 |---|---|---|---|
 | **Language** | Python | `>=3.10` | Core backend, dissection, and ML processing. Strict type hint compliance. |
 | **Numerical/ML** | NumPy, scikit-learn, joblib | `>=1.24`, `>=1.3` | Matrix manipulation, Random Forest inference, model serialization. Zero heavy deep learning runtime overhead. |
-| **API Framework** | FastAPI, Uvicorn, Pydantic | `>=0.110`, `>=0.27`, `>=2.0` | Asynchronous REST and WebSocket telemetry server with automatic schema validation. |
+| **API Framework** | FastAPI, Uvicorn, Pydantic | `>=0.110`, `>=0.27`, `>=2.0` | REST API with one server-sent event stream and automatic schema validation. |
 | **Testing** | Pytest, HTTPX | `>=7.4`, `>=0.26` | Unit, integration, and mock API testing suite. |
 | **Frontend Core** | HTML5, Vanilla JavaScript (ES2022) | Modern Standard | Dependency-free, lightweight, responsive client logic. Zero external bundlers needed. |
 | **Styling** | Vanilla CSS3 | Custom CSS Tokens | Epistemic color coding, high-density tactical layout, glassmorphic HUD styling. **No Tailwind**. |
-| **Audio** | Web Audio API | Browser Native | Real-time procedural tactical sound generation without audio sample assets. |
 | **OS Wireless** | Windows WLAN / Linux `iw` | Kernel Native | Driverless, non-intrusive 802.11 ambient spectrum telemetry extraction. |
 
 ---

@@ -4,7 +4,17 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt && pip install -e .
-    startCommand: python -m cipherguard.cli serve --host 0.0.0.0 --insecure-bind
+    # No --insecure-bind: a public host must not serve the dashboard
+    # unauthenticated. The server refuses a non-loopback bind without a token.
+    startCommand: python -m cipherguard.cli serve --host 0.0.0.0
     envVars:
       - key: PORT
         value: 8000
+      # Generated once by Render; read it from the service's Environment page
+      # and enter it when the dashboard asks for a token.
+      - key: CIPHERGUARD_TOKEN
+        generateValue: true
+      # The hosted static dashboard is the only other origin allowed to call
+      # this API from a browser. Cross-origin access is off for everything else.
+      - key: CIPHERGUARD_CORS_ORIGINS
+        value: https://git-huber2007.github.io

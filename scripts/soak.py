@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import mmap
 import os
 import shutil
 import sqlite3
@@ -85,7 +86,7 @@ def _rss_and_fds() -> tuple[int | None, int | None]:
     rss = fds = None
     try:
         with open("/proc/self/statm") as fh:
-            rss = int(fh.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
+            rss = int(fh.read().split()[1]) * mmap.PAGESIZE
         fds = len(os.listdir("/proc/self/fd"))
     except (OSError, ValueError, AttributeError):
         pass
@@ -299,6 +300,9 @@ def _evaluate(cfg: Config, samples: list[dict], n_captures: int,
 
     rss_base = peak(warm, "rss")
     rss_peak = peak(steady, "rss")
+    if rss_base is None or rss_peak is None:
+        return {"passed": False, "checks": {},
+                "error": "resident memory could not be measured: install psutil"}
     check("rss_growth_mb", round((rss_peak - rss_base) / MB, 1), cfg.max_rss_growth_mb, "MB")
     checks["rss_growth_mb"].update({
         "warmup_peak_mb": round(rss_base / MB, 1),
@@ -321,7 +325,7 @@ def _evaluate(cfg: Config, samples: list[dict], n_captures: int,
     peers = samples[-1]["db_peers"]
     check("db_rows", peak(samples, "db_rows"), peers * (cfg.retain_per_peer + 1), "rows")
     checks["db_rows"]["final"] = samples[-1]["db_rows"]
-    check("db_mb", round(peak(samples, "db_bytes") / MB, 3), cfg.max_db_mb, "MB")
+    check("db_mb", round((peak(samples, "db_bytes") or 0) / MB, 3), cfg.max_db_mb, "MB")
 
     log_bound = retention_ceiling(cfg.audit_max_bytes, cfg.audit_backups, largest_record)
     check("log_bytes", peak(samples, "log_bytes"), log_bound, "bytes")

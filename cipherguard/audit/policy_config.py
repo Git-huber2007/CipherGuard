@@ -41,6 +41,7 @@ OVERLAYABLE: dict[str, type] = {
     "MIN_DH_BITS": int,
     "MAX_IKE_SA_LIFETIME": int,
     "MAX_CHILD_SA_LIFETIME": int,
+    "DH_PQ_GROUPS": set,
 }
 
 # Keys whose maps are indexed by DH group number rather than by name. JSON

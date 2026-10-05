@@ -156,6 +156,29 @@ class AuditLog:
             }
         )
 
+    def remediation(self, action: str, plan, declared_actor: str = "",
+                    outcome: str = "") -> None:
+        """Record an approval or a dry-run of a hardening plan.
+
+        The plan is identified, never copied: the generated configuration stays
+        in the plan store. `declared_actor` is whatever name the caller typed.
+        The API has no per-user identity, so the record says so in as many
+        words; a reader must not mistake it for an authenticated identity.
+        """
+        self._write(
+            {
+                "event": "remediation",
+                "action": action,
+                "plan_id": plan.plan_id,
+                "capture": os.path.basename(plan.capture),
+                "platform": plan.platform,
+                "status": plan.status,
+                "declared_actor": declared_actor[:80],
+                "actor_identity": "self-declared",
+                "outcome": outcome[:200],
+            }
+        )
+
     def denied(self, reason: str, detail: str = "") -> None:
         self._write({"event": "denied", "reason": reason, "detail": detail[:200]})
 

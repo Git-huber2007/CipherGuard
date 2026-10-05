@@ -23,7 +23,9 @@ Figures follow NIST SP 800-57 Part 1 Rev. 5 Table 2 for classical strength.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from . import constants as C
 
 # --------------------------------------------------------------------------
 # Symmetric encryption
@@ -147,6 +149,17 @@ class SuiteStrength:
     block_bits: int
     kex_family: str
     detail: dict[str, int]
+    # Key establishment on its own, before the cipher's Grover margin caps the
+    # association's quantum_bits. Lets a caller tell "the key exchange is
+    # classical" from "the key exchange is post-quantum and the cipher is short".
+    kex_quantum_bits: int = 0
+    # One entry per key exchange that contributes: the type 4 method, then any
+    # RFC 9370 additional key exchange that is not NONE.
+    kex_components: list[dict] = field(default_factory=list)
+
+    @property
+    def hybrid(self) -> bool:
+        return len(self.kex_components) > 1
 
     @property
     def classical_grade(self) -> str:
@@ -174,6 +187,9 @@ class SuiteStrength:
             "classical_grade": self.classical_grade,
             "quantum_safe": self.quantum_safe,
             "components": self.detail,
+            "kex_quantum_bits": self.kex_quantum_bits,
+            "hybrid": self.hybrid,
+            "kex_components": self.kex_components,
         }
 
 
@@ -184,17 +200,80 @@ def _encr_bits(name: str, key_length: int | None) -> tuple[int, int]:
     return bits, block
 
 
+def _key_exchange(transforms) -> tuple[int | None, int | None, str, list[dict]]:
+    """Combined strength of the key exchange, hybrid or not.
+
+    RFC 9370 mixes the shared secret of every key exchange into the keys in
+    turn, so an attacker has to break all of them to recover a session key. The
+    combination is therefore as strong as its strongest component, against each
+    adversary separately: Curve25519 with ML-KEM-768 takes ML-KEM's 192 bits
+    against a quantum attacker, where Curve25519 alone gives none. Two
+    classical groups still give none, because Shor breaks both.
+
+    Within one transform type the usual rule holds. Several alternatives of the
+    same type only appear in an initiator's offer, any of them may be chosen,
+    and the slot is scored at the weakest. An additional key exchange that
+    offers NONE as an alternative therefore contributes nothing until a
+    responder is seen to select the real one.
+    """
+    slots: dict[int, list[tuple[int, int, str, int, str]]] = {}
+    for t in transforms:
+        if t.type_id not in C.KE_TRANSFORM_TYPES:
+            continue
+        # An unrecognised group gets the benefit of the doubt as the main key
+        # exchange, as before, but earns no credit as an additional one.
+        unknown = (112, 0, "modp") if t.type_id == C.TRANSFORM_KE else (0, 0, "unknown")
+        c, q, fam = DH_STRENGTH.get(t.value_id, unknown)
+        slots.setdefault(t.type_id, []).append((c, q, fam, t.value_id, t.name))
+
+    if not slots:
+        return None, None, "none", []
+
+    components: list[dict] = []
+    for type_id in sorted(slots):
+        alts = slots[type_id]
+        c = min(a[0] for a in alts)
+        q = min(a[1] for a in alts)
+        weakest = min(alts, key=lambda a: (a[1], a[0]))
+        if type_id != C.TRANSFORM_KE and weakest[2] in ("none", "unknown"):
+            continue  # this additional slot may be, or is, unused
+        components.append({
+            "slot": C.TRANSFORM_TYPE.get(type_id, f"TYPE_{type_id}"),
+            "group": weakest[3],
+            "name": weakest[4],
+            "family": weakest[2],
+            "classical_bits": c,
+            "quantum_bits": q,
+        })
+
+    if not components:
+        return None, None, "none", []
+    families: list[str] = []
+    for comp in components:
+        if comp["family"] not in families:
+            families.append(comp["family"])
+    return (
+        max(comp["classical_bits"] for comp in components),
+        max(comp["quantum_bits"] for comp in components),
+        "+".join(families),
+        components,
+    )
+
+
 def score_proposal(transforms) -> SuiteStrength:
     """Score a proposal at its weakest component.
 
     A chain is only as strong as its weakest link, and mixed suites are common
     in the field: AES-256 paired with SHA-1 and DH Group 2 is not a 256-bit
     association, it is an 80-bit one. Averaging would flatter it badly.
+
+    The key exchange is one link in that chain. When it is a hybrid of several
+    exchanges, that link is scored by `_key_exchange`, and the rest of the
+    chain is still bounded by its weakest member.
     """
+    transforms = list(transforms)
     encr_bits = block_bits = None
     integ_bits = prf_bits = None
-    dh_c = dh_q = None
-    family = "none"
 
     for t in transforms:
         if t.type_id == 1:
@@ -207,11 +286,8 @@ def score_proposal(transforms) -> SuiteStrength:
         elif t.type_id == 3:
             v = INTEG_STRENGTH.get(t.name, 128)
             integ_bits = v if integ_bits is None else min(integ_bits, v)
-        elif t.type_id == 4:
-            c, q, fam = DH_STRENGTH.get(t.value_id, (112, 0, "modp"))
-            dh_c = c if dh_c is None else min(dh_c, c)
-            dh_q = q if dh_q is None else min(dh_q, q)
-            family = fam
+
+    dh_c, dh_q, family, kex_components = _key_exchange(transforms)
 
     components = {
         k: v
@@ -238,6 +314,8 @@ def score_proposal(transforms) -> SuiteStrength:
         block_bits=block_bits or 0,
         kex_family=family,
         detail=components,
+        kex_quantum_bits=dh_q or 0,
+        kex_components=kex_components,
     )
 
 
