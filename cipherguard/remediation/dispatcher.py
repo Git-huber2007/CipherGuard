@@ -6,7 +6,6 @@ staging on target gateways.
 
 from __future__ import annotations
 
-import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -26,7 +25,7 @@ def apply_plan(
     syntactic correctness and emitting the staged execution sequence.
     """
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    
+
     # 1. Pre-execution syntax validation
     is_valid, errors = validate_syntax(plan.platform, plan.forward_config)
     if not is_valid:

@@ -366,7 +366,6 @@ class SuiteClassifier:
     # -- persistence --------------------------------------------------------
 
     def save(self, directory: str) -> None:
-        import hashlib
         import platform
         import sys
         from datetime import datetime, timezone

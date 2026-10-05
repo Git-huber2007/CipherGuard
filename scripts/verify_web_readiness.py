@@ -23,9 +23,9 @@ from cipherguard.api.server import create_app
 def run_tests():
     app = create_app()
     client = TestClient(app, raise_server_exceptions=False)
-    
+
     print("Testing 20-Point Web Production Readiness Checklist...")
-    
+
     # 1. Root dashboard
     r = client.get("/")
     assert r.status_code == 200, f"GET / failed: {r.status_code}"

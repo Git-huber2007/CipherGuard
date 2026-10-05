@@ -25,7 +25,7 @@ def validate_syntax(platform: str, config: str) -> tuple[bool, list[str]]:
 def _validate_cisco(config: str) -> tuple[bool, list[str]]:
     errors: list[str] = []
     lines = [l.strip() for l in config.splitlines() if l.strip() and not l.strip().startswith("!")]
-    
+
     # Must have crypto ikev2 and ipsec components
     has_ikev2_prop = any("crypto ikev2 proposal" in l for l in lines)
     has_ikev2_pol = any("crypto ikev2 policy" in l for l in lines)

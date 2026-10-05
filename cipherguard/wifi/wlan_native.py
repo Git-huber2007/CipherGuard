@@ -9,7 +9,6 @@ from __future__ import annotations
 import ctypes
 import sys
 import time
-from typing import Any
 
 is_windows = sys.platform.startswith("win")
 

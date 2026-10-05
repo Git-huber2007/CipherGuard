@@ -8,7 +8,6 @@ from cipherguard.remediation import (
     build_all_plans,
     build_plan,
     generate_rollback,
-    validate_syntax,
 )
 from cipherguard.remediation.syntax import (
     validate_cisco_syntax,

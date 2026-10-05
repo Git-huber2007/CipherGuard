@@ -26,6 +26,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+from .. import __version__
 from ..audit.policy import framing_class_of
 from ..core import constants as C
 from ..core.models import Assessment
@@ -278,7 +279,7 @@ def build_cbom(assessment: Assessment, serial: str | None = None) -> dict:
                     {
                         "type": "application",
                         "name": "CipherGuard",
-                        "version": "1.0.0",
+                        "version": __version__,
                         "description": (
                             "Passive IPsec cryptographic inventory derived from "
                             "observed network traffic"

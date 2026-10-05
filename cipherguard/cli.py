@@ -16,7 +16,6 @@ from .core.models import Assessment, Severity
 from .core.retention import prune_evidence
 from .intel.baseline import DEFAULT_RETAIN_DAYS, DEFAULT_RETAIN_PER_PEER
 from .pipeline import analyze, throughput_estimate
-from .remediation.synth import PLATFORM_NAMES, detect_platforms, synthesize
 
 # ANSI colours, disabled when not writing to a terminal
 _TTY = sys.stdout.isatty()
@@ -638,7 +637,7 @@ def _verify_real_ike(args: argparse.Namespace, result: dict, EXPECTATIONS, SOURC
         print()
         return True
     print(f"  Source: {SOURCE}")
-    print(f"  Ground truth is the upstream filename, not anything written here.")
+    print("  Ground truth is the upstream filename, not anything written here.")
     print()
 
     by_name = {e.filename: e for e in EXPECTATIONS}
@@ -968,11 +967,11 @@ def cmd_remediate(args: argparse.Namespace) -> int:
     store = PlanStore(args.db if hasattr(args, "db") and args.db else "cipherguard-plans.db")
 
     if getattr(args, "approve", None):
-        print(_c("1", f"\n=== Recording Administrator Approval ==="))
+        print(_c("1", "\n=== Recording Administrator Approval ==="))
         for p in plans:
             p.capture = args.capture
             store.save_plan(p)
-            updated = store.update_status(p.plan_id, "APPROVED", actor=args.approve, comment="Approved via CLI")
+            store.update_status(p.plan_id, "APPROVED", actor=args.approve, comment="Approved via CLI")
             print(_c("1;32", f"  [APPROVED] Plan {p.plan_id} for {p.platform_name} approved by {args.approve}"))
         return 0
 
@@ -984,7 +983,7 @@ def cmd_remediate(args: argparse.Namespace) -> int:
             print(f"  [{status_tag}] {p.platform_name:<24} {res['lines_staged']} commands staged | {len(p.rollback_config.splitlines())} rollback lines")
         return 0
 
-    print(_c("1", f"\n=== CipherGuard Automated Hardening & Remediation Playbooks ==="))
+    print(_c("1", "\n=== CipherGuard Automated Hardening & Remediation Playbooks ==="))
     print(f"  Capture : {args.capture} (Posture Score: {a.score()}/100, Grade {a.grade()})")
     print(f"  Findings Addressed : {sum(1 for f in a.findings if f.severity.value != 'info')}")
 

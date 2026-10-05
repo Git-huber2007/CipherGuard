@@ -4,7 +4,6 @@
 - og-image.png (1200x630 high-res social card)
 """
 import os
-import math
 from PIL import Image, ImageDraw, ImageFont
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "cipherguard", "api", "static")

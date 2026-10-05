@@ -137,7 +137,6 @@ def mask_alone(model_dir: str = "models", samples_per_suite: int = 30,
     are handling a residual rather than carrying the system, and the hybrid
     design is a measured fact rather than an argument.
     """
-    import numpy as np
 
     from ..core.constants import ESP_SUITES
     from .classifier import plausibility
@@ -191,8 +190,7 @@ def calibration(model_dir: str = "models", samples_per_suite: int = 30,
     buckets: list[list[tuple[float, bool]]] = [[] for _ in range(bins)]
     for flow, truth in zip(flows, truths):
         pred = model.predict_one(flow)
-        _cls, members, mass = flow.framing() if flow.predicted_suite else (None, [], 0.0)
-        members = pred.group
+        _cls, _members, mass = flow.framing() if flow.predicted_suite else (None, [], 0.0)
         mass = pred.group_confidence
         hit = framing_class_of(pred.label)[0] == framing_class_of(truth)[0]
         idx = min(int(mass * bins), bins - 1)

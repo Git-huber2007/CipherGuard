@@ -9,7 +9,6 @@ Those are marked as regression tests.
 
 from __future__ import annotations
 
-import math
 import os
 import random
 import struct
@@ -1346,7 +1345,7 @@ def test_nat_keepalive_is_not_mistaken_for_esp():
     assert ike_mod.parse_message(keepalive) is None
 
 
-def test_ikev2_fragmentation_is_recognised_not_flagged_malformed():
+def test_ikev2_fragment_number_and_total_are_read_from_the_packet():
     """RFC 7383. Certificate-bearing IKE_AUTH is routinely fragmented in the
     field; a dissector that does not know the payload type reports a perfectly
     valid exchange as malformed."""

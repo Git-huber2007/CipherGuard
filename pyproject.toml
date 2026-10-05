@@ -4,11 +4,26 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cipherguard"
-version = "1.0.0"
+dynamic = ["version"]
 description = "Passive IPsec VPN protocol analyzer and security assessment framework"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "CipherGuard Contributors" }]
+keywords = ["ipsec", "ike", "esp", "vpn", "pcap", "network-security", "cryptography", "post-quantum", "cbom"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Security :: Cryptography",
+    "Topic :: System :: Networking :: Monitoring",
+    "Typing :: Typed",
+]
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24",
@@ -22,7 +37,7 @@ Repository = "https://github.com/Git-huber2007/CipherGuard"
 
 [project.optional-dependencies]
 api = ["fastapi>=0.110", "uvicorn>=0.27", "pydantic>=2.0", "python-multipart>=0.0.9"]
-dev = ["pytest>=7.4", "psutil>=5.9"]
+dev = ["pytest>=7.4", "httpx>=0.26", "psutil>=5.9", "ruff>=0.16", "pre-commit>=4.0"]
 
 [project.scripts]
 cipherguard = "cipherguard.cli:main"
@@ -30,7 +45,11 @@ cipherguard = "cipherguard.cli:main"
 [tool.setuptools.packages.find]
 include = ["cipherguard*"]
 
+[tool.setuptools.dynamic]
+version = { attr = "cipherguard.__version__" }
+
 [tool.setuptools.package-data]
+"cipherguard" = ["py.typed"]
 "cipherguard.api" = [
     "static/*.html", "static/*.json", "static/*.ico", "static/site.webmanifest",
     "static/css/*.css", "static/js/*.js", "static/img/*",
@@ -46,4 +65,20 @@ markers = [
 
 [tool.pyright]
 reportMissingImports = "warning"
+
+[tool.ruff]
+target-version = "py310"
+extend-exclude = ["docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+# Line length is not enforced. One-line guards (E701) and short variable
+# names (E741) are established style here.
+ignore = ["E501", "E701", "E741"]
+
+[tool.ruff.lint.per-file-ignores]
+# scripts set up sys.path or stdio before importing the package
+"scripts/*" = ["E402"]
+# netsh output fixtures keep the trailing spaces the real command prints
+"tests/test_wifi.py" = ["W291"]
 

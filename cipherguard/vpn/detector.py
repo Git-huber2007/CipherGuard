@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import socket
 import subprocess
 import sys
 import time
@@ -19,7 +18,7 @@ import urllib.request
 from typing import Any
 
 from ..wifi.models import SecurityFinding
-from .models import NetworkPostureComposite, VpnTunnelInfo
+from .models import VpnTunnelInfo
 
 VPN_PATTERNS: list[tuple[str, str]] = [
     (r"protun|proton", "ProtonVPN (WireGuard)"),
@@ -329,7 +328,7 @@ class VpnDetector:
             info.is_default_route = True
             info.route_metric = vpn_adapter["metric"] or 1
             info.dns_servers = dns_by_iface.get(vpn_adapter["name"], [])
-            
+
             wifi_dns_active = dns_by_iface.get("Wi-Fi", [])
             effective_wifi_dns = wifi_dns or wifi_dns_active
             if info.dns_servers and not any(d in wifi_dns_active for d in info.dns_servers):

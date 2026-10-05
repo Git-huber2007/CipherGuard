@@ -12,7 +12,7 @@ import struct
 from typing import Any
 
 from .esp import shannon_entropy
-from .pcap import read_packets, Packet
+from .pcap import read_packets
 
 ESP_HEADER_LEN = 8  # SPI (4) + Sequence (4)
 

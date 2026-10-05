@@ -1,6 +1,5 @@
 import os
 import zipfile
-import shutil
 
 SOURCE_DIR = r"C:\anitgravity fix\fix anything\cipherguard\cipherguard"
 DOWNLOADS_DIR = os.path.join(os.environ["USERPROFILE"], "Downloads")

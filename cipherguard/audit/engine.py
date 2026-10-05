@@ -558,7 +558,7 @@ def rule_weakest_link(sess: IkeSession) -> list[Finding]:
             severity=severity,
             subject=_peer(sess),
             detail=(
-                f"Component strengths: "
+                "Component strengths: "
                 + ", ".join(f"{k} {v} bits" for k, v in strength.detail.items())
                 + f". The association is bounded by its {weakest} at "
                 f"{strength.classical_bits} bits, which is graded "

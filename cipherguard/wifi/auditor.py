@@ -8,13 +8,10 @@ DNS security, and rogue AP detection), and produces structured assessments.
 from __future__ import annotations
 
 import ipaddress
-import os
 import re
-import socket
 import subprocess
 import sys
 import time
-from datetime import datetime
 from typing import Any
 
 from .models import (
@@ -190,7 +187,7 @@ class WifiAuditor:
                     rule_id="WIFI-010",
                     title="Weak Wireless Signal Strength",
                     subject=f"Signal: {interface_info.signal_percent}% ({interface_info.rssi_dbm} dBm)",
-                    detail=f"Low signal strength increases packet drop rate, leading to frequent TCP/IPsec retransmissions and susceptibility to jamming or deauthentication.",
+                    detail="Low signal strength increases packet drop rate, leading to frequent TCP/IPsec retransmissions and susceptibility to jamming or deauthentication.",
                     remediation="Move closer to the access point or switch to a 5 GHz band channel with better line-of-sight.",
                     reference="RFC 9000 §13 / IEEE 802.11k",
                 )

@@ -11,7 +11,6 @@ import os
 from functools import lru_cache
 
 import hmac
-import secrets
 
 import asyncio
 import json
@@ -22,6 +21,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Str
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from .. import __version__
 from ..core.audit_log import AuditLog
 
 from ..audit.engine import rule_catalogue
@@ -130,7 +130,7 @@ def create_app(
     app = FastAPI(
         title="CipherGuard",
         description="Passive IPsec VPN protocol analyzer and security assessment framework",
-        version="1.0.0",
+        version=__version__,
         lifespan=lifespan,
     )
 
