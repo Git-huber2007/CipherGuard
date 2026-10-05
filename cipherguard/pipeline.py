@@ -161,8 +161,8 @@ def throughput_estimate(assessment: Assessment) -> dict:
             "Measured single-threaded in the pure-Python reference reader, "
             "excluding model load. The C++/DPDK ingestion path is a separate "
             "component; this is the portable path's real rate, not a line-rate claim."
-            if measurable else
-            f"Capture too small to measure throughput: {packets:,} packets, fewer "
+            if measurable
+            else f"Capture too small to measure throughput: {packets:,} packets, fewer "
             f"than the {MIN_PACKETS_FOR_RATE:,} needed for a stable rate. Run "
             "`cipherguard bench` for a reproducible figure."
         ),

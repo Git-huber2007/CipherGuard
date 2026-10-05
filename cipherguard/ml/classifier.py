@@ -35,8 +35,7 @@ from .cnn import EspCNN
 # group is really a prediction of the group; the members differ only by weak
 # timing signal and must not be reported as certain.
 AMBIGUITY_GROUPS = [
-    {"AES-CTR-128 / HMAC-SHA2-256-128", "AES-GCM-128 (ICV 16)",
-     "AES-GCM-256 (ICV 16)", "ChaCha20-Poly1305"},
+    {"AES-CTR-128 / HMAC-SHA2-256-128", "AES-GCM-128 (ICV 16)", "AES-GCM-256 (ICV 16)", "ChaCha20-Poly1305"},
     {"3DES-CBC / HMAC-MD5-96", "DES-CBC / HMAC-SHA1-96"},
 ]
 
@@ -89,17 +88,15 @@ class Prediction:
     group: list[str]
     group_confidence: float
     excluded: list[tuple[str, str]] | None = None  # (suite, why it was ruled out)
-    notes: list[str] | None = None                 # tests that could not run, etc.
-    trace: dict | None = None                      # framing.evaluate() working
+    notes: list[str] | None = None  # tests that could not run, etc.
+    trace: dict | None = None  # framing.evaluate() working
 
     @property
     def ambiguous(self) -> bool:
         return len(self.group) > 1 and self.group_confidence - self.confidence > 0.12
 
 
-def plausibility(
-    flow: EspFlow, labels: list[str] | None = None
-) -> tuple[np.ndarray, list[tuple[str, str]], list[str]]:
+def plausibility(flow: EspFlow, labels: list[str] | None = None) -> tuple[np.ndarray, list[tuple[str, str]], list[str]]:
     """Hard structural constraints from RFC 4303, applied over the learned models.
 
     Two suites can be statistically confusable while being physically impossible
@@ -162,10 +159,7 @@ def _mask_from_trace(
         mask = np.ones(len(labels))
     else:
         survivors = [labels[i] for i in range(len(labels)) if mask[i] > 0]
-        notes.append(
-            f"{len(survivors)} of {len(labels)} suites are structurally consistent "
-            "with the observed framing."
-        )
+        notes.append(f"{len(survivors)} of {len(labels)} suites are structurally consistent with the observed framing.")
     return mask, excluded, notes
 
 
@@ -236,9 +230,7 @@ class SuiteClassifier:
         index = {name: i for i, name in enumerate(self.labels)}
         y = np.array([index[l] for l in labels])
 
-        X_tr, X_te, y_tr, y_te = train_test_split(
-            X, y, test_size=0.25, random_state=seed, stratify=y
-        )
+        X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.25, random_state=seed, stratify=y)
 
         self.rf = RandomForestClassifier(
             n_estimators=300,
@@ -253,9 +245,7 @@ class SuiteClassifier:
         self.cnn = EspCNN(len(self.labels), signal_len=F.SIGNAL_LEN, seed=seed)
         if verbose:
             print("Training 1D-CNN")
-        self.cnn.fit(
-            X_tr[:, : F.SIGNAL_LEN], y_tr, epochs=epochs, seed=seed, verbose=verbose
-        )
+        self.cnn.fit(X_tr[:, : F.SIGNAL_LEN], y_tr, epochs=epochs, seed=seed, verbose=verbose)
 
         rf_acc = float((self.rf.predict(X_te) == y_te).mean())
         cnn_acc = float((self.cnn.predict(X_te[:, : F.SIGNAL_LEN]) == y_te).mean())
@@ -268,14 +258,7 @@ class SuiteClassifier:
         for i, name in enumerate(self.labels):
             key = tuple(sorted(ambiguity_group(name)))
             group_index[i] = key
-        grouped = float(
-            np.mean(
-                [
-                    group_index[p] == group_index[t]
-                    for p, t in zip(ens.argmax(axis=1), y_te)
-                ]
-            )
-        )
+        grouped = float(np.mean([group_index[p] == group_index[t] for p, t in zip(ens.argmax(axis=1), y_te)]))
 
         self.metrics = {
             "n_train": int(len(y_tr)),
@@ -384,10 +367,7 @@ class SuiteClassifier:
         # the manifest somewhere the analyzer's model directory is not.
         manifest = {
             "algorithm": "sha256",
-            "files": {
-                name: _sha256_file(os.path.join(directory, name))
-                for name in ("rf.joblib", "cnn.npz")
-            },
+            "files": {name: _sha256_file(os.path.join(directory, name)) for name in ("rf.joblib", "cnn.npz")},
         }
         with open(os.path.join(directory, "MANIFEST.sha256"), "w") as fh:
             json.dump(manifest, fh, indent=2)
@@ -404,9 +384,7 @@ class SuiteClassifier:
                     # Provenance, so an operator can answer "what is this model
                     # and where did it come from" from the artefact itself.
                     "provenance": {
-                        "trained_at": datetime.now(timezone.utc).isoformat(
-                            timespec="seconds"
-                        ),
+                        "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                         "python": sys.version.split()[0],
                         "sklearn": sklearn.__version__,
                         "platform": platform.platform(),
@@ -510,7 +488,4 @@ class SuiteClassifier:
 
     @staticmethod
     def is_trained(directory: str) -> bool:
-        return all(
-            os.path.exists(os.path.join(directory, f))
-            for f in ("rf.joblib", "cnn.npz", "meta.json")
-        )
+        return all(os.path.exists(os.path.join(directory, f)) for f in ("rf.joblib", "cnn.npz", "meta.json"))

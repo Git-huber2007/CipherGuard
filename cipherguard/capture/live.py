@@ -197,9 +197,7 @@ class LiveCapture:
             sock.bind((self.interface, ETH_P_ALL))
         except OSError as exc:
             sock.close()
-            raise CaptureUnavailable(
-                f"could not bind interface {self.interface!r}: {exc}"
-            ) from exc
+            raise CaptureUnavailable(f"could not bind interface {self.interface!r}: {exc}") from exc
 
         if self.kernel_filter:
             try:
@@ -208,9 +206,7 @@ class LiveCapture:
                 # attached, so it has to outlive the setsockopt call — hence the
                 # instance attribute rather than a local.
                 self._filter_buf = bytearray(prog)
-                fprog = struct.pack(
-                    "H6xP", len(prog) // 8, _buffer_address(self._filter_buf)
-                )
+                fprog = struct.pack("H6xP", len(prog) // 8, _buffer_address(self._filter_buf))
                 sock.setsockopt(socket.SOL_SOCKET, SO_ATTACH_FILTER, fprog)
             except OSError:
                 # A rejected filter must not stop the capture: falling back to
@@ -318,6 +314,7 @@ def list_interfaces() -> list[str]:
     if sys.platform.startswith("win"):
         try:
             import subprocess
+
             out = subprocess.check_output(
                 ["netsh", "interface", "show", "interface"],
                 text=True,

@@ -143,10 +143,14 @@ class EspCNN:
 
     def _params(self) -> list[np.ndarray]:
         return [
-            self.conv1.W, self.conv1.b,
-            self.conv2.W, self.conv2.b,
-            self.fc1.W, self.fc1.b,
-            self.fc2.W, self.fc2.b,
+            self.conv1.W,
+            self.conv1.b,
+            self.conv2.W,
+            self.conv2.b,
+            self.fc1.W,
+            self.fc1.b,
+            self.fc2.W,
+            self.fc2.b,
         ]
 
     # -- forward / backward -------------------------------------------------

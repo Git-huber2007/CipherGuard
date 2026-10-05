@@ -62,8 +62,7 @@ class EspTracker:
     view was incomplete instead of quietly under-reporting.
     """
 
-    def __init__(self, max_samples: int = 4000, max_flows: int = 8192,
-                 evict_fraction: float = 0.10):
+    def __init__(self, max_samples: int = 4000, max_flows: int = 8192, evict_fraction: float = 0.10):
         self.flows: dict[tuple[str, str, int], EspFlow] = {}
         self.max_samples = max_samples
         self.max_flows = max_flows
@@ -153,9 +152,7 @@ class EspTracker:
             # Short packets cannot support a usable estimate at all, so they are
             # skipped rather than averaged in as spuriously low entropy.
             if len(flow.entropy_samples) < 256 and len(ciphertext) >= MIN_ENTROPY_SAMPLE:
-                flow.entropy_samples.append(
-                    shannon_entropy(ciphertext[:ENTROPY_SAMPLE_BYTES])
-                )
+                flow.entropy_samples.append(shannon_entropy(ciphertext[:ENTROPY_SAMPLE_BYTES]))
         return True
 
     def results(self, min_packets: int = 8) -> list[EspFlow]:

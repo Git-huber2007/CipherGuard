@@ -34,6 +34,7 @@ from ..core.strength import DH_STRENGTH
 
 SPEC_VERSION = "1.6"
 
+
 # NIST PQC security categories, used for the quantumSecurityLevel field.
 def _nist_level(classical_bits: int, quantum_bits: int) -> int:
     if quantum_bits >= 256:
@@ -70,8 +71,7 @@ def _in_use(transforms) -> list:
     An RFC 9370 additional key exchange set to NONE is an empty slot, and an
     inventory entry for "NONE" would be an asset that does not exist.
     """
-    return [t for t in transforms
-            if not (t.type_id in C.ADDKE_TRANSFORM_TYPES and t.value_id == 0)]
+    return [t for t in transforms if not (t.type_id in C.ADDKE_TRANSFORM_TYPES and t.value_id == 0)]
 
 
 def _bom_ref(*parts: str) -> str:
@@ -96,11 +96,9 @@ def _algorithm_component(name: str, transform, peer: str, sess) -> dict:
 
     props: dict[str, Any] = {
         "primitive": "kem" if is_kem else PRIMITIVE.get(4 if is_kex else tid, "other"),
-        "executionEnvironment": "hardware" if sess.vendor_family() in
-                                ("cisco", "juniper", "fortinet") else "software",
+        "executionEnvironment": "hardware" if sess.vendor_family() in ("cisco", "juniper", "fortinet") else "software",
         "implementationPlatform": "generic",
-        "cryptoFunctions": KEM_FUNCTIONS if is_kem
-                           else CRYPTO_FUNCTIONS.get(4 if is_kex else tid, ["other"]),
+        "cryptoFunctions": KEM_FUNCTIONS if is_kem else CRYPTO_FUNCTIONS.get(4 if is_kex else tid, ["other"]),
     }
     if param:
         props["parameterSetIdentifier"] = param
@@ -155,24 +153,21 @@ def _protocol_component(sess, assessment: Assessment) -> dict:
     ]
     if strength:
         props += [
-            {"name": "cipherguard:classicalSecurityBits",
-             "value": str(strength.classical_bits)},
-            {"name": "cipherguard:quantumSecurityBits",
-             "value": str(strength.quantum_bits)},
-            {"name": "cipherguard:quantumSafe",
-             "value": "true" if strength.quantum_safe else "false"},
-            {"name": "cipherguard:responderConfirmed",
-             "value": "true" if sess.is_confirmed("IKE") else "false"},
+            {"name": "cipherguard:classicalSecurityBits", "value": str(strength.classical_bits)},
+            {"name": "cipherguard:quantumSecurityBits", "value": str(strength.quantum_bits)},
+            {"name": "cipherguard:quantumSafe", "value": "true" if strength.quantum_safe else "false"},
+            {"name": "cipherguard:responderConfirmed", "value": "true" if sess.is_confirmed("IKE") else "false"},
         ]
         if strength.hybrid:
             kex = sess.key_exchange()
             props += [
-                {"name": "cipherguard:hybridKeyExchange",
-                 "value": " + ".join(c["name"] for c in strength.kex_components)},
+                {
+                    "name": "cipherguard:hybridKeyExchange",
+                    "value": " + ".join(c["name"] for c in strength.kex_components),
+                },
                 # the additional exchanges are encrypted; this is how many of
                 # the exchanges that carry them were seen, and nothing more
-                {"name": "cipherguard:intermediateExchangesObserved",
-                 "value": str(kex["intermediate_exchanges"])},
+                {"name": "cipherguard:intermediateExchangesObserved", "value": str(kex["intermediate_exchanges"])},
             ]
 
     return {
@@ -184,10 +179,7 @@ def _protocol_component(sess, assessment: Assessment) -> dict:
             "protocolProperties": {
                 "type": "ipsec",
                 "version": "2.0" if sess.version == "IKEv2" else "1.0",
-                "cryptoRefArray": [
-                    _bom_ref("alg", t.label(), peer)
-                    for t in _in_use(prop.transforms if prop else [])
-                ],
+                "cryptoRefArray": [_bom_ref("alg", t.label(), peer) for t in _in_use(prop.transforms if prop else [])],
             },
         },
         "properties": props,
@@ -219,8 +211,7 @@ def _esp_component(flow) -> dict:
             {"name": "cipherguard:source", "value": "RFC 4303 framing analysis"},
             {"name": "cipherguard:confidence", "value": f"{flow.confidence:.3f}"},
             {"name": "cipherguard:candidates", "value": ", ".join(candidates)},
-            {"name": "cipherguard:framingSignature",
-             "value": spec["signature"] if spec else "unknown"},
+            {"name": "cipherguard:framingSignature", "value": spec["signature"] if spec else "unknown"},
             {"name": "cipherguard:packetsObserved", "value": str(flow.packets)},
             {"name": "cipherguard:peer", "value": f"{flow.src} -> {flow.dst}"},
         ],
@@ -260,8 +251,7 @@ def build_cbom(assessment: Assessment, serial: str | None = None) -> dict:
                     "detail": f.detail,
                     "recommendation": f.remediation,
                     "properties": [
-                        {"name": "cipherguard:provenance",
-                         "value": "inferred" if f.inferred else "observed"},
+                        {"name": "cipherguard:provenance", "value": "inferred" if f.inferred else "observed"},
                         {"name": "cipherguard:reference", "value": f.reference},
                     ],
                 }
@@ -280,10 +270,7 @@ def build_cbom(assessment: Assessment, serial: str | None = None) -> dict:
                         "type": "application",
                         "name": "CipherGuard",
                         "version": __version__,
-                        "description": (
-                            "Passive IPsec cryptographic inventory derived from "
-                            "observed network traffic"
-                        ),
+                        "description": ("Passive IPsec cryptographic inventory derived from observed network traffic"),
                     }
                 ]
             },

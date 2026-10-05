@@ -73,10 +73,10 @@ const out = (x) => process.stdout.write(JSON.stringify(x));
 
 def _node(body: str, data) -> Any:
     # the clock formats through Fmt and marks terms through Glossary
-    script = (_PRELUDE + module("Fmt") + "\n" + module("Glossary") + "\n"
-              + _clock_source() + "\n" + body)
-    proc = subprocess.run(["node", "-e", script], input=json.dumps(data),
-                          capture_output=True, text=True, encoding="utf-8", timeout=30)
+    script = _PRELUDE + module("Fmt") + "\n" + module("Glossary") + "\n" + _clock_source() + "\n" + body
+    proc = subprocess.run(
+        ["node", "-e", script], input=json.dumps(data), capture_output=True, text=True, encoding="utf-8", timeout=30
+    )
     assert proc.returncode == 0, proc.stderr
     return json.loads(proc.stdout)
 
@@ -93,8 +93,8 @@ SECRECY = sorted(set(SECRECY_LIFETIME.values()) | {0.0, 0.1, 2.5, 7.3})
 MIGRATION = [0.0, 0.2, 0.5, 1.0, 3.0, 7.25, 10.1]
 CRQC = [0.3, 5.0, 10.0, 12.0, 13.0, 15.5, 30.0, 100.0]
 CASES = list(itertools.product(SECRECY, MIGRATION, CRQC)) + [
-    (10.0, 2.0, 12.0),     # exactly on the deadline: not late
-    (0.1, 0.2, 0.3),       # 0.1 + 0.2 != 0.3 in doubles; operand order decides
+    (10.0, 2.0, 12.0),  # exactly on the deadline: not late
+    (0.1, 0.2, 0.3),  # 0.1 + 0.2 != 0.3 in doubles; operand order decides
     (0.3, 0.0, 0.3),
     (1e-9, 0.0, 0.0),
 ]
@@ -103,8 +103,11 @@ CASES = list(itertools.product(SECRECY, MIGRATION, CRQC)) + [
 @pytest.mark.no_model
 @needs_node
 def test_js_and_python_mosca_formulas_agree():
-    got = _node("out(input.map(([s, m, c]) => { const g = HarvestClock.moscaGap(s, m, c);"
-                " return [g, HarvestClock.isLate(g)]; }));", CASES)
+    got = _node(
+        "out(input.map(([s, m, c]) => { const g = HarvestClock.moscaGap(s, m, c);"
+        " return [g, HarvestClock.isLate(g)]; }));",
+        CASES,
+    )
     assert len(got) == len(CASES)
     for (s, m, c), (js_gap, js_late) in zip(CASES, got):
         py = mosca_gap(s, m, c)
@@ -117,12 +120,13 @@ def test_js_and_python_mosca_formulas_agree():
 def test_js_recomputes_every_class_as_the_roadmap_would():
     """What the selector shows for a class must be what the server would have
     said had the capture been analysed under that class."""
-    plans = {cls: _plan(cls, migration_years=3.0, crqc_years=12.0)["assumptions"]
-             for cls in SECRECY_LIFETIME}
+    plans = {cls: _plan(cls, migration_years=3.0, crqc_years=12.0)["assumptions"] for cls in SECRECY_LIFETIME}
     table = plans["official"]["secrecy_lifetimes"]
-    got = _node("out(Object.keys(input.table).map(k => { const g = HarvestClock.moscaGap("
-                "input.table[k], 3.0, 12.0); return [k, g, HarvestClock.isLate(g)]; }));",
-                {"table": table})
+    got = _node(
+        "out(Object.keys(input.table).map(k => { const g = HarvestClock.moscaGap("
+        "input.table[k], 3.0, 12.0); return [k, g, HarvestClock.isLate(g)]; }));",
+        {"table": table},
+    )
     for cls, gap, late in got:
         assert round(gap, 1) == plans[cls]["mosca_gap_years"]
         assert late is plans[cls]["already_late"]
@@ -139,34 +143,34 @@ def test_deadline_reads_in_years_and_months():
     gaps = [1.0, -9.0, 1.5, -0.04, 0.0, 0.01, 25.999, -2.75]
     got = _node("out(input.map(g => HarvestClock.describeDeadline(g)));", gaps)
     by_gap = dict(zip(gaps, got))
-    assert by_gap[1.0] == {"late": True, "value": "1 yr 00 mo",
-                           "label": "Past the Mosca deadline"}
+    assert by_gap[1.0] == {"late": True, "value": "1 yr 00 mo", "label": "Past the Mosca deadline"}
     assert by_gap[-9.0]["value"] == "9 yr 00 mo" and not by_gap[-9.0]["late"]
     assert by_gap[-9.0]["label"] == "Until the Mosca deadline"
     assert by_gap[1.5]["value"] == "1 yr 06 mo"
     assert by_gap[-2.75]["value"] == "2 yr 09 mo"
     assert by_gap[25.999]["value"] == "26 yr 00 mo"
-    assert by_gap[-0.04] == {"late": False, "value": "under 1 month",
-                             "label": "Until the Mosca deadline"}
-    assert by_gap[0.0]["late"] is False           # on the deadline is not past it
+    assert by_gap[-0.04] == {"late": False, "value": "under 1 month", "label": "Until the Mosca deadline"}
+    assert by_gap[0.0]["late"] is False  # on the deadline is not past it
     assert by_gap[0.01]["late"] is True and by_gap[0.01]["value"] == "under 1 month"
 
 
 @pytest.mark.no_model
 @needs_node
 def test_counter_arithmetic_and_units():
-    got = _node("""out({
+    got = _node(
+        """out({
       one_second: HarvestClock.harvested(1e6, 8, 1000),
       no_rate: HarvestClock.harvested(1234, 0, 60000),
       clock_skew: HarvestClock.harvested(500, 100, -5000),
       units: [0, 999, 1000, 1146388, 2.5e12, 5e18].map(Fmt.bytes),
       steps: [HarvestClock.stepMs(true), HarvestClock.stepMs(false)],
-    });""", None)
-    assert got["one_second"] == 2_000_000      # 8 Mb/s is 1 MB/s
+    });""",
+        None,
+    )
+    assert got["one_second"] == 2_000_000  # 8 Mb/s is 1 MB/s
     assert got["no_rate"] == 1234
-    assert got["clock_skew"] == 500            # a clock stepped back never un-harvests
-    assert got["units"] == ["0 B", "999 B", "1.0 KB", "1.1 MB", "2.5 TB",
-                            "5000000.0 TB"]
+    assert got["clock_skew"] == 500  # a clock stepped back never un-harvests
+    assert got["units"] == ["0 B", "999 B", "1.0 KB", "1.1 MB", "2.5 TB", "5000000.0 TB"]
     reduced, smooth = got["steps"]
     assert reduced >= 1000 > smooth
 
@@ -179,15 +183,32 @@ def test_counter_arithmetic_and_units():
 def _backbone_plan() -> dict:
     plan = _plan("official")
     plan["links"] = [
-        {"peer": "a <-> b", "quantum_safe": False, "harvest_rate_mbps": 50.55,
-         "bytes_observed": 398376, "classical_bits": 112, "quantum_bits": 0,
-         "kex_family": "modp", "exposure_index": 3.1, "priority": 1, "rationale": ""},
-        {"peer": "c <-> d", "quantum_safe": True, "harvest_rate_mbps": 9.0,
-         "bytes_observed": 1000, "classical_bits": 128, "quantum_bits": 128,
-         "kex_family": "mlkem", "exposure_index": 0.0, "priority": 2, "rationale": ""},
+        {
+            "peer": "a <-> b",
+            "quantum_safe": False,
+            "harvest_rate_mbps": 50.55,
+            "bytes_observed": 398376,
+            "classical_bits": 112,
+            "quantum_bits": 0,
+            "kex_family": "modp",
+            "exposure_index": 3.1,
+            "priority": 1,
+            "rationale": "",
+        },
+        {
+            "peer": "c <-> d",
+            "quantum_safe": True,
+            "harvest_rate_mbps": 9.0,
+            "bytes_observed": 1000,
+            "classical_bits": 128,
+            "quantum_bits": 128,
+            "kex_family": "mlkem",
+            "exposure_index": 0.0,
+            "priority": 2,
+            "rationale": "",
+        },
     ]
-    plan["summary"].update(total_bytes_harvestable=398376, harvest_rate_mbps=50.55,
-                           quantum_exposed=1, links_assessed=2)
+    plan["summary"].update(total_bytes_harvestable=398376, harvest_rate_mbps=50.55, quantum_exposed=1, links_assessed=2)
     return plan
 
 
@@ -255,8 +276,7 @@ def test_mounted_clock_recomputes_on_class_change_and_states_the_assumption():
     assert "−6.0 yr" in routine["terms"]
 
     assert first["disabled"] is False
-    assert re.findall(r'value="(\w+)"', first["options"]) == sorted(
-        SECRECY_LIFETIME, key=lambda k: SECRECY_LIFETIME[k])
+    assert re.findall(r'value="(\w+)"', first["options"]) == sorted(SECRECY_LIFETIME, key=lambda k: SECRECY_LIFETIME[k])
     assert 'value="official" selected' in first["options"]
 
     assert "planning assumption, not a forecast" in first["note"]
@@ -270,7 +290,7 @@ def test_remounting_releases_the_previous_clock():
     listeners from the last one must go with it, or each capture viewed adds
     another interval ticking forever."""
     got = _node(_MOUNT, {"plan": _backbone_plan(), "reduced": False})
-    assert got["cleared"] >= 2       # the reschedule on the motion flip, then the remount
+    assert got["cleared"] >= 2  # the reschedule on the motion flip, then the remount
     assert got["listeners_after"] == got["listeners_before"] == {"motion": 1, "vis": 1}
     assert got["change_handlers"] == 1
 
@@ -288,7 +308,7 @@ def test_an_old_static_export_without_the_class_table_still_renders():
     assert got["first"]["disabled"] is True
     assert re.findall(r'value="(\w+)"', got["first"]["options"]) == ["official"]
     assert got["first"]["deadline"] == "1 yr 00 mo"
-    assert "50.5 Mb/s" in got["first"]["rate"]     # summed from the links instead
+    assert "50.5 Mb/s" in got["first"]["rate"]  # summed from the links instead
 
 
 @pytest.mark.no_model
@@ -317,8 +337,7 @@ def test_roadmap_publishes_the_class_table_and_the_tick_rate(tmp_path):
     assert plan["assumptions"]["secrecy_lifetimes"] == SECRECY_LIFETIME
     exposed = [l for l in plan["links"] if not l["quantum_safe"]]
     assert exposed, "scenario has no exposed links; test is vacuous"
-    assert plan["summary"]["harvest_rate_mbps"] == round(
-        sum(l["harvest_rate_mbps"] for l in exposed), 2)
+    assert plan["summary"]["harvest_rate_mbps"] == round(sum(l["harvest_rate_mbps"] for l in exposed), 2)
     assert plan["summary"]["harvest_rate_mbps"] > 0
 
 
@@ -330,8 +349,7 @@ def test_clock_styling_has_no_glow_or_motion():
     rules = re.findall(r"([^{}]*hclock[^{}]*)\{([^}]*)\}", css)
     assert rules, "no harvest clock rules found"
     for selector, body in rules:
-        for banned in ("animation", "transition", "box-shadow", "text-shadow",
-                       "filter", "@keyframes"):
+        for banned in ("animation", "transition", "box-shadow", "text-shadow", "filter", "@keyframes"):
             assert banned not in body, f"{selector.strip()} uses {banned}"
     assert "hclock" not in "".join(re.findall(r"@keyframes[^{]*\{", css))
 
@@ -347,8 +365,7 @@ def test_static_export_carries_the_clock(tmp_path):
     caps.mkdir()
     pcapgen.scenario_mixed_backbone(str(caps / "backbone.pcap"))
     out = tmp_path / "site"
-    manifest = export(capture_dir=str(caps), out_dir=str(out), model_dir="models",
-                      verbose=False)
+    manifest = export(capture_dir=str(caps), out_dir=str(out), model_dir="models", verbose=False)
 
     html = (out / "index.html").read_text(encoding="utf-8")
     assert 'id="hclock"' in html and 'id="hclock-class"' in html

@@ -132,19 +132,15 @@ def run(
     on_window: Callable[[WindowResult], None] | None = None,
 ) -> list[WindowResult]:
     """Capture and assess in windows until the window budget is exhausted."""
-    model = (
-        SuiteClassifier.load(config.model_dir)
-        if SuiteClassifier.is_trained(config.model_dir)
-        else None
-    )
+    model = SuiteClassifier.load(config.model_dir) if SuiteClassifier.is_trained(config.model_dir) else None
     store = None
     if config.baseline_db:
         from ..intel.baseline import BaselineStore
 
-        store = BaselineStore(config.baseline_db, retain_per_peer=config.retain_per_peer,
-                              retain_days=config.retain_days)
-    log = AuditLog(config.audit_log, actor="sensor", max_bytes=config.audit_max_bytes,
-                   backups=config.audit_backups)
+        store = BaselineStore(
+            config.baseline_db, retain_per_peer=config.retain_per_peer, retain_days=config.retain_days
+        )
+    log = AuditLog(config.audit_log, actor="sensor", max_bytes=config.audit_max_bytes, backups=config.audit_backups)
 
     results: list[WindowResult] = []
     index = 0
@@ -159,9 +155,7 @@ def run(
                 evidence = None
                 if config.evidence_dir:
                     os.makedirs(config.evidence_dir, exist_ok=True)
-                    evidence = os.path.join(
-                        config.evidence_dir, _evidence_name(config.interface, index)
-                    )
+                    evidence = os.path.join(config.evidence_dir, _evidence_name(config.interface, index))
 
                 before = cap.stats.packets
                 packets = cap.packets(
@@ -169,9 +163,7 @@ def run(
                     max_packets=before + config.max_packets_per_window,
                     pcap_path=evidence,
                 )
-                assessment = _assess_window(
-                    packets, model, config.min_esp_packets, name
-                )
+                assessment = _assess_window(packets, model, config.min_esp_packets, name)
 
                 drifts = store.record(assessment) if store else []
                 downgrades = [d for d in drifts if d.kind == "downgrade"]
@@ -194,10 +186,12 @@ def run(
                 if config.evidence_dir:
                     # after the assessment is recorded, and never the window it
                     # was made from
-                    prune_evidence(config.evidence_dir, config.retain_windows,
-                                   config.max_evidence_bytes, protect=evidence)
+                    prune_evidence(
+                        config.evidence_dir, config.retain_windows, config.max_evidence_bytes, protect=evidence
+                    )
                     write_sensor_state(
-                        config.evidence_dir, window=index,
+                        config.evidence_dir,
+                        window=index,
                         window_seconds=config.window_seconds,
                         packets=cap.stats.packets - before,
                         score=assessment.score(),

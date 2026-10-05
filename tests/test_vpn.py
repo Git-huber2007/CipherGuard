@@ -40,6 +40,7 @@ def test_vpn_models_serialization():
     assert d["findings"][0]["rule_id"] == "VPN-001"
 
     from cipherguard.wifi.models import WifiInterfaceInfo
+
     iface = WifiInterfaceInfo(
         name="Wi-Fi",
         description="Wireless NIC",

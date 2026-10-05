@@ -55,9 +55,7 @@ def test_the_true_suite_is_never_eliminated(suite):
     """The arithmetic is only worth showing if it never rules out the truth."""
     flow = synth_flow(suite, random.Random(11), packets=400)
     trace = framing.evaluate(flow)
-    assert suite in trace["survivors"], [
-        (r["suite"], r["reason"]) for r in trace["suites"] if r["suite"] == suite
-    ]
+    assert suite in trace["survivors"], [(r["suite"], r["reason"]) for r in trace["suites"] if r["suite"] == suite]
 
 
 @pytest.mark.no_model
@@ -95,9 +93,14 @@ def test_entropy_separates_null_from_gcm():
 
 @pytest.mark.no_model
 def test_too_few_distinct_lengths_is_reported_as_a_skipped_test():
-    flow = EspFlow(spi=1, src="a", dst="b", packets=40,
-                   payload_lengths=[92, 108, 124] * 10 + [140] * 10,
-                   entropy_samples=[7.8] * 20)
+    flow = EspFlow(
+        spi=1,
+        src="a",
+        dst="b",
+        packets=40,
+        payload_lengths=[92, 108, 124] * 10 + [140] * 10,
+        entropy_samples=[7.8] * 20,
+    )
     trace = framing.evaluate(flow)
     skipped = [n for n in trace["notes"] if n["kind"] == "skipped"]
     assert [n["test"] for n in skipped] == ["granularity"]
@@ -128,8 +131,7 @@ def test_empty_flow_runs_nothing_and_says_so():
 
 @pytest.mark.no_model
 def test_no_surviving_suite_is_a_fallback_note():
-    flow = EspFlow(spi=1, src="a", dst="b", packets=50,
-                   payload_lengths=[37, 41, 43, 47, 53, 59, 61, 67, 71, 73])
+    flow = EspFlow(spi=1, src="a", dst="b", packets=50, payload_lengths=[37, 41, 43, 47, 53, 59, 61, 67, 71, 73])
     trace = framing.evaluate(flow)
     assert trace["fallback"] and not trace["survivors"] and not trace["classes"]
     assert any(n["kind"] == "fallback" for n in trace["notes"])
@@ -146,8 +148,7 @@ def test_surviving_class_explains_why_members_are_inseparable():
 
 @pytest.mark.no_model
 def test_several_surviving_classes_are_flagged_as_unresolved():
-    flow = EspFlow(spi=1, src="a", dst="b", packets=40,
-                   payload_lengths=[108, 124] * 20, entropy_samples=[7.8] * 20)
+    flow = EspFlow(spi=1, src="a", dst="b", packets=40, payload_lengths=[108, 124] * 20, entropy_samples=[7.8] * 20)
     trace = framing.evaluate(flow)
     assert len(trace["classes"]) > 1
     assert any(n["kind"] == "unresolved" for n in trace["notes"])
@@ -165,9 +166,7 @@ def test_plausibility_mask_is_derived_from_the_same_trace():
         mask, excluded, _ = plausibility(flow, labels)
         trace = framing.evaluate(flow)
         by_suite = {r["suite"]: r for r in trace["suites"]}
-        assert dict(excluded) == {
-            s: r["reason"] for s, r in by_suite.items() if r["eliminated_by"]
-        }
+        assert dict(excluded) == {s: r["reason"] for s, r in by_suite.items() if r["eliminated_by"]}
         for i, label in enumerate(labels):
             assert (mask[i] == 0) == (by_suite[label]["eliminated_by"] is not None)
 
@@ -177,9 +176,16 @@ def test_plausibility_mask_is_derived_from_the_same_trace():
 # ---------------------------------------------------------------------------
 
 
-REQUIRED = ("exclusions", "inference_notes", "residues", "length_granularity",
-            "granularity_usable", "distinct_lengths", "mean_entropy",
-            "framing_arithmetic")
+REQUIRED = (
+    "exclusions",
+    "inference_notes",
+    "residues",
+    "length_granularity",
+    "granularity_usable",
+    "distinct_lengths",
+    "mean_entropy",
+    "framing_arithmetic",
+)
 
 
 @pytest.mark.no_model
@@ -218,8 +224,7 @@ def test_static_build_bakes_the_evidence_into_its_json(tmp_path, model_dir):
     caps.mkdir()
     pcapgen.scenario_mixed_backbone(str(caps / "backbone.pcap"))
     out = tmp_path / "site"
-    manifest = export(capture_dir=str(caps), out_dir=str(out),
-                      model_dir=model_dir, verbose=False)
+    manifest = export(capture_dir=str(caps), out_dir=str(out), model_dir=model_dir, verbose=False)
 
     payload = json.loads((out / manifest["captures"][0]["file"]).read_text(encoding="utf-8"))
     assert payload["flows"], "fixture scenario should contain ESP flows"
@@ -261,7 +266,7 @@ def test_panel_wiring_keyboard_and_no_chart_library():
     js = _read("js", "dashboard.js")
     assert 'class="flow-open"' in js and '<button type="button" class="flow-open"' in js
     # Escape closes it from the global handler and from inside the dialog
-    escape_block = js[js.index('if (e.key === "Escape" || e.key === "Esc") {'):][:400]
+    escape_block = js[js.index('if (e.key === "Escape" || e.key === "Esc") {') :][:400]
     assert "EvidencePanel.close()" in escape_block
     assert "function onKey" in js and '"Tab"' in js
     html = _read("index.html")
@@ -282,9 +287,14 @@ def test_panel_renders_the_working_in_order():
     """Run the real panel code against real to_dict output and check the
     rendered HTML: every suite, struck through with its reason, in constraint
     order, caveats present, and the model block kept separate and last."""
-    flow = EspFlow(spi=0xABC, src="10.0.0.1", dst="10.0.0.2", packets=40,
-                   payload_lengths=[92, 108, 124] * 10 + [140] * 10,
-                   entropy_samples=[7.8] * 20)
+    flow = EspFlow(
+        spi=0xABC,
+        src="10.0.0.1",
+        dst="10.0.0.2",
+        packets=40,
+        payload_lengths=[92, 108, 124] * 10 + [140] * 10,
+        entropy_samples=[7.8] * 20,
+    )
     flow.ranked = [(CBC, 0.6), ("3DES-CBC / HMAC-MD5-96", 0.4)]
     flow.predicted_suite = CBC
     data = flow.to_dict()
@@ -293,13 +303,15 @@ def test_panel_renders_the_working_in_order():
         "const esc = s => String(s == null ? '' : s).replace(/[&<>\"']/g, "
         "c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\n"
         "const $ = () => null; const window = {};\n"
-        + module("Fmt") + "\n"   # the panel formats percentages through Fmt
+        + module("Fmt")
+        + "\n"  # the panel formats percentages through Fmt
         + _panel_source()
         + "\nprocess.stdout.write(EvidencePanel.render(JSON.parse(require('fs')"
-          ".readFileSync(0, 'utf8'))));\n"
+        ".readFileSync(0, 'utf8'))));\n"
     )
-    out = subprocess.run(["node", "-e", script], input=json.dumps(data),
-                         capture_output=True, text=True, encoding="utf-8", timeout=30)
+    out = subprocess.run(
+        ["node", "-e", script], input=json.dumps(data), capture_output=True, text=True, encoding="utf-8", timeout=30
+    )
     assert out.returncode == 0, out.stderr
     html = out.stdout
 
@@ -314,8 +326,8 @@ def test_panel_renders_the_working_in_order():
     assert set(re.findall(r'class="ev-suite is-alive">([^<]+)<', html)) == set(alive)
 
     assert html.count("<svg") == 3
-    assert "did not run" in html                        # granularity skipped
-    assert 'class="ev-alert"' in html                   # flagged up front
+    assert "did not run" in html  # granularity skipped
+    assert 'class="ev-alert"' in html  # flagged up front
     assert html.index('class="ev-alert"') < html.index('id="ev-a"')
     order = [html.index(f'id="ev-{k}"') for k in "abcd"]
     assert order == sorted(order)

@@ -49,17 +49,21 @@ ALLOWED_SUFFIXES = (".pcap", ".pcapng", ".cap")
 MAX_UPLOAD_BYTES = 500 * 1000 * 1000
 
 # A per-file cap alone still lets a client fill the disk one file at a time.
-MAX_CAPTURE_DIR_BYTES = 4 * 1000 ** 3
+MAX_CAPTURE_DIR_BYTES = 4 * 1000**3
 
 MAX_CAPTURE_NAME = 128
 
 # pcap (microsecond and nanosecond, either byte order) and pcapng. A file that
 # starts with anything else is not a capture, whatever it is called.
-CAPTURE_MAGICS = frozenset({
-    b"\xd4\xc3\xb2\xa1", b"\xa1\xb2\xc3\xd4",
-    b"\x4d\x3c\xb2\xa1", b"\xa1\xb2\x3c\x4d",
-    b"\x0a\x0d\x0d\x0a",
-})
+CAPTURE_MAGICS = frozenset(
+    {
+        b"\xd4\xc3\xb2\xa1",
+        b"\xa1\xb2\xc3\xd4",
+        b"\x4d\x3c\xb2\xa1",
+        b"\xa1\xb2\x3c\x4d",
+        b"\x0a\x0d\x0d\x0a",
+    }
+)
 
 # Two IPv6 addresses with zone IDs and the separator fit well inside this; a
 # longer "peer key" is not one.
@@ -168,8 +172,7 @@ def create_app(
         wait = auth_failures.retry_after(client)
         if wait:
             log.denied("auth_lockout")
-            raise HTTPException(429, "too many failed attempts; try again later",
-                                headers={"Retry-After": str(wait)})
+            raise HTTPException(429, "too many failed attempts; try again later", headers={"Retry-After": str(wait)})
         supplied = ""
         if authorization.lower().startswith("bearer "):
             supplied = authorization[7:].strip()
@@ -182,8 +185,7 @@ def create_app(
     def throttle(request: Request) -> None:
         wait = heavy_requests.hit(_client_key(request))
         if wait:
-            raise HTTPException(429, "too many requests; slow down",
-                                headers={"Retry-After": str(wait)})
+            raise HTTPException(429, "too many requests; slow down", headers={"Retry-After": str(wait)})
 
     guard = [Depends(require_token)]
     heavy = [Depends(require_token), Depends(throttle)]
@@ -194,11 +196,13 @@ def create_app(
             while True:
                 try:
                     from ..wifi.wlan_native import trigger_scan
+
                     trigger_scan(wait_secs=0.0)
                 except Exception:
                     # no adapter, or not Windows: the Wi-Fi view reports that itself
                     logger.debug("background Wi-Fi scan skipped", exc_info=True)
                 await asyncio.sleep(WIFI_BACKGROUND_SCAN_SECONDS)
+
         task = asyncio.create_task(_keep_wifi_scan_fresh())
         try:
             yield
@@ -305,8 +309,7 @@ def create_app(
     async def http_error(request: Request, exc: StarletteHTTPException):
         if exc.status_code == 404 and "text/html" in request.headers.get("accept", ""):
             return FileResponse(os.path.join(STATIC_DIR, "404.html"), status_code=404)
-        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code,
-                            headers=getattr(exc, "headers", None))
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=getattr(exc, "headers", None))
 
     @app.exception_handler(Exception)
     async def unexpected_error(request: Request, exc: Exception):
@@ -319,15 +322,19 @@ def create_app(
 
     def _capture_files() -> list[tuple[str, int]]:
         os.makedirs(capture_dir, exist_ok=True)
-        return [(name, os.path.getsize(os.path.join(capture_dir, name)))
-                for name in sorted(os.listdir(capture_dir)) if name.endswith(ALLOWED_SUFFIXES)]
+        return [
+            (name, os.path.getsize(os.path.join(capture_dir, name)))
+            for name in sorted(os.listdir(capture_dir))
+            if name.endswith(ALLOWED_SUFFIXES)
+        ]
 
     @app.get("/api/captures", dependencies=guard)
     def list_captures() -> dict:
         # size_kb (1024-based) is kept for older clients; the dashboard
         # formats size_bytes itself, in the one unit convention it uses
-        items = [{"name": name, "size_bytes": size, "size_kb": round(size / 1024, 1)}
-                 for name, size in _capture_files()]
+        items = [
+            {"name": name, "size_bytes": size, "size_kb": round(size / 1024, 1)} for name, size in _capture_files()
+        ]
         return {"captures": items, "directory": capture_dir}
 
     @app.post("/api/analyze", dependencies=heavy)
@@ -382,8 +389,10 @@ def create_app(
             stored = sum(size for _, size in _capture_files())
             if stored + (file.size or 0) > MAX_CAPTURE_DIR_BYTES:
                 raise HTTPException(
-                    507, f"the capture directory is at its {MAX_CAPTURE_DIR_BYTES // 1000 ** 3} GB limit; "
-                         "remove captures on the server first")
+                    507,
+                    f"the capture directory is at its {MAX_CAPTURE_DIR_BYTES // 1000**3} GB limit; "
+                    "remove captures on the server first",
+                )
 
             head = await file.read(4)
             if head not in CAPTURE_MAGICS:
@@ -421,8 +430,7 @@ def create_app(
         @app.post("/api/upload", dependencies=guard)
         def upload_unavailable() -> JSONResponse:
             return JSONResponse(
-                {"detail": "upload requires python-multipart; copy captures into "
-                           f"{capture_dir}/ instead"},
+                {"detail": f"upload requires python-multipart; copy captures into {capture_dir}/ instead"},
                 status_code=501,
             )
 
@@ -431,8 +439,7 @@ def create_app(
         from ..intel.pqc import roadmap
 
         if data_class not in SECRECY_LIFETIME:
-            raise HTTPException(
-                400, f"unknown data_class; expected one of: {', '.join(sorted(SECRECY_LIFETIME))}")
+            raise HTTPException(400, f"unknown data_class; expected one of: {', '.join(sorted(SECRECY_LIFETIME))}")
         return JSONResponse(roadmap(_run(capture), data_class=data_class))
 
     @app.get("/api/cbom", dependencies=heavy)
@@ -489,8 +496,7 @@ def create_app(
         try:
             wifi_name = assessment.interface.name if assessment.interface else "Wi-Fi"
             wifi_dns = assessment.interface.dns_servers if assessment.interface else []
-            res["vpn"] = VpnDetector().detect_current(
-                wifi_iface_name=wifi_name, wifi_dns=wifi_dns).to_dict()
+            res["vpn"] = VpnDetector().detect_current(wifi_iface_name=wifi_name, wifi_dns=wifi_dns).to_dict()
         except Exception:
             # VPN detection shells out to OS tools that may be absent; the
             # Wi-Fi result is still worth returning without it.
@@ -591,15 +597,17 @@ def create_app(
         if plan.status not in APPLY_ALLOWED_FROM:
             log.remediation("apply", plan, outcome="refused: not approved")
             raise HTTPException(
-                409, f"plan {plan.plan_id} is {plan.status}; it must be approved before it can be staged")
+                409, f"plan {plan.plan_id} is {plan.status}; it must be approved before it can be staged"
+            )
 
         result = apply_plan(plan, dry_run=dry_run, target_host=target)
         if result.get("success"):
             # the dispatcher only ever succeeds in dry-run; a live apply is refused there
-            plan = plan_store.update_status(
-                plan_id, "STAGED", actor="api", comment=f"Executed ({result.get('mode')})") or plan
-        log.remediation("apply", plan, declared_actor=plan.approver,
-                        outcome=str(result.get("mode", "")))
+            plan = (
+                plan_store.update_status(plan_id, "STAGED", actor="api", comment=f"Executed ({result.get('mode')})")
+                or plan
+            )
+        log.remediation("apply", plan, declared_actor=plan.approver, outcome=str(result.get("mode", "")))
         return result
 
     @app.get("/api/remediation-plans", dependencies=guard)
@@ -610,6 +618,7 @@ def create_app(
     @app.get("/api/wifi/networks", dependencies=heavy)
     def wifi_networks() -> dict:
         from ..wifi.auditor import WifiAuditor
+
         auditor = WifiAuditor()
         current_ssid = ""
         current_bssid = ""
@@ -617,17 +626,25 @@ def create_app(
         if cur:
             current_ssid = cur.ssid
             current_bssid = cur.bssid
-        networks = auditor._get_windows_networks(current_ssid, current_bssid, force_scan=True) if auditor.is_windows else auditor._get_linux_networks()
+        networks = (
+            auditor._get_windows_networks(current_ssid, current_bssid, force_scan=True)
+            if auditor.is_windows
+            else auditor._get_linux_networks()
+        )
         return {"networks": [n.to_dict() for n in networks]}
 
     @app.get("/api/interfaces", dependencies=guard)
     def get_interfaces() -> dict:
         from ..capture.live import available, list_interfaces
+
         is_avail, reason = available()
-        items = [{
-            "name": iface,
-            "is_wifi": any(w in iface.lower() for w in ("wi-fi", "wlan", "wireless", "802.11")),
-        } for iface in list_interfaces()]
+        items = [
+            {
+                "name": iface,
+                "is_wifi": any(w in iface.lower() for w in ("wi-fi", "wlan", "wireless", "802.11")),
+            }
+            for iface in list_interfaces()
+        ]
         return {
             "interfaces": items,
             "live_capture_available": is_avail,

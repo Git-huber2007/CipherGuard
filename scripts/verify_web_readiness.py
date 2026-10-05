@@ -1,4 +1,5 @@
 """Test all web readiness endpoints and custom error handling for CipherGuard."""
+
 import sys
 import os
 import warnings
@@ -19,6 +20,7 @@ while parent_dir in sys.path:
 # pyrefly: ignore [missing-import]
 from fastapi.testclient import TestClient
 from cipherguard.api.server import create_app
+
 
 def run_tests():
     app = create_app()
@@ -92,6 +94,7 @@ def run_tests():
     print("[OK] Live Packet Sniffer & Streamer Endpoints passed")
 
     print("\nALL VERIFICATIONS PASSED SUCCESSFULLY!")
+
 
 if __name__ == "__main__":
     run_tests()

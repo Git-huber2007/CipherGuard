@@ -59,6 +59,7 @@ def egress_lookup_enabled() -> bool:
 
     CIPHERGUARD_NO_EGRESS_LOOKUP, the old opt-out, still wins if both are set.
     """
+
     def truthy(name: str) -> bool:
         return os.environ.get(name, "").strip().lower() in ("1", "true", "yes")
 
@@ -104,7 +105,10 @@ class VpnDetector:
         # verdict rests on adapter and route inspection alone.
         if not info.connected and info.egress_isp:
             isp_lower = info.egress_isp.lower()
-            if any(p in isp_lower for p in ["proton", "mullvad", "nord", "expressvpn", "surfshark", "wireguard", "private internet"]):
+            if any(
+                p in isp_lower
+                for p in ["proton", "mullvad", "nord", "expressvpn", "surfshark", "wireguard", "private internet"]
+            ):
                 info.connected = True
                 if "proton" in isp_lower:
                     info.vpn_type = "ProtonVPN (WireGuard)"
@@ -212,16 +216,11 @@ class VpnDetector:
     def _detect_windows_fast(self, wifi_iface_name: str, wifi_dns: list[str] | None) -> VpnTunnelInfo:
         info = VpnTunnelInfo()
         out_if = subprocess.check_output(
-            ["netsh", "interface", "ipv4", "show", "interfaces"],
-            text=True, errors="ignore", timeout=3
+            ["netsh", "interface", "ipv4", "show", "interfaces"], text=True, errors="ignore", timeout=3
         )
-        out_rt = subprocess.check_output(
-            ["route", "print"],
-            text=True, errors="ignore", timeout=3
-        )
+        out_rt = subprocess.check_output(["route", "print"], text=True, errors="ignore", timeout=3)
         out_dns = subprocess.check_output(
-            ["netsh", "interface", "ip", "show", "dns"],
-            text=True, errors="ignore", timeout=3
+            ["netsh", "interface", "ip", "show", "dns"], text=True, errors="ignore", timeout=3
         )
 
         idx_to_desc: dict[int, str] = {}
@@ -311,7 +310,7 @@ class VpnDetector:
                 dns_by_iface[cur_if] = []
                 continue
             if cur_if:
-                m_ip = re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', line)
+                m_ip = re.search(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", line)
                 if m_ip:
                     dns_by_iface[cur_if].append(m_ip.group(0))
 
@@ -361,25 +360,32 @@ class VpnDetector:
             )
             data = json.loads(raw)
             adapters = data.get("adapters") or []
-            if isinstance(adapters, dict): adapters = [adapters]
+            if isinstance(adapters, dict):
+                adapters = [adapters]
             routes = data.get("routes") or []
-            if isinstance(routes, dict): routes = [routes]
+            if isinstance(routes, dict):
+                routes = [routes]
             dns_list = data.get("dns") or []
-            if isinstance(dns_list, dict): dns_list = [dns_list]
+            if isinstance(dns_list, dict):
+                dns_list = [dns_list]
 
             vpn_adapter = None
             detected_vpn_type = "None"
             for ad in adapters:
                 combined = f"{ad.get('Name', '')} {ad.get('InterfaceDescription', '')}".lower()
-                if "wi-fi" in combined and "vpn" not in combined: continue
-                if ("wireless" in combined or "802.11" in combined) and "vpn" not in combined: continue
-                if "gbe family" in combined or "gigabit" in combined: continue
+                if "wi-fi" in combined and "vpn" not in combined:
+                    continue
+                if ("wireless" in combined or "802.11" in combined) and "vpn" not in combined:
+                    continue
+                if "gbe family" in combined or "gigabit" in combined:
+                    continue
                 for pattern, vtype in VPN_PATTERNS:
                     if re.search(pattern, combined):
                         vpn_adapter = ad
                         detected_vpn_type = vtype
                         break
-                if vpn_adapter: break
+                if vpn_adapter:
+                    break
 
             if vpn_adapter:
                 info.connected = True

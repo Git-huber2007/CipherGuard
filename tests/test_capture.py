@@ -39,9 +39,7 @@ def test_bpf_jump_targets_are_in_range():
     total capture failure rather than as a filtering problem."""
     prog = _ipsec_filter()
     assert len(prog) % 8 == 0
-    instructions = [
-        struct.unpack_from("HBBI", prog, i) for i in range(0, len(prog), 8)
-    ]
+    instructions = [struct.unpack_from("HBBI", prog, i) for i in range(0, len(prog), 8)]
     for i, (op, jt, jf, _k) in enumerate(instructions):
         if op & 0x07 != 0x05:  # only BPF_JMP carries branch targets
             continue
@@ -51,13 +49,11 @@ def test_bpf_jump_targets_are_in_range():
 
 def test_bpf_program_terminates_in_returns():
     prog = _ipsec_filter()
-    instructions = [
-        struct.unpack_from("HBBI", prog, i) for i in range(0, len(prog), 8)
-    ]
+    instructions = [struct.unpack_from("HBBI", prog, i) for i in range(0, len(prog), 8)]
     assert instructions[-2][0] & 0x07 == 0x06  # ret accept
     assert instructions[-1][0] & 0x07 == 0x06  # ret drop
-    assert instructions[-2][3] > 0             # accept returns a snaplen
-    assert instructions[-1][3] == 0            # drop returns zero
+    assert instructions[-2][3] > 0  # accept returns a snaplen
+    assert instructions[-1][3] == 0  # drop returns zero
 
 
 def test_capture_availability_reports_a_reason():
@@ -87,8 +83,7 @@ def _emit(port: int, payload: bytes, count: int = 30, delay: float = 0.02) -> No
 def test_kernel_filter_excludes_non_ipsec_traffic():
     """The filter is what lets the sensor keep up on a link carrying mostly
     non-IPsec traffic, so it has to actually exclude things."""
-    threading.Thread(target=_emit, args=(500, b"\x00" * 4 + b"\x11" * 28),
-                     daemon=True).start()
+    threading.Thread(target=_emit, args=(500, b"\x00" * 4 + b"\x11" * 28), daemon=True).start()
     threading.Thread(target=_emit, args=(9999, b"X" * 120), daemon=True).start()
 
     with LiveCapture("lo") as cap:
@@ -111,8 +106,7 @@ def test_capture_honours_its_time_bound():
 
 @requires_capture
 def test_capture_honours_its_packet_bound():
-    threading.Thread(target=_emit, args=(500, b"\x00" * 4 + b"\x11" * 28, 200, 0.001),
-                     daemon=True).start()
+    threading.Thread(target=_emit, args=(500, b"\x00" * 4 + b"\x11" * 28, 200, 0.001), daemon=True).start()
     with LiveCapture("lo") as cap:
         list(cap.packets(max_packets=10, max_seconds=5))
         assert cap.stats.packets <= 10
@@ -124,8 +118,7 @@ def test_capture_writes_replayable_evidence(tmp_path):
     from, so the evidence file has to be readable by the ordinary file path."""
     from cipherguard.dissector.pcap import read_packets
 
-    threading.Thread(target=_emit, args=(500, b"\x00" * 4 + b"\x11" * 28),
-                     daemon=True).start()
+    threading.Thread(target=_emit, args=(500, b"\x00" * 4 + b"\x11" * 28), daemon=True).start()
     evidence = str(tmp_path / "window.pcap")
     with LiveCapture("lo") as cap:
         list(cap.packets(max_seconds=2.5, pcap_path=evidence))
@@ -146,7 +139,9 @@ def test_sensor_assesses_live_negotiation(tmp_path):
     from cipherguard.capture.sensor import SensorConfig, run
 
     weak = pcapgen.ikev1_message(
-        b"\x11" * 8, b"\x00" * 8, 4,
+        b"\x11" * 8,
+        b"\x00" * 8,
+        4,
         [(1, pcapgen.ikev1_sa_payload(0, 5, 1, 1, 2, 172800))],
     )
     threading.Thread(target=_emit, args=(500, weak, 40, 0.03), daemon=True).start()
@@ -176,11 +171,11 @@ def test_sensor_window_state_does_not_accumulate(tmp_path):
     accumulates across windows eventually dies on a busy link."""
     from cipherguard.capture.sensor import SensorConfig, run
 
-    threading.Thread(target=_emit, args=(500, b"\x00" * 4 + b"\x11" * 28, 60, 0.02),
-                     daemon=True).start()
+    threading.Thread(target=_emit, args=(500, b"\x00" * 4 + b"\x11" * 28, 60, 0.02), daemon=True).start()
     results = run(
-        SensorConfig(interface="lo", window_seconds=1.5, max_windows=3,
-                     baseline_db=None, audit_log=None, model_dir="models")
+        SensorConfig(
+            interface="lo", window_seconds=1.5, max_windows=3, baseline_db=None, audit_log=None, model_dir="models"
+        )
     )
     assert len(results) == 3
     for r in results:

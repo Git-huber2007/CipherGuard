@@ -53,10 +53,16 @@ def urlopen_calls(monkeypatch):
 
     def fake_urlopen(req, timeout=None):
         calls.append(req.full_url if hasattr(req, "full_url") else str(req))
-        return io.BytesIO(json.dumps({
-            "ip": "198.51.100.7", "country": "Testland", "city": "Testville",
-            "connection": {"isp": "Example Transit"},
-        }).encode())
+        return io.BytesIO(
+            json.dumps(
+                {
+                    "ip": "198.51.100.7",
+                    "country": "Testland",
+                    "city": "Testville",
+                    "connection": {"isp": "Example Transit"},
+                }
+            ).encode()
+        )
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
     monkeypatch.setattr(detector, "_GLOBAL_EGRESS_CACHE", {})
@@ -125,12 +131,14 @@ def test_launcher_listens_on_loopback_unless_lan_mode_sets_a_token():
     bat = _root_file("launch_dashboard.bat")
     assert "--insecure-bind" not in bat
     assert 'set "BIND_HOST=127.0.0.1"' in bat
-    serve = [line for line in bat.splitlines() if "cipherguard.cli serve" in line and not line.upper().startswith("REM")]
+    serve = [
+        line for line in bat.splitlines() if "cipherguard.cli serve" in line and not line.upper().startswith("REM")
+    ]
     assert len(serve) == 1 and "--host !BIND_HOST!" in serve[0]
     # 0.0.0.0 is only ever assigned on the --lan path, which then requires a token
-    lan = bat[bat.index('set "BIND_HOST=0.0.0.0"'):bat.index("\n:token_ready")]
+    lan = bat[bat.index('set "BIND_HOST=0.0.0.0"') : bat.index("\n:token_ready")]
     assert "CIPHERGUARD_TOKEN" in lan and "exit /b 1" in lan
-    assert bat[:bat.index('set "BIND_HOST=0.0.0.0"')].rstrip().endswith("if not defined LAN_MODE goto :bind_ready")
+    assert bat[: bat.index('set "BIND_HOST=0.0.0.0"')].rstrip().endswith("if not defined LAN_MODE goto :bind_ready")
 
 
 @pytest.mark.no_model
@@ -160,11 +168,9 @@ def test_packet_stream_requires_the_token(tmp_path):
 
     from cipherguard.api.server import create_app
 
-    client = TestClient(create_app(capture_dir=str(tmp_path), auth_token="s3cret",
-                                   baseline_db=str(tmp_path / "b.db")))
+    client = TestClient(create_app(capture_dir=str(tmp_path), auth_token="s3cret", baseline_db=str(tmp_path / "b.db")))
     assert client.get("/api/sniff/stream").status_code == 401
-    assert client.get("/api/sniff/stream",
-                      headers={"Authorization": "Bearer wrong"}).status_code == 401
+    assert client.get("/api/sniff/stream", headers={"Authorization": "Bearer wrong"}).status_code == 401
     for route in ("/api/sniff/status", "/api/remediation-plans"):
         assert client.get(route).status_code == 401, route
 
@@ -174,11 +180,12 @@ def test_every_api_route_except_health_is_guarded(tmp_path):
     """So the next route added without the dependency fails here, not in review."""
     from cipherguard.api.server import create_app
 
-    app = create_app(capture_dir=str(tmp_path), auth_token="s3cret",
-                     baseline_db=str(tmp_path / "b.db"))
-    unguarded = [getattr(r, "path", "") for r in app.routes
-                 if getattr(r, "path", "").startswith("/api/")
-                 and not getattr(r, "dependencies", None)]
+    app = create_app(capture_dir=str(tmp_path), auth_token="s3cret", baseline_db=str(tmp_path / "b.db"))
+    unguarded = [
+        getattr(r, "path", "")
+        for r in app.routes
+        if getattr(r, "path", "").startswith("/api/") and not getattr(r, "dependencies", None)
+    ]
     assert unguarded == ["/api/health"]
 
 
@@ -186,8 +193,8 @@ def test_every_api_route_except_health_is_guarded(tmp_path):
 def test_page_reads_the_stream_with_fetch_so_the_token_is_a_header():
     js = dashboard_js()
     assert "EventSource" not in re.sub(r"/\*.*?\*/|//[^\n]*", "", js, flags=re.S)
-    stream = js[js.index("async function connectStream"):]
-    stream = stream[:stream.index("function resetFeed")]
+    stream = js[js.index("async function connectStream") :]
+    stream = stream[: stream.index("function resetFeed")]
     assert 'resolveApiPath("/api/sniff/stream")' in stream
     assert "headers: authHeaders(" in stream
     assert "token=" not in stream and "state.token" not in stream  # never in the URL
@@ -206,8 +213,9 @@ def test_cross_origin_access_is_off_by_default(tmp_path):
     assert res.status_code == 200
     assert "access-control-allow-origin" not in res.headers
 
-    preflight = client.options("/api/analyze", headers={
-        "Origin": "https://evil.example", "Access-Control-Request-Method": "POST"})
+    preflight = client.options(
+        "/api/analyze", headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "POST"}
+    )
     assert "access-control-allow-origin" not in preflight.headers
 
 
@@ -218,8 +226,9 @@ def test_cross_origin_access_is_limited_to_the_configured_origins(tmp_path):
     from cipherguard.api.server import create_app
 
     allowed = "https://dashboard.example"
-    client = TestClient(create_app(capture_dir=str(tmp_path), baseline_db=str(tmp_path / "b.db"),
-                                   cors_origins=[allowed + "/"]))
+    client = TestClient(
+        create_app(capture_dir=str(tmp_path), baseline_db=str(tmp_path / "b.db"), cors_origins=[allowed + "/"])
+    )
     ok = client.get("/api/rules", headers={"Origin": allowed})
     assert ok.headers["access-control-allow-origin"] == allowed
     assert "access-control-allow-credentials" not in ok.headers
@@ -235,7 +244,8 @@ def test_serve_takes_cors_origins_from_the_command_line():
     from cipherguard.cli import build_parser
 
     args = build_parser().parse_args(
-        ["serve", "--cors-origin", "https://a.example", "--cors-origin", "https://b.example"])
+        ["serve", "--cors-origin", "https://a.example", "--cors-origin", "https://b.example"]
+    )
     assert args.cors_origin == ["https://a.example", "https://b.example"]
     assert build_parser().parse_args(["serve"]).cors_origin is None
 
@@ -245,12 +255,25 @@ def test_serve_takes_cors_origins_from_the_command_line():
 # ---------------------------------------------------------------------------
 
 
-def _ipv4(proto: int, body: bytes, src: str = "203.0.113.5", dst: str = "198.51.100.9",
-          frag: int = 0) -> bytes:
+def _ipv4(proto: int, body: bytes, src: str = "203.0.113.5", dst: str = "198.51.100.9", frag: int = 0) -> bytes:
     import socket
 
-    return struct.pack("!BBHHHBBH4s4s", 0x45, 0, 20 + len(body), 0, frag, 64, proto, 0,
-                       socket.inet_aton(src), socket.inet_aton(dst)) + body
+    return (
+        struct.pack(
+            "!BBHHHBBH4s4s",
+            0x45,
+            0,
+            20 + len(body),
+            0,
+            frag,
+            64,
+            proto,
+            0,
+            socket.inet_aton(src),
+            socket.inet_aton(dst),
+        )
+        + body
+    )
 
 
 def _udp(sport: int, dport: int, payload: bytes) -> bytes:
@@ -335,16 +358,16 @@ def test_live_path_keeps_only_ike_and_esp():
     sniffer = LiveSniffer()
     esp = struct.pack("!II", 0xC3A1F00D, 1) + b"\x55" * 64
     feed = [
-        _ipv4(50, esp),                                                  # ESP
-        _ipv4(17, _udp(500, 500, b"\x11" * 28)),                         # IKE
-        _ipv4(17, _udp(4500, 4500, b"\x00" * 4 + b"\x11" * 28)),         # IKE over NAT-T
-        _ipv4(17, _udp(4500, 4500, esp)),                                # UDP-encapsulated ESP
-        _ipv4(17, _udp(4500, 4500, b"\xff")),                            # NAT keepalive
-        _ipv4(17, _udp(53124, 53, b"\x12\x34" + b"\x00" * 30)),          # DNS
-        _ipv4(17, _udp(443, 50000, b"\x40" * 40)),                       # QUIC
-        _ipv4(6, b"\x00" * 40),                                          # TCP
-        _ipv4(50, esp, frag=0x0010),                                     # non-first fragment
-        b"\x45\x00",                                                     # runt
+        _ipv4(50, esp),  # ESP
+        _ipv4(17, _udp(500, 500, b"\x11" * 28)),  # IKE
+        _ipv4(17, _udp(4500, 4500, b"\x00" * 4 + b"\x11" * 28)),  # IKE over NAT-T
+        _ipv4(17, _udp(4500, 4500, esp)),  # UDP-encapsulated ESP
+        _ipv4(17, _udp(4500, 4500, b"\xff")),  # NAT keepalive
+        _ipv4(17, _udp(53124, 53, b"\x12\x34" + b"\x00" * 30)),  # DNS
+        _ipv4(17, _udp(443, 50000, b"\x40" * 40)),  # QUIC
+        _ipv4(6, b"\x00" * 40),  # TCP
+        _ipv4(50, esp, frag=0x0010),  # non-first fragment
+        b"\x45\x00",  # runt
     ]
     for datagram in feed:
         sniffer._handle_datagram(datagram, 1.0)
@@ -401,8 +424,7 @@ def sniff_api(tmp_path, monkeypatch):
     captures.mkdir()
 
     def build(**kw):
-        return TestClient(create_app(capture_dir=str(captures),
-                                     baseline_db=str(tmp_path / "b.db"), **kw))
+        return TestClient(create_app(capture_dir=str(captures), baseline_db=str(tmp_path / "b.db"), **kw))
 
     yield build, sniffer, captures
     sniffer.stop()
@@ -450,14 +472,14 @@ def test_assessment_of_a_replay_is_labelled_as_one(sniff_api, sample_dir, model_
     payload = client.post("/api/sniff/analyze").json()
     assert payload["capture_source"] == "replay"
     assert payload["provenance"]["capture"] == "replay_snapshot.pcap"
-    assert sorted(os.listdir(captures)) == ["replay_snapshot.pcap"]   # never live_snapshot
+    assert sorted(os.listdir(captures)) == ["replay_snapshot.pcap"]  # never live_snapshot
 
 
 @pytest.mark.no_model
 def test_page_labels_replay_and_offers_it_only_as_its_own_button():
     html, js = _index_html(), dashboard_js()
     assert 'id="btn-sniffer-replay"' in html and 'id="sniffer-source-notice"' in html
-    engine = js[js.index("const LiveSnifferEngine"):js.index("window.LiveSnifferEngine")]
+    engine = js[js.index("const LiveSnifferEngine") : js.index("window.LiveSnifferEngine")]
     assert "NOT LIVE" in engine and "not live traffic" in engine.lower()
     assert 'btnStart.addEventListener("click", () => startSniffing(false))' in engine
     assert 'btnReplay.addEventListener("click", () => startSniffing(true))' in engine
@@ -481,8 +503,11 @@ def plans_api(tmp_path, model_dir):
     captures.mkdir()
     pcapgen.scenario_legacy(str(captures / "legacy.pcap"))
     audit = tmp_path / "audit.jsonl"
-    client = TestClient(create_app(model_dir=model_dir, capture_dir=str(captures),
-                                   baseline_db=str(tmp_path / "b.db"), audit_log=str(audit)))
+    client = TestClient(
+        create_app(
+            model_dir=model_dir, capture_dir=str(captures), baseline_db=str(tmp_path / "b.db"), audit_log=str(audit)
+        )
+    )
     plans = client.get("/api/remediation/legacy.pcap").json()["plans"]
 
     def events():
@@ -503,8 +528,9 @@ def test_a_plan_cannot_be_staged_until_it_is_approved(plans_api):
     stored = {p["plan_id"]: p for p in client.get("/api/remediation-plans").json()["plans"]}
     assert stored[pid]["status"] == "PENDING_REVIEW"
 
-    approved = client.post(f"/api/remediation/{pid}/approve",
-                           json={"actor": "A. Analyst", "comment": "change window 4"})
+    approved = client.post(
+        f"/api/remediation/{pid}/approve", json={"actor": "A. Analyst", "comment": "change window 4"}
+    )
     assert approved.status_code == 200
     assert approved.json()["plan"]["approver_identity"] == "self-declared"
 
@@ -517,7 +543,10 @@ def test_a_plan_cannot_be_staged_until_it_is_approved(plans_api):
 
     log = events()
     assert [(e["action"], e["outcome"]) for e in log] == [
-        ("apply", "refused: not approved"), ("approve", ""), ("apply", "dry-run")]
+        ("apply", "refused: not approved"),
+        ("approve", ""),
+        ("apply", "dry-run"),
+    ]
     assert all(e["actor_identity"] == "self-declared" and e["plan_id"] == pid for e in log)
     assert log[1]["declared_actor"] == "A. Analyst"
     # the audit trail identifies the plan; it does not copy the configuration
@@ -528,8 +557,7 @@ def test_an_approved_plan_is_still_never_applied_to_a_gateway(plans_api):
     client, plan, _events = plans_api
     pid = plan["plan_id"]
     client.post(f"/api/remediation/{pid}/approve", json={"actor": "A. Analyst"})
-    live = client.post(f"/api/remediation/{pid}/apply",
-                       json={"dry_run": False, "target": "192.0.2.1"}).json()
+    live = client.post(f"/api/remediation/{pid}/apply", json={"dry_run": False, "target": "192.0.2.1"}).json()
     assert live["success"] is False and live["mode"] == "live_apply_prohibited"
     stored = {p["plan_id"]: p for p in client.get("/api/remediation-plans").json()["plans"]}
     assert stored[pid]["status"] == "APPROVED"
@@ -543,11 +571,9 @@ def test_an_approval_needs_a_name_and_the_name_is_cleaned(plans_api):
     for body in ({}, {"actor": ""}, {"actor": "   "}, {"actor": 7}):
         res = client.post(f"/api/remediation/{pid}/approve", json=body)
         assert res.status_code == 400, body
-    assert client.post("/api/remediation/no-such-plan/approve",
-                       json={"actor": "x"}).status_code == 404
+    assert client.post("/api/remediation/no-such-plan/approve", json={"actor": "x"}).status_code == 404
 
-    res = client.post(f"/api/remediation/{pid}/approve",
-                      json={"actor": "Eve\n! injected line\t" + "x" * 200})
+    res = client.post(f"/api/remediation/{pid}/approve", json={"actor": "Eve\n! injected line\t" + "x" * 200})
     saved = res.json()["plan"]["approver"]
     assert "\n" not in saved and "\t" not in saved and len(saved) <= 80
     assert saved.startswith("Eve ! injected line")

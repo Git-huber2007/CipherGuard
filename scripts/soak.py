@@ -102,11 +102,11 @@ def _db_stats(db: str) -> tuple[int, int, int]:
     conn = sqlite3.connect(db)
     try:
         rows = conn.execute("SELECT COUNT(*) FROM observations").fetchone()[0]
-        peers = conn.execute(
-            "SELECT COUNT(DISTINCT peer_key) FROM observations").fetchone()[0]
+        peers = conn.execute("SELECT COUNT(DISTINCT peer_key) FROM observations").fetchone()[0]
         orphaned = conn.execute(
             "SELECT COUNT(*) FROM baselines WHERE best_observation_id IS NOT NULL "
-            "AND best_observation_id NOT IN (SELECT id FROM observations)").fetchone()[0]
+            "AND best_observation_id NOT IN (SELECT id FROM observations)"
+        ).fetchone()[0]
         return rows, peers, orphaned
     finally:
         conn.close()
@@ -135,10 +135,7 @@ def _slope_per_hour(xs: list[float], ys: list[float]) -> float | None:
 
 def _captures(directory: str | None, scratch: str) -> list[str]:
     if directory and os.path.isdir(directory):
-        found = sorted(
-            os.path.join(directory, n) for n in os.listdir(directory)
-            if n.endswith(".pcap")
-        )
+        found = sorted(os.path.join(directory, n) for n in os.listdir(directory) if n.endswith(".pcap"))
         if found:
             return found
     from cipherguard.lab.pcapgen import generate_all
@@ -160,16 +157,16 @@ def run(
     evidence = os.path.join(scratch, "evidence")
     os.makedirs(evidence, exist_ok=True)
     db = os.path.join(scratch, "baseline.db")
-    audit = AuditLog(os.path.join(scratch, "audit.jsonl"), actor="soak",
-                     max_bytes=cfg.audit_max_bytes, backups=cfg.audit_backups)
+    audit = AuditLog(
+        os.path.join(scratch, "audit.jsonl"), actor="soak", max_bytes=cfg.audit_max_bytes, backups=cfg.audit_backups
+    )
     assert audit.path
 
     # A soak that cannot measure is a soak that always passes, so refuse.
     if None in _rss_and_fds():
-        raise RuntimeError("cannot measure RSS and open descriptors here: "
-                           "install psutil, or run on Linux")
+        raise RuntimeError("cannot measure RSS and open descriptors here: install psutil, or run on Linux")
 
-    leak: list[bytes] = []   # only for demonstrating that the soak catches a leak
+    leak: list[bytes] = []  # only for demonstrating that the soak catches a leak
     violations: list[str] = []
     samples: list[dict] = []
     largest_record = 0
@@ -196,19 +193,17 @@ def run(
         audit.assessment(assessment, window, source="soak")
         if _size(audit.path) < active_before:
             rotations += 1
-        with BaselineStore(db, retain_per_peer=cfg.retain_per_peer,
-                           retain_days=cfg.retain_days) as store:
+        with BaselineStore(db, retain_per_peer=cfg.retain_per_peer, retain_days=cfg.retain_days) as store:
             count = "SELECT COUNT(*) FROM observations"
             before = store.conn.execute(count).fetchone()[0]
             store.record(assessment)
-            inserted = sum(1 for s in assessment.sessions
-                           if s.negotiated("IKE", confirmed_only=True))
+            inserted = sum(1 for s in assessment.sessions if s.negotiated("IKE", confirmed_only=True))
             rows_pruned += before + inserted - store.conn.execute(count).fetchone()[0]
-        removed, _ = prune_evidence(evidence, cfg.retain_windows,
-                                    cfg.max_evidence_bytes, protect=window)
+        removed, _ = prune_evidence(evidence, cfg.retain_windows, cfg.max_evidence_bytes, protect=window)
         evidence_removed += removed
-        write_sensor_state(evidence, window=iteration, window_seconds=0,
-                           score=assessment.score(), evidence=os.path.basename(window))
+        write_sensor_state(
+            evidence, window=iteration, window_seconds=0, score=assessment.score(), evidence=os.path.basename(window)
+        )
 
         # The constraint retention must never break: the most recent
         # assessment's evidence and audit record both still exist.
@@ -217,8 +212,7 @@ def run(
         last = _last_line(audit.path)
         if not last or last.get("capture") != os.path.basename(window):
             violations.append(f"iteration {iteration}: latest audit record missing")
-        largest_record = max(largest_record,
-                             len(json.dumps(last or {}, separators=(",", ":"))) + 1)
+        largest_record = max(largest_record, len(json.dumps(last or {}, separators=(",", ":"))) + 1)
 
         if inject_leak_kb:
             # filled rather than zeroed, so the pages are really touched
@@ -229,51 +223,52 @@ def run(
             rss, fds = _rss_and_fds()
             rows, peers, orphaned = _db_stats(db)
             if orphaned:
-                violations.append(f"iteration {iteration}: {orphaned} baseline(s) "
-                                  "lost their establishing observation")
-            samples.append({
-                "t": round(time.monotonic() - started, 2),
-                "iteration": iteration,
-                "rss": rss,
-                "fds": fds,
-                "db_bytes": _size(db, db + "-journal", db + "-wal"),
-                "db_rows": rows,
-                "db_peers": peers,
-                "log_bytes": sum(_size(p) for p in audit.generations()),
-                "log_generations": len(audit.generations()),
-                "evidence_bytes": _size(*[os.path.join(evidence, n)
-                                          for n in os.listdir(evidence)
-                                          if n.endswith(".pcap")]),
-                "evidence_files": sum(1 for n in os.listdir(evidence)
-                                      if n.endswith(".pcap")),
-            })
+                violations.append(f"iteration {iteration}: {orphaned} baseline(s) lost their establishing observation")
+            samples.append(
+                {
+                    "t": round(time.monotonic() - started, 2),
+                    "iteration": iteration,
+                    "rss": rss,
+                    "fds": fds,
+                    "db_bytes": _size(db, db + "-journal", db + "-wal"),
+                    "db_rows": rows,
+                    "db_peers": peers,
+                    "log_bytes": sum(_size(p) for p in audit.generations()),
+                    "log_generations": len(audit.generations()),
+                    "evidence_bytes": _size(
+                        *[os.path.join(evidence, n) for n in os.listdir(evidence) if n.endswith(".pcap")]
+                    ),
+                    "evidence_files": sum(1 for n in os.listdir(evidence) if n.endswith(".pcap")),
+                }
+            )
 
     elapsed = time.monotonic() - started
     report = _evaluate(cfg, samples, len(captures), largest_record, largest_capture)
-    report.update({
-        "config": asdict(cfg),
-        "host": {"python": sys.version.split()[0], "platform": sys.platform},
-        "elapsed_seconds": round(elapsed, 1),
-        "iterations": iteration,
-        "captures": [os.path.basename(c) for c in captures],
-        "exercised": {
-            "observation_rows_pruned": rows_pruned,
-            "evidence_files_pruned": evidence_removed,
-            "audit_rotations": rotations,
-            "audit_generations_at_end": len(audit.generations()),
-            "largest_audit_record_bytes": largest_record,
-        },
-        "violations": violations[:20],
-        "samples": samples,
-        "workdir": scratch,
-    })
+    report.update(
+        {
+            "config": asdict(cfg),
+            "host": {"python": sys.version.split()[0], "platform": sys.platform},
+            "elapsed_seconds": round(elapsed, 1),
+            "iterations": iteration,
+            "captures": [os.path.basename(c) for c in captures],
+            "exercised": {
+                "observation_rows_pruned": rows_pruned,
+                "evidence_files_pruned": evidence_removed,
+                "audit_rotations": rotations,
+                "audit_generations_at_end": len(audit.generations()),
+                "largest_audit_record_bytes": largest_record,
+            },
+            "violations": violations[:20],
+            "samples": samples,
+            "workdir": scratch,
+        }
+    )
     report["passed"] = report["passed"] and not violations
     del leak
     return report
 
 
-def _evaluate(cfg: Config, samples: list[dict], n_captures: int,
-              largest_record: int, largest_capture: int) -> dict:
+def _evaluate(cfg: Config, samples: list[dict], n_captures: int, largest_record: int, largest_capture: int) -> dict:
     """Compare every metric with its bound.
 
     RSS and descriptors are judged by growth over the warm-up: the first
@@ -283,10 +278,9 @@ def _evaluate(cfg: Config, samples: list[dict], n_captures: int,
     absolute bound derived from the retention configuration.
     """
     warm = [s for s in samples if s["t"] <= cfg.warmup or s["iteration"] <= n_captures]
-    steady = samples[len(warm):]
+    steady = samples[len(warm) :]
     if not warm or not steady:
-        return {"passed": False, "checks": {},
-                "error": "run too short: no samples after warm-up"}
+        return {"passed": False, "checks": {}, "error": "run too short: no samples after warm-up"}
 
     def peak(rows, key):
         vals = [r[key] for r in rows if r[key] is not None]
@@ -301,24 +295,26 @@ def _evaluate(cfg: Config, samples: list[dict], n_captures: int,
     rss_base = peak(warm, "rss")
     rss_peak = peak(steady, "rss")
     if rss_base is None or rss_peak is None:
-        return {"passed": False, "checks": {},
-                "error": "resident memory could not be measured: install psutil"}
+        return {"passed": False, "checks": {}, "error": "resident memory could not be measured: install psutil"}
     check("rss_growth_mb", round((rss_peak - rss_base) / MB, 1), cfg.max_rss_growth_mb, "MB")
-    checks["rss_growth_mb"].update({
-        "warmup_peak_mb": round(rss_base / MB, 1),
-        "steady_peak_mb": round(rss_peak / MB, 1),
-        "final_mb": round(samples[-1]["rss"] / MB, 1),
-        # Over a span of seconds a slope is allocator noise extrapolated to an
-        # hour; it is reported only once there is enough run to mean something.
-        "trend_mb_per_hour": _round(_slope_per_hour(
-            [s["t"] for s in steady], [s["rss"] / MB for s in steady]))
-            if steady[-1]["t"] - steady[0]["t"] >= TREND_MIN_SPAN else None,
-    })
+    checks["rss_growth_mb"].update(
+        {
+            "warmup_peak_mb": round(rss_base / MB, 1),
+            "steady_peak_mb": round(rss_peak / MB, 1),
+            "final_mb": round(samples[-1]["rss"] / MB, 1),
+            # Over a span of seconds a slope is allocator noise extrapolated to an
+            # hour; it is reported only once there is enough run to mean something.
+            "trend_mb_per_hour": _round(_slope_per_hour([s["t"] for s in steady], [s["rss"] / MB for s in steady]))
+            if steady[-1]["t"] - steady[0]["t"] >= TREND_MIN_SPAN
+            else None,
+        }
+    )
 
     fd_base, fd_peak = peak(warm, "fds"), peak(steady, "fds")
     check("fd_growth", None if fd_base is None else fd_peak - fd_base, cfg.max_fd_growth)
-    checks["fd_growth"].update({"warmup_peak": fd_base, "steady_peak": fd_peak,
-                                "kind": "handles" if os.name == "nt" else "fds"})
+    checks["fd_growth"].update(
+        {"warmup_peak": fd_base, "steady_peak": fd_peak, "kind": "handles" if os.name == "nt" else "fds"}
+    )
 
     # Every peer keeps at most retain_per_peer rows plus its baseline-
     # establishing row, which may be older than the rest.
@@ -333,11 +329,14 @@ def _evaluate(cfg: Config, samples: list[dict], n_captures: int,
     # The byte ceiling can be exceeded by exactly one window: the newest, which
     # pruning protects because the latest assessment was made from it.
     check("evidence_files", peak(samples, "evidence_files"), cfg.retain_windows, "files")
-    check("evidence_bytes", peak(samples, "evidence_bytes"),
-          cfg.max_evidence_bytes + largest_capture, "bytes")
+    check("evidence_bytes", peak(samples, "evidence_bytes"), cfg.max_evidence_bytes + largest_capture, "bytes")
 
-    return {"passed": all(c["ok"] for c in checks.values()), "checks": checks,
-            "warmup_samples": len(warm), "steady_samples": len(steady)}
+    return {
+        "passed": all(c["ok"] for c in checks.values()),
+        "checks": checks,
+        "warmup_samples": len(warm),
+        "steady_samples": len(steady),
+    }
 
 
 def _round(x: float | None) -> float | None:
@@ -347,16 +346,17 @@ def _round(x: float | None) -> float | None:
 def _print(report: dict) -> None:
     print()
     verdict = "PASS" if report["passed"] else "FAIL"
-    print(f"soak {verdict}: {report['iterations']} iterations in "
-          f"{report['elapsed_seconds']}s ({report['host']['platform']}, "
-          f"Python {report['host']['python']})")
+    print(
+        f"soak {verdict}: {report['iterations']} iterations in "
+        f"{report['elapsed_seconds']}s ({report['host']['platform']}, "
+        f"Python {report['host']['python']})"
+    )
     if "error" in report:
         print(f"  {report['error']}")
     for name, c in report.get("checks", {}).items():
         mark = "ok  " if c["ok"] else "FAIL"
         extra = {k: v for k, v in c.items() if k not in ("value", "bound", "unit", "ok")}
-        print(f"  [{mark}] {name:<15} {c['value']} {c['unit']} (bound {c['bound']})"
-              + (f"  {extra}" if extra else ""))
+        print(f"  [{mark}] {name:<15} {c['value']} {c['unit']} (bound {c['bound']})" + (f"  {extra}" if extra else ""))
     print(f"  exercised: {report['exercised']}")
     for v in report["violations"]:
         print(f"  VIOLATION {v}")
@@ -369,8 +369,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sample-every", type=float, default=d.sample_every)
     ap.add_argument("--warmup", type=float, default=d.warmup)
     ap.add_argument("--models", default="models")
-    ap.add_argument("--captures", default="samples",
-                    help="directory of .pcap files; generated if empty or absent")
+    ap.add_argument("--captures", default="samples", help="directory of .pcap files; generated if empty or absent")
     ap.add_argument("--workdir", help="where the DB, log and evidence go (default: temp)")
     ap.add_argument("--retain-per-peer", type=int, default=d.retain_per_peer)
     ap.add_argument("--audit-max-bytes", type=int, default=d.audit_max_bytes)
@@ -383,13 +382,19 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     cfg = Config(
-        duration=args.duration, sample_every=args.sample_every, warmup=args.warmup,
-        retain_per_peer=args.retain_per_peer, audit_max_bytes=args.audit_max_bytes,
-        audit_backups=args.audit_backups, max_rss_growth_mb=args.max_rss_growth_mb,
-        max_fd_growth=args.max_fd_growth, max_db_mb=args.max_db_mb,
+        duration=args.duration,
+        sample_every=args.sample_every,
+        warmup=args.warmup,
+        retain_per_peer=args.retain_per_peer,
+        audit_max_bytes=args.audit_max_bytes,
+        audit_backups=args.audit_backups,
+        max_rss_growth_mb=args.max_rss_growth_mb,
+        max_fd_growth=args.max_fd_growth,
+        max_db_mb=args.max_db_mb,
     )
-    report = run(cfg, model_dir=args.models, captures_dir=args.captures,
-                 workdir=args.workdir, inject_leak_kb=args.inject_leak_kb)
+    report = run(
+        cfg, model_dir=args.models, captures_dir=args.captures, workdir=args.workdir, inject_leak_kb=args.inject_leak_kb
+    )
     if args.json_out:
         with open(args.json_out, "w") as fh:
             json.dump(report, fh, indent=2)

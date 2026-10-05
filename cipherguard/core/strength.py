@@ -36,14 +36,14 @@ ENCR_STRENGTH: dict[str, tuple[int, int]] = {
     "ENCR_DES": (56, 64),
     "ENCR_DES_IV64": (56, 64),
     "ENCR_DES_IV32": (56, 64),
-    "ENCR_3DES": (112, 64),          # meet-in-the-middle caps 168-bit keying at 112
+    "ENCR_3DES": (112, 64),  # meet-in-the-middle caps 168-bit keying at 112
     "ENCR_IDEA": (128, 64),
     "ENCR_CAST": (128, 64),
     "ENCR_BLOWFISH": (128, 64),
     "ENCR_3IDEA": (112, 64),
     "ENCR_RC5": (128, 64),
     "ENCR_NULL": (0, 0),
-    "ENCR_AES_CBC": (128, 128),      # refined by the negotiated key length
+    "ENCR_AES_CBC": (128, 128),  # refined by the negotiated key length
     "ENCR_AES_CTR": (128, 128),
     "ENCR_AES_CCM_8": (128, 128),
     "ENCR_AES_CCM_12": (128, 128),
@@ -71,7 +71,7 @@ ENCR_STRENGTH: dict[str, tuple[int, int]] = {
 
 INTEG_STRENGTH: dict[str, int] = {
     "AUTH_NONE": 0,
-    "AUTH_HMAC_MD5_96": 64,      # HMAC survives MD5 collisions, but only just
+    "AUTH_HMAC_MD5_96": 64,  # HMAC survives MD5 collisions, but only just
     "AUTH_HMAC_MD5_128": 64,
     "AUTH_KPDK_MD5": 64,
     "AUTH_DES_MAC": 56,
@@ -112,17 +112,17 @@ PRF_STRENGTH: dict[str, int] = {
 # group id -> (classical bits, quantum bits, family)
 DH_STRENGTH: dict[int, tuple[int, int, str]] = {
     0: (0, 0, "none"),
-    1: (32, 0, "modp"),       # 768-bit: broken in practice
-    2: (80, 0, "modp"),       # 1024-bit: within nation-state precomputation
-    5: (96, 0, "modp"),       # 1536-bit
-    14: (112, 0, "modp"),     # 2048-bit
-    15: (128, 0, "modp"),     # 3072-bit
-    16: (152, 0, "modp"),     # 4096-bit
+    1: (32, 0, "modp"),  # 768-bit: broken in practice
+    2: (80, 0, "modp"),  # 1024-bit: within nation-state precomputation
+    5: (96, 0, "modp"),  # 1536-bit
+    14: (112, 0, "modp"),  # 2048-bit
+    15: (128, 0, "modp"),  # 3072-bit
+    16: (152, 0, "modp"),  # 4096-bit
     17: (176, 0, "modp"),
     18: (200, 0, "modp"),
-    19: (128, 0, "ecp"),      # NIST P-256
-    20: (192, 0, "ecp"),      # NIST P-384
-    21: (256, 0, "ecp"),      # NIST P-521
+    19: (128, 0, "ecp"),  # NIST P-256
+    20: (192, 0, "ecp"),  # NIST P-384
+    21: (256, 0, "ecp"),  # NIST P-521
     22: (80, 0, "modp"),
     23: (112, 0, "modp"),
     24: (112, 0, "modp"),
@@ -132,11 +132,11 @@ DH_STRENGTH: dict[int, tuple[int, int, str]] = {
     28: (128, 0, "ecp"),
     29: (192, 0, "ecp"),
     30: (256, 0, "ecp"),
-    31: (128, 0, "ecp"),      # Curve25519
-    32: (224, 0, "ecp"),      # Curve448
-    35: (128, 128, "ml-kem"), # ML-KEM-512,  NIST PQC category 1
-    36: (192, 192, "ml-kem"), # ML-KEM-768,  category 3
-    37: (256, 256, "ml-kem"), # ML-KEM-1024, category 5
+    31: (128, 0, "ecp"),  # Curve25519
+    32: (224, 0, "ecp"),  # Curve448
+    35: (128, 128, "ml-kem"),  # ML-KEM-512,  NIST PQC category 1
+    36: (192, 192, "ml-kem"),  # ML-KEM-768,  category 3
+    37: (256, 256, "ml-kem"),  # ML-KEM-1024, category 5
 }
 
 
@@ -237,14 +237,16 @@ def _key_exchange(transforms) -> tuple[int | None, int | None, str, list[dict]]:
         weakest = min(alts, key=lambda a: (a[1], a[0]))
         if type_id != C.TRANSFORM_KE and weakest[2] in ("none", "unknown"):
             continue  # this additional slot may be, or is, unused
-        components.append({
-            "slot": C.TRANSFORM_TYPE.get(type_id, f"TYPE_{type_id}"),
-            "group": weakest[3],
-            "name": weakest[4],
-            "family": weakest[2],
-            "classical_bits": c,
-            "quantum_bits": q,
-        })
+        components.append(
+            {
+                "slot": C.TRANSFORM_TYPE.get(type_id, f"TYPE_{type_id}"),
+                "group": weakest[3],
+                "name": weakest[4],
+                "family": weakest[2],
+                "classical_bits": c,
+                "quantum_bits": q,
+            }
+        )
 
     if not components:
         return None, None, "none", []
@@ -326,8 +328,7 @@ def score_proposal(transforms) -> SuiteStrength:
 SWEET32_PRACTICAL_BLOCKS = 2**32  # collisions become exploitable around here
 
 
-def sweet32_exposure(block_bits: int, bytes_observed: int, seconds_observed: float,
-                     rekey_seconds: int) -> dict | None:
+def sweet32_exposure(block_bits: int, bytes_observed: int, seconds_observed: float, rekey_seconds: int) -> dict | None:
     """Quantify Sweet32 risk from observed throughput instead of asserting it.
 
     For a cipher with a b-bit block, distinct ciphertext blocks start colliding
@@ -352,9 +353,7 @@ def sweet32_exposure(block_bits: int, bytes_observed: int, seconds_observed: flo
         "threshold_gb": round(threshold_bytes / 1e9, 1),
         "observed_rate_mbps": round(rate * 8 / 1e6, 2),
         "bytes_per_rekey_gb": round(bytes_per_key / 1e9, 2),
-        "ratio_to_threshold": round(bytes_per_key / threshold_bytes, 3)
-        if threshold_bytes
-        else 0.0,
+        "ratio_to_threshold": round(bytes_per_key / threshold_bytes, 3) if threshold_bytes else 0.0,
         "seconds_to_threshold": round(threshold_bytes / rate, 1) if rate > 0 else None,
         "exceeds": bytes_per_key >= threshold_bytes,
     }

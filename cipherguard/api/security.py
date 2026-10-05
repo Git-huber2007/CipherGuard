@@ -41,18 +41,20 @@ MULTIPART_OVERHEAD_BYTES = 64 << 10
 
 # The page is plain files from this server. Inline style attributes are still
 # used by the dashboard, so styles allow 'unsafe-inline'; scripts do not.
-CONTENT_SECURITY_POLICY = "; ".join([
-    "default-src 'self'",
-    "script-src 'self'",
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
-    "font-src 'self'",
-    "connect-src 'self'",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-])
+CONTENT_SECURITY_POLICY = "; ".join(
+    [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob:",
+        "font-src 'self'",
+        "connect-src 'self'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+    ]
+)
 
 SECURITY_HEADERS = {
     "Content-Security-Policy": CONTENT_SECURITY_POLICY,
@@ -71,7 +73,7 @@ def hostname(host_header: str) -> str:
     """The name in a Host header, without the port and without IPv6 brackets."""
     host = host_header.strip().lower()
     if host.startswith("["):
-        return host[1:host.find("]")] if "]" in host else ""
+        return host[1 : host.find("]")] if "]" in host else ""
     return host.rsplit(":", 1)[0] if ":" in host else host
 
 
@@ -108,8 +110,7 @@ class RequestGuard:
 
         headers = Headers(scope=scope)
         path: str = scope.get("path", "")
-        secure = (scope.get("scheme") == "https"
-                  or headers.get("x-forwarded-proto", "").lower() == "https")
+        secure = scope.get("scheme") == "https" or headers.get("x-forwarded-proto", "").lower() == "https"
 
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
@@ -144,8 +145,7 @@ class RequestGuard:
         elif headers.get("sec-fetch-site", "").lower() == "cross-site":
             return 403, "cross-site request refused"
 
-        limit = (self.max_upload_bytes + MULTIPART_OVERHEAD_BYTES
-                 if path == self.upload_path else MAX_JSON_BODY_BYTES)
+        limit = self.max_upload_bytes + MULTIPART_OVERHEAD_BYTES if path == self.upload_path else MAX_JSON_BODY_BYTES
         length = headers.get("content-length")
         if length is None:
             # A body of unknown length cannot be bounded before it is read.
@@ -170,12 +170,13 @@ class RequestGuard:
 
 async def _send_json(send: Send, status: int, detail: str) -> None:
     body = json.dumps({"detail": detail}).encode("utf-8")
-    await send({
-        "type": "http.response.start",
-        "status": status,
-        "headers": [(b"content-type", b"application/json"),
-                    (b"content-length", str(len(body)).encode("ascii"))],
-    })
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode("ascii"))],
+        }
+    )
     await send({"type": "http.response.body", "body": body})
 
 

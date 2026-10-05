@@ -14,8 +14,7 @@ import shutil
 import subprocess
 from typing import Any
 
-STATIC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                      "cipherguard", "api", "static")
+STATIC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cipherguard", "api", "static")
 
 NODE = shutil.which("node")
 
@@ -33,7 +32,7 @@ def dashboard_js() -> str:
 def module(name: str, js: str | None = None) -> str:
     js = js if js is not None else dashboard_js()
     start = js.index(f"const {name} = (() => {{")
-    return js[start: js.index("})();", start) + len("})();")]
+    return js[start : js.index("})();", start) + len("})();")]
 
 
 def function(name: str, js: str | None = None) -> str:
@@ -46,12 +45,13 @@ def function(name: str, js: str | None = None) -> str:
             for j in range(i, len(js)):
                 depth += {"{": 1, "}": -1}.get(js[j], 0)
                 if depth == 0:
-                    return js[start: j + 1]
+                    return js[start : j + 1]
     raise KeyError(name)
 
 
 def run_node(script: str, data: Any = None) -> Any:
-    proc = subprocess.run(["node", "-e", script], input=json.dumps(data), capture_output=True,
-                          text=True, encoding="utf-8", timeout=30)
+    proc = subprocess.run(
+        ["node", "-e", script], input=json.dumps(data), capture_output=True, text=True, encoding="utf-8", timeout=30
+    )
     assert proc.returncode == 0, proc.stderr
     return json.loads(proc.stdout) if proc.stdout.strip() else None

@@ -62,21 +62,28 @@ def test_model_load_is_timed_separately_and_excluded(backbone_path, model_dir, m
     assert stats["model_load_seconds"] >= 0.4
     assert stats["processing_seconds"] <= stats["analysis_seconds"] - 0.4 + 0.01
     assert stats["processing_seconds"] == pytest.approx(
-        stats["analysis_seconds"] - stats["model_load_seconds"], abs=0.01)
+        stats["analysis_seconds"] - stats["model_load_seconds"], abs=0.01
+    )
 
 
 def _assessment(packets: int, processing: float, load: float = 2.0) -> Assessment:
-    return Assessment(capture="x.pcap", started="now", stats={
-        "packets_read": packets, "processing_seconds": processing,
-        "model_load_seconds": load, "analysis_seconds": processing + load,
-    })
+    return Assessment(
+        capture="x.pcap",
+        started="now",
+        stats={
+            "packets_read": packets,
+            "processing_seconds": processing,
+            "model_load_seconds": load,
+            "analysis_seconds": processing + load,
+        },
+    )
 
 
 @pytest.mark.no_model
 def test_throughput_uses_processing_time_only():
     tp = throughput_estimate(_assessment(50_000, processing=0.5, load=4.5))
     assert tp["measurable"] is True
-    assert tp["packets_per_second"] == 100_000.0   # not 50,000 / 5.0 = 10,000
+    assert tp["packets_per_second"] == 100_000.0  # not 50,000 / 5.0 = 10,000
 
 
 @pytest.mark.no_model
@@ -86,7 +93,7 @@ def test_small_capture_gives_no_rate_at_all(packets):
     assert tp["measurable"] is False
     assert tp["packets_per_second"] is None
     assert "too small to measure throughput" in tp["note"]
-    assert tp["processing_seconds"] == 0.01          # the timing is still reported
+    assert tp["processing_seconds"] == 0.01  # the timing is still reported
 
 
 @pytest.mark.no_model
@@ -111,7 +118,7 @@ def test_bench_generates_and_times_both_paths(tmp_path, model_dir):
     assert result["reader"]["packets_per_second"] > 0
     pl = result["pipeline"]
     assert pl["model_loaded"] and pl["esp_flows"] == 8 and pl["ike_sessions"] == 8
-    assert pl["packets_per_second"] > 0                 # above the threshold
+    assert pl["packets_per_second"] > 0  # above the threshold
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +132,7 @@ def test_backbone_groups_collapse_repeated_rules(backbone):
     assert sum(g["count"] for g in groups) == len(findings)
 
     members = sorted(i for g in groups for i in g["findings"])
-    assert members == list(range(len(findings)))       # each finding in exactly one group
+    assert members == list(range(len(findings)))  # each finding in exactly one group
 
     dh = next(g for g in groups if g["rule_id"] == "IKE-006")
     assert dh["count"] == 2 and len(dh["subjects"]) == 2
@@ -149,7 +156,7 @@ def test_group_takes_highest_severity_and_any_inferred_and_sorts():
     groups = group_findings(findings)
     r1 = next(g for g in groups if g["key"] == "R-1|t")
     assert r1["severity"] == "critical" and r1["count"] == 2 and r1["inferred"]
-    assert len(groups) == 4                            # title is part of the key
+    assert len(groups) == 4  # title is part of the key
     order = [(g["severity"], g["count"]) for g in groups]
     assert order == [("critical", 2), ("critical", 1), ("low", 1), ("low", 1)]
 
@@ -183,7 +190,7 @@ def test_every_finding_is_on_exactly_one_link_or_none(scenario, tmp_path, model_
     d = analyze(path, model_dir=model_dir).to_dict()
 
     placed = [i for link in d["links"] for i in link["findings"]] + d["unlinked_findings"]
-    assert sorted(placed) == list(range(len(d["findings"])))   # no gaps, no duplicates
+    assert sorted(placed) == list(range(len(d["findings"])))  # no gaps, no duplicates
 
     for link in d["links"]:
         for i in link["findings"]:
@@ -191,13 +198,16 @@ def test_every_finding_is_on_exactly_one_link_or_none(scenario, tmp_path, model_
 
 
 @pytest.mark.no_model
-@pytest.mark.parametrize("subject, pair", [
-    ("203.0.113.7 <-> 198.51.100.4", ("198.51.100.4", "203.0.113.7")),
-    ("203.0.113.7->198.51.100.4:0xe88b7591", ("198.51.100.4", "203.0.113.7")),
-    ("2001:db8::2->2001:db8::1:0x0000abcd", ("2001:db8::1", "2001:db8::2")),
-    ("10.0.0.9 <-> 10.0.0.10", ("10.0.0.9", "10.0.0.10")),       # numeric, not lexical
-    ("WLAN Adapter", None),
-])
+@pytest.mark.parametrize(
+    "subject, pair",
+    [
+        ("203.0.113.7 <-> 198.51.100.4", ("198.51.100.4", "203.0.113.7")),
+        ("203.0.113.7->198.51.100.4:0xe88b7591", ("198.51.100.4", "203.0.113.7")),
+        ("2001:db8::2->2001:db8::1:0x0000abcd", ("2001:db8::1", "2001:db8::2")),
+        ("10.0.0.9 <-> 10.0.0.10", ("10.0.0.9", "10.0.0.10")),  # numeric, not lexical
+        ("WLAN Adapter", None),
+    ],
+)
 def test_subject_pair(subject, pair):
     assert subject_pair(subject) == pair
 
@@ -206,12 +216,16 @@ def test_subject_pair(subject, pair):
 def test_esp_only_link_and_pooled_tunnels():
     """Two tunnels between one pair are pooled into one link, and a pair with
     ESP but no IKE gets no strength rather than an invented one."""
-    flows = [EspFlow(spi=1, src="10.0.0.1", dst="10.0.0.2"),
-             EspFlow(spi=2, src="10.0.0.2", dst="10.0.0.1"),
-             EspFlow(spi=3, src="10.0.0.5", dst="10.0.0.6")]
+    flows = [
+        EspFlow(spi=1, src="10.0.0.1", dst="10.0.0.2"),
+        EspFlow(spi=2, src="10.0.0.2", dst="10.0.0.1"),
+        EspFlow(spi=3, src="10.0.0.5", dst="10.0.0.6"),
+    ]
     sess = IkeSession(b"\x01" * 8, b"\x02" * 8, "IKEv2", "10.0.0.1", "10.0.0.2")
-    findings = [Finding("ESP-001", "t", Severity.HIGH, flows[2].key, "d", "r", "f"),
-                Finding("X-1", "t", Severity.LOW, "somewhere else", "d", "r", "f")]
+    findings = [
+        Finding("ESP-001", "t", Severity.HIGH, flows[2].key, "d", "r", "f"),
+        Finding("X-1", "t", Severity.LOW, "somewhere else", "d", "r", "f"),
+    ]
     links, unlinked = build_links([sess], flows, findings)
 
     by_id = {link["id"]: link for link in links}
@@ -221,7 +235,7 @@ def test_esp_only_link_and_pooled_tunnels():
     assert lonely["sessions"] == [] and lonely["strength"] is None
     assert lonely["findings"] == [0] and lonely["worst_severity"] == "high"
     assert unlinked == [1]
-    assert links[0]["id"] == "10.0.0.5~10.0.0.6"        # the only link with a finding
+    assert links[0]["id"] == "10.0.0.5~10.0.0.6"  # the only link with a finding
 
 
 @pytest.mark.no_model

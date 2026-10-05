@@ -49,11 +49,11 @@ from ..ml.synth import esp_ciphertext_length
 # path MTU — is one of the most stable measured properties of IP traffic and is
 # markedly different from the smooth three-mode mixture the training model uses.
 SIZE_MODES = [
-    (0.42, 40, 64),       # bare ACKs, TCP control
-    (0.11, 65, 200),      # interactive, VoIP payloads
-    (0.14, 201, 700),     # small transactions
-    (0.06, 701, 1200),    # mid-size
-    (0.27, 1380, 1460),   # MTU-filling bulk transfer
+    (0.42, 40, 64),  # bare ACKs, TCP control
+    (0.11, 65, 200),  # interactive, VoIP payloads
+    (0.14, 201, 700),  # small transactions
+    (0.06, 701, 1200),  # mid-size
+    (0.27, 1380, 1460),  # MTU-filling bulk transfer
 ]
 
 TFC_REGIMES = ("none", "light", "pad_to_mtu")
@@ -144,8 +144,7 @@ def field_flow(
     return flow
 
 
-def _append(flow: EspFlow, t: float, seq: int, clen: int,
-            rng: random.Random, base_entropy: float) -> None:
+def _append(flow: EspFlow, t: float, seq: int, clen: int, rng: random.Random, base_entropy: float) -> None:
     if flow.packets and t >= flow.last_seen:
         flow.inter_arrivals.append(t - flow.last_seen)
     flow.last_seen = max(flow.last_seen, t)

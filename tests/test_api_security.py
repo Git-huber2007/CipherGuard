@@ -42,6 +42,7 @@ def lab_captures(tmp_path):
 
 # -- Host allowlist ---------------------------------------------------------
 
+
 def test_tokenless_server_answers_loopback_names_only(tmp_path):
     """DNS rebinding: the hostile page is same-origin to the browser, so CORS
     never applies. Its Host header is the one thing that gives it away."""
@@ -62,8 +63,7 @@ def test_host_check_covers_pages_and_static_files(tmp_path):
 
 def test_a_token_or_an_explicit_list_changes_which_hosts_are_answered(tmp_path):
     with_token = _client(tmp_path, auth_token="s3cret")
-    res = with_token.get("/api/rules", headers={"Host": "sensor.agency.example",
-                                               "Authorization": "Bearer s3cret"})
+    res = with_token.get("/api/rules", headers={"Host": "sensor.agency.example", "Authorization": "Bearer s3cret"})
     assert res.status_code == 200
 
     named = _client(tmp_path, allowed_hosts=["tunnel.example"])
@@ -88,11 +88,20 @@ def test_serve_adds_named_hosts_to_the_loopback_list(monkeypatch):
 
 # -- cross-site requests ----------------------------------------------------
 
-@pytest.mark.parametrize("path", [
-    "/api/sniff/start", "/api/sniff/stop", "/api/sniff/analyze", "/api/wifi/scan",
-    "/api/remediation/cg-plan-00000000/approve", "/api/remediation/cg-plan-00000000/apply",
-    "/api/analyze", "/api/upload",
-])
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/sniff/start",
+        "/api/sniff/stop",
+        "/api/sniff/analyze",
+        "/api/wifi/scan",
+        "/api/remediation/cg-plan-00000000/approve",
+        "/api/remediation/cg-plan-00000000/apply",
+        "/api/analyze",
+        "/api/upload",
+    ],
+)
 def test_state_changing_requests_from_another_site_are_refused(tmp_path, path):
     """A text/plain POST needs no preflight, so the browser just sends it."""
     client = _client(tmp_path)
@@ -112,7 +121,7 @@ def test_the_page_itself_and_non_browser_clients_are_not_refused(tmp_path):
     client = _client(tmp_path)
     same = client.post("/api/sniff/stop", headers={"Origin": "http://testserver"})
     assert same.status_code == 200
-    assert client.post("/api/sniff/stop").status_code == 200          # curl, scripts
+    assert client.post("/api/sniff/stop").status_code == 200  # curl, scripts
 
 
 def test_a_configured_origin_may_post(tmp_path):
@@ -127,14 +136,14 @@ def test_a_json_body_must_be_declared_as_json(lab_captures):
     plan_id = client.get("/api/remediation/legacy.pcap").json()["plans"][0]["plan_id"]
     body = json.dumps({"actor": "someone"})
 
-    forged = client.post(f"/api/remediation/{plan_id}/approve", content=body,
-                         headers={"Content-Type": "text/plain"})
+    forged = client.post(f"/api/remediation/{plan_id}/approve", content=body, headers={"Content-Type": "text/plain"})
     assert forged.status_code == 415
     listed = client.get("/api/remediation-plans").json()["plans"]
     assert all(p["status"] != "APPROVED" for p in listed)
 
-    broken = client.post(f"/api/remediation/{plan_id}/approve", content="{not json",
-                         headers={"Content-Type": "application/json"})
+    broken = client.post(
+        f"/api/remediation/{plan_id}/approve", content="{not json", headers={"Content-Type": "application/json"}
+    )
     assert broken.status_code == 400
 
     real = client.post(f"/api/remediation/{plan_id}/approve", json={"actor": "someone"})
@@ -143,13 +152,14 @@ def test_a_json_body_must_be_declared_as_json(lab_captures):
 
 # -- response headers and exposed surface -----------------------------------
 
+
 @pytest.mark.parametrize("path", ["/", "/api/rules", "/static/js/dashboard.js", "/api/nope"])
 def test_every_response_carries_the_security_headers(tmp_path, path):
     res = _client(tmp_path).get(path)
     csp = res.headers["content-security-policy"]
     assert "default-src 'self'" in csp and "frame-ancestors 'none'" in csp
     script_src = next(d for d in csp.split("; ") if d.startswith("script-src"))
-    assert script_src == "script-src 'self'"                # no inline, no eval, no CDN
+    assert script_src == "script-src 'self'"  # no inline, no eval, no CDN
     assert res.headers["x-content-type-options"] == "nosniff"
     assert res.headers["x-frame-options"] == "DENY"
     assert res.headers["referrer-policy"] == "no-referrer"
@@ -194,12 +204,14 @@ def test_importing_the_server_module_builds_nothing(tmp_path):
 
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     env = dict(os.environ, PYTHONPATH=repo)
-    subprocess.run([sys.executable, "-c", "import cipherguard.api.server"],
-                   cwd=tmp_path, env=env, check=True, timeout=120)
+    subprocess.run(
+        [sys.executable, "-c", "import cipherguard.api.server"], cwd=tmp_path, env=env, check=True, timeout=120
+    )
     assert not list(tmp_path.iterdir())
 
 
 # -- authentication ---------------------------------------------------------
+
 
 def test_a_non_ascii_token_is_a_401_not_a_crash(tmp_path):
     client = _client(tmp_path, auth_token="s3cret")
@@ -244,21 +256,25 @@ def test_heavy_routes_are_throttled_per_client(lab_captures):
     client = _client(lab_captures, heavy_requests_per_minute=3)
     codes = [client.get("/api/remediation/legacy.pcap").status_code for _ in range(5)]
     assert codes == [200, 200, 200, 429, 429]
-    assert client.get("/api/rules").status_code == 200       # cheap reads are not counted
+    assert client.get("/api/rules").status_code == 200  # cheap reads are not counted
 
 
 # -- input validation -------------------------------------------------------
 
-@pytest.mark.parametrize("body", [
-    {"capture": "legacy.pcap", "min_packets": 0},
-    {"capture": "legacy.pcap", "min_packets": -5},
-    {"capture": "legacy.pcap", "min_packets": 10**12},
-    {"capture": "legacy.pcap", "disabled": ["NOT-A-RULE"]},
-    {"capture": "legacy.pcap", "disabled": [f"X-{i}" for i in range(5000)]},
-    {"capture": "x" * 500 + ".pcap"},
-    {"capture": ""},
-    {},
-])
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"capture": "legacy.pcap", "min_packets": 0},
+        {"capture": "legacy.pcap", "min_packets": -5},
+        {"capture": "legacy.pcap", "min_packets": 10**12},
+        {"capture": "legacy.pcap", "disabled": ["NOT-A-RULE"]},
+        {"capture": "legacy.pcap", "disabled": [f"X-{i}" for i in range(5000)]},
+        {"capture": "x" * 500 + ".pcap"},
+        {"capture": ""},
+        {},
+    ],
+)
 def test_analyze_rejects_out_of_range_input(lab_captures, body):
     assert _client(lab_captures).post("/api/analyze", json=body).status_code == 422
 
@@ -319,6 +335,7 @@ def test_an_unexpected_error_tells_the_client_nothing(tmp_path, monkeypatch):
 
 # -- uploads ----------------------------------------------------------------
 
+
 def test_upload_checks_the_content_not_just_the_name(tmp_path):
     client = _client(tmp_path)
     for body in (b"<script>alert(1)</script>", b"this is not a capture", b"", b"\xd4\xc3"):
@@ -344,13 +361,19 @@ def test_oversize_body_is_refused_from_its_declared_length(tmp_path):
     from cipherguard.api.server import MAX_UPLOAD_BYTES
 
     client = _client(tmp_path)
-    huge = client.post("/api/upload", content=b"x",
-                       headers={"Content-Type": "multipart/form-data; boundary=x",
-                                "Content-Length": str(MAX_UPLOAD_BYTES + (1 << 20))})
+    huge = client.post(
+        "/api/upload",
+        content=b"x",
+        headers={
+            "Content-Type": "multipart/form-data; boundary=x",
+            "Content-Length": str(MAX_UPLOAD_BYTES + (1 << 20)),
+        },
+    )
     assert huge.status_code == 413 and "500 MB" in huge.json()["detail"]
 
-    big_json = client.post("/api/analyze", content=b"{" + b" " * (70 << 10) + b"}",
-                           headers={"Content-Type": "application/json"})
+    big_json = client.post(
+        "/api/analyze", content=b"{" + b" " * (70 << 10) + b"}", headers={"Content-Type": "application/json"}
+    )
     assert big_json.status_code == 413
 
 

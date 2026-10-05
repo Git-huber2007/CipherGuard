@@ -48,13 +48,15 @@ def format_hex_dump(raw: bytes, bytes_per_line: int = 16) -> list[dict[str, Any]
         chunk = raw[offset : offset + bytes_per_line]
         hex_bytes = [f"{b:02x}" for b in chunk]
         ascii_chars = "".join(chr(b) if 32 <= b <= 126 else "." for b in chunk)
-        lines.append({
-            "offset": f"{offset:04x}",
-            "offset_int": offset,
-            "hex": hex_bytes,
-            "ascii": ascii_chars,
-            "length": len(chunk),
-        })
+        lines.append(
+            {
+                "offset": f"{offset:04x}",
+                "offset_int": offset,
+                "hex": hex_bytes,
+                "ascii": ascii_chars,
+                "length": len(chunk),
+            }
+        )
     return lines
 
 
@@ -140,37 +142,43 @@ def extract_wire_samples(
         ]
 
         if iv_len > 0:
-            segments.append({
-                "id": "iv",
-                "label": f"IV / Nonce ({iv_len}B)",
-                "color": "#3b82f6",
-                "start": 8,
-                "end": 8 + iv_len,
-                "value": data[8 : 8 + iv_len].hex(),
-                "desc": "Initialization Vector / Nonce for cipher mode initialization.",
-            })
+            segments.append(
+                {
+                    "id": "iv",
+                    "label": f"IV / Nonce ({iv_len}B)",
+                    "color": "#3b82f6",
+                    "start": 8,
+                    "end": 8 + iv_len,
+                    "value": data[8 : 8 + iv_len].hex(),
+                    "desc": "Initialization Vector / Nonce for cipher mode initialization.",
+                }
+            )
 
         if prot_end > prot_start:
-            segments.append({
-                "id": "ciphertext",
-                "label": "Protected Payload & Padding",
-                "color": "#64748b",
-                "start": prot_start,
-                "end": prot_end,
-                "value": f"{prot_end - prot_start} bytes (Entropy: {entropy_val:.2f}/8.0)",
-                "desc": "Encrypted payload and alignment padding. Zero payload retained.",
-            })
+            segments.append(
+                {
+                    "id": "ciphertext",
+                    "label": "Protected Payload & Padding",
+                    "color": "#64748b",
+                    "start": prot_start,
+                    "end": prot_end,
+                    "value": f"{prot_end - prot_start} bytes (Entropy: {entropy_val:.2f}/8.0)",
+                    "desc": "Encrypted payload and alignment padding. Zero payload retained.",
+                }
+            )
 
         if icv_len > 0 and total_len >= prot_end + icv_len:
-            segments.append({
-                "id": "icv",
-                "label": f"ICV Auth Tag ({icv_len}B)",
-                "color": "#a855f7",
-                "start": prot_end,
-                "end": prot_end + icv_len,
-                "value": data[prot_end : prot_end + icv_len].hex(),
-                "desc": "Integrity Check Value / MAC tag guaranteeing packet authenticity.",
-            })
+            segments.append(
+                {
+                    "id": "icv",
+                    "label": f"ICV Auth Tag ({icv_len}B)",
+                    "color": "#a855f7",
+                    "start": prot_end,
+                    "end": prot_end + icv_len,
+                    "value": data[prot_end : prot_end + icv_len].hex(),
+                    "desc": "Integrity Check Value / MAC tag guaranteeing packet authenticity.",
+                }
+            )
 
         # RFC 4303 Modulo Arithmetic Proof
         protected_len = prot_end - prot_start
@@ -190,19 +198,21 @@ def extract_wire_samples(
             "is_encrypted": entropy_val > 7.0,
         }
 
-        samples.append({
-            "sample_index": len(samples) + 1,
-            "frame": pkt.frame,
-            "timestamp": round(pkt.timestamp, 4),
-            "src": pkt.src,
-            "dst": pkt.dst,
-            "encapsulated": encapsulated,
-            "total_bytes": total_len,
-            "segments": segments,
-            "modulo_proof": modulo_proof,
-            "hex_dump": format_hex_dump(data),
-            "raw_hex": data.hex(),
-        })
+        samples.append(
+            {
+                "sample_index": len(samples) + 1,
+                "frame": pkt.frame,
+                "timestamp": round(pkt.timestamp, 4),
+                "src": pkt.src,
+                "dst": pkt.dst,
+                "encapsulated": encapsulated,
+                "total_bytes": total_len,
+                "segments": segments,
+                "modulo_proof": modulo_proof,
+                "hex_dump": format_hex_dump(data),
+                "raw_hex": data.hex(),
+            }
+        )
 
     return {
         "spi": f"0x{spi_int:08x}",

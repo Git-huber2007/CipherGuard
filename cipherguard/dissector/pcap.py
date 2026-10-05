@@ -34,8 +34,8 @@ PCAPNG_MAGIC = 0x0A0D0D0A
 # sized by an in-file integer is validated against these before allocating,
 # because a 140-byte file declaring a 3 GB packet is a 20-million-fold memory
 # amplification and costs an attacker nothing to produce.
-MAX_SNAPLEN = 262_144        # a jumbo frame is 9 KB; this is generous already
-MAX_BLOCK_LEN = 16 << 20     # pcapng block ceiling
+MAX_SNAPLEN = 262_144  # a jumbo frame is 9 KB; this is generous already
+MAX_BLOCK_LEN = 16 << 20  # pcapng block ceiling
 
 
 class CaptureError(Exception):
@@ -283,7 +283,7 @@ def _read_pcapng(fh: io.BufferedReader) -> Iterator[Packet]:
                     break
                 if code == 9 and val:
                     exp = val[0]
-                    res = float(2 ** (exp & 0x7F)) if exp & 0x80 else float(10 ** exp)
+                    res = float(2 ** (exp & 0x7F)) if exp & 0x80 else float(10**exp)
                 off += 4 + ((olen + 3) & ~3)
                 if code == 0:
                     break
@@ -365,12 +365,18 @@ class PcapWriter:
             total = (total & 0xFFFF) + (total >> 16)
         return (~total) & 0xFFFF
 
-    def write_ip(self, ts: float, src: str, dst: str, proto: int, payload: bytes,
-                 ident: int = 0) -> None:
+    def write_ip(self, ts: float, src: str, dst: str, proto: int, payload: bytes, ident: int = 0) -> None:
         total = 20 + len(payload)
         hdr = struct.pack(
             "!BBHHHBBH4s4s",
-            0x45, 0x00, total, ident & 0xFFFF, 0x4000, 64, proto, 0,
+            0x45,
+            0x00,
+            total,
+            ident & 0xFFFF,
+            0x4000,
+            64,
+            proto,
+            0,
             bytes(int(x) for x in src.split(".")),
             bytes(int(x) for x in dst.split(".")),
         )
@@ -378,12 +384,10 @@ class PcapWriter:
         eth = b"\x02\x00\x00\x00\x00\x02\x02\x00\x00\x00\x00\x01\x08\x00"
         self.write_frame(ts, eth + hdr + payload)
 
-    def write_udp(self, ts: float, src: str, dst: str, sport: int, dport: int,
-                  payload: bytes, ident: int = 0) -> None:
+    def write_udp(self, ts: float, src: str, dst: str, sport: int, dport: int, payload: bytes, ident: int = 0) -> None:
         udp = struct.pack("!HHHH", sport, dport, 8 + len(payload), 0) + payload
         self.write_ip(ts, src, dst, IPPROTO_UDP, udp, ident)
 
-    def write_esp(self, ts: float, src: str, dst: str, spi: int, seq: int,
-                  body: bytes, ident: int = 0) -> None:
+    def write_esp(self, ts: float, src: str, dst: str, spi: int, seq: int, body: bytes, ident: int = 0) -> None:
         esp = struct.pack("!II", spi, seq) + body
         self.write_ip(ts, src, dst, IPPROTO_ESP, esp, ident)

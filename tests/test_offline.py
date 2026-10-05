@@ -34,7 +34,10 @@ def _read(*parts: str) -> str:
 
 
 def _hosts(text: str) -> set[str]:
-    return {h.lower() for h in re.findall(r"(?:https?:)?//([a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|\d+\.\d+\.\d+\.\d+|localhost)", text)}
+    return {
+        h.lower()
+        for h in re.findall(r"(?:https?:)?//([a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|\d+\.\d+\.\d+\.\d+|localhost)", text)
+    }
 
 
 @pytest.mark.parametrize("page", ["index.html", "404.html"])
@@ -52,8 +55,9 @@ def test_stylesheet_fetches_nothing_remote():
 def test_fonts_are_bundled_declared_and_licensed():
     css = _read("css", "dashboard.css")
     faces = re.findall(r"@font-face\{(.*?)\}", css, re.S)
-    declared = {(re.findall(r'font-family:"([^"]+)"', f)[0],
-                 int(re.findall(r"font-weight:(\d+)", f)[0])) for f in faces}
+    declared = {
+        (re.findall(r'font-family:"([^"]+)"', f)[0], int(re.findall(r"font-weight:(\d+)", f)[0])) for f in faces
+    }
     # the weights this stylesheet actually uses, so nothing is faux-bolded
     assert declared >= {("IBM Plex Sans", w) for w in (400, 500, 600)}
     assert declared >= {("IBM Plex Mono", w) for w in (400, 500)}

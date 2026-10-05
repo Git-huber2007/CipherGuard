@@ -108,9 +108,9 @@ class RealSample:
 @dataclass
 class RealCorpus:
     samples: list[RealSample] = field(default_factory=list)
-    captures: list[str] = field(default_factory=list)      # labelled, contributed flows
-    unlabelled: list[str] = field(default_factory=list)    # no sidecar at all
-    empty: list[dict] = field(default_factory=list)        # labelled, no usable flow
+    captures: list[str] = field(default_factory=list)  # labelled, contributed flows
+    unlabelled: list[str] = field(default_factory=list)  # no sidecar at all
+    empty: list[dict] = field(default_factory=list)  # labelled, no usable flow
     unlabelled_flows: list[dict] = field(default_factory=list)
     unmatched_entries: list[dict] = field(default_factory=list)
 
@@ -157,15 +157,14 @@ def parse_label(data: dict, capture: str, path: str = "") -> CaptureLabel:
         suite = item.get("suite")
         if suite not in ESP_SUITES:
             raise LabelError(
-                f"{where}: suite {suite!r} is not in the catalogue. Known suites: "
-                + "; ".join(ESP_SUITES)
+                f"{where}: suite {suite!r} is not in the catalogue. Known suites: " + "; ".join(ESP_SUITES)
             )
 
         source = item.get("source") or top_source
         if not isinstance(source, str) or not source.strip():
             raise LabelError(
                 f"{where}: no 'source'. A label must say where the ground truth "
-                "came from (e.g. \"swanctl --list-sas on the responder\"), because "
+                'came from (e.g. "swanctl --list-sas on the responder"), because '
                 "the wire cannot vouch for it."
             )
 
@@ -183,13 +182,14 @@ def parse_label(data: dict, capture: str, path: str = "") -> CaptureLabel:
             entries.append(LabelEntry(suite=suite, source=source.strip(), spi=spi, dst=dst))
         else:
             peers = item["peers"]
-            if (not isinstance(peers, list) or len(peers) != 2
-                    or not all(isinstance(p, str) and p for p in peers)
-                    or peers[0] == peers[1]):
+            if (
+                not isinstance(peers, list)
+                or len(peers) != 2
+                or not all(isinstance(p, str) and p for p in peers)
+                or peers[0] == peers[1]
+            ):
                 raise LabelError(f"{where}: 'peers' must be two distinct addresses")
-            entries.append(
-                LabelEntry(suite=suite, source=source.strip(), peers=(peers[0], peers[1]))
-            )
+            entries.append(LabelEntry(suite=suite, source=source.strip(), peers=(peers[0], peers[1])))
 
     return CaptureLabel(
         capture=os.path.basename(capture),
@@ -231,8 +231,7 @@ def extract_esp_flows(capture: str, min_packets: int = 8) -> tuple[list[EspFlow]
 
 
 def _flow_ref(flow: EspFlow) -> dict:
-    return {"flow": flow.key, "spi": f"0x{flow.spi:08x}", "src": flow.src,
-            "dst": flow.dst, "packets": flow.packets}
+    return {"flow": flow.key, "spi": f"0x{flow.spi:08x}", "src": flow.src, "dst": flow.dst, "packets": flow.packets}
 
 
 def match_flows(label: CaptureLabel, flows: list[EspFlow], short: list[EspFlow] | None = None):
@@ -257,13 +256,9 @@ def match_flows(label: CaptureLabel, flows: list[EspFlow], short: list[EspFlow] 
         entry = label.entry_for(flow)
         if entry is not None:
             used.add(id(entry))
-            short_labelled.append({**_flow_ref(flow), "label": entry.selector(),
-                                   "suite": entry.suite})
+            short_labelled.append({**_flow_ref(flow), "label": entry.selector(), "suite": entry.suite})
 
-    unmatched = [
-        {"label": e.selector(), "suite": e.suite}
-        for e in label.entries if id(e) not in used
-    ]
+    unmatched = [{"label": e.selector(), "suite": e.suite} for e in label.entries if id(e) not in used]
     return matched, unlabelled, unmatched, short_labelled
 
 
@@ -304,10 +299,15 @@ def collect(directory: str, min_packets: int = 8) -> RealCorpus:
 
         corpus.captures.append(name)
         for flow, entry in matched:
-            corpus.samples.append(RealSample(
-                capture=name, flow=flow, suite=entry.suite,
-                source=entry.source, selector=entry.selector(),
-            ))
+            corpus.samples.append(
+                RealSample(
+                    capture=name,
+                    flow=flow,
+                    suite=entry.suite,
+                    source=entry.source,
+                    selector=entry.selector(),
+                )
+            )
     return corpus
 
 
@@ -322,20 +322,20 @@ def _explain_miss(pred, truth: str, truth_class: str | None) -> dict:
 
     members = set(FRAMING_CLASSES[truth_class]["members"]) if truth_class else {truth}
     excluded = pred.excluded or []
-    truth_excluded = [
-        {"suite": s, "reason": r} for s, r in excluded if s in members
-    ]
+    truth_excluded = [{"suite": s, "reason": r} for s, r in excluded if s in members]
     truth_prob = sum(p for s, p in pred.ranked if s in members)
     if truth_excluded and len(truth_excluded) == len(members):
-        verdict = ("the plausibility mask ruled out every member of the labelled "
-                   "class; either the label is wrong or the flow violates the "
-                   "framing model (TFC padding, nesting, an uncatalogued transform)")
+        verdict = (
+            "the plausibility mask ruled out every member of the labelled "
+            "class; either the label is wrong or the flow violates the "
+            "framing model (TFC padding, nesting, an uncatalogued transform)"
+        )
     elif truth_excluded:
-        verdict = ("the mask ruled out part of the labelled class; the surviving "
-                   "members were outranked by the learned models")
+        verdict = (
+            "the mask ruled out part of the labelled class; the surviving members were outranked by the learned models"
+        )
     else:
-        verdict = ("the labelled class survived the mask and was outranked by the "
-                   "learned models")
+        verdict = "the labelled class survived the mask and was outranked by the learned models"
     return {
         "truth_class_probability": round(float(truth_prob), 4),
         "truth_excluded": truth_excluded,
@@ -379,7 +379,9 @@ def check_capture(capture: str, model, min_packets: int = 8) -> dict:
             "capture": name,
             "labelled": False,
             "label_path": label_path(capture),
-            "results": [], "hits": 0, "misses": 0,
+            "results": [],
+            "hits": 0,
+            "misses": 0,
             "passed": False,
         }
 
@@ -416,9 +418,7 @@ def check_capture(capture: str, model, min_packets: int = 8) -> dict:
 def find_captures(directory: str) -> list[str]:
     if not os.path.isdir(directory):
         return []
-    return sorted(
-        n for n in os.listdir(directory) if n.lower().endswith(CAPTURE_EXTENSIONS)
-    )
+    return sorted(n for n in os.listdir(directory) if n.lower().endswith(CAPTURE_EXTENSIONS))
 
 
 def check_directory(directory: str, model, min_packets: int = 8) -> dict:

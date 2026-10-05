@@ -58,8 +58,7 @@ def generate(path: str, packets: int = 200_000, links: int = 8, seed: int = 4303
             for j, (clen, seq) in enumerate(zip(flow.payload_lengths, flow.sequence_numbers)):
                 if j:
                     t += flow.inter_arrivals[j - 1]
-                w.write_ip(t, a, b, 50, struct.pack("!II", flow.spi, seq) + os.urandom(clen),
-                           j & 0xFFFF)
+                w.write_ip(t, a, b, 50, struct.pack("!II", flow.spi, seq) + os.urandom(clen), j & 0xFFFF)
                 written += 1
     return {"path": path, "packets": written, "bytes": os.path.getsize(path), "links": links}
 
@@ -68,8 +67,11 @@ def time_reader(path: str) -> dict:
     started = time.perf_counter()
     count = sum(1 for _ in read_packets(path))
     seconds = time.perf_counter() - started
-    return {"packets": count, "seconds": round(seconds, 3),
-            "packets_per_second": round(count / seconds, 1) if seconds else None}
+    return {
+        "packets": count,
+        "seconds": round(seconds, 3),
+        "packets_per_second": round(count / seconds, 1) if seconds else None,
+    }
 
 
 def time_pipeline(path: str, model_dir: str) -> dict:
@@ -102,8 +104,9 @@ def _summary(runs: list[dict]) -> dict:
     return median
 
 
-def run(packets: int = 200_000, model_dir: str = "models", repeat: int = 3,
-        keep: str | None = None, seed: int = 4303) -> dict:
+def run(
+    packets: int = 200_000, model_dir: str = "models", repeat: int = 3, keep: str | None = None, seed: int = 4303
+) -> dict:
     """Generate a capture, then time both paths `repeat` times each.
 
     A discarded warm-up pass fills the OS file cache and imports everything,
@@ -131,8 +134,11 @@ def run(packets: int = 200_000, model_dir: str = "models", repeat: int = 3,
             "repeat": repeat,
             "reader": _summary(readers),
             "pipeline": _summary(pipelines),
-            "host": {"python": sys.version.split()[0], "platform": platform.platform(),
-                     "processor": platform.processor() or platform.machine()},
+            "host": {
+                "python": sys.version.split()[0],
+                "platform": platform.platform(),
+                "processor": platform.processor() or platform.machine(),
+            },
         }
     finally:
         if not keep:

@@ -180,9 +180,7 @@ def _parse_v2_sa(data: bytes, msg: IkeMessage) -> list[Proposal]:
     proposals: list[Proposal] = []
     off = 0
     while off + 8 <= len(data):
-        last, _res, plen, pnum, proto, spi_size, ntrans = struct.unpack_from(
-            "!BBHBBBB", data, off
-        )
+        last, _res, plen, pnum, proto, spi_size, ntrans = struct.unpack_from("!BBHBBBB", data, off)
         if plen < 8 or off + plen > len(data):
             msg.parse_errors.append(f"bad proposal length {plen}")
             break
@@ -276,27 +274,32 @@ def _parse_v1_transform(data: bytes, msg: IkeMessage) -> tuple[Transform, ...] |
     if group is not None:
         msg.ke_group = group
 
-    return Transform(
-        type_id=1,
-        type_name="ENCR",
-        value_id=lookup.get(1, 0),
-        name=encr,
-        key_length=key_len,
-    ), Transform(
-        type_id=2,
-        type_name="PRF",
-        value_id=lookup.get(2, 0),
-        name=f"PRF_HMAC_{hash_alg}",
-    ), Transform(
-        type_id=3,
-        type_name="INTEG",
-        value_id=lookup.get(2, 0),
-        name=f"AUTH_HMAC_{hash_alg}",
-    ), Transform(
-        type_id=4,
-        type_name="DH",
-        value_id=group or 0,
-        name=str(C.DH_GROUPS.get(group or 0, {}).get("name", f"GROUP_{group}")),
+    return (
+        Transform(
+            type_id=1,
+            type_name="ENCR",
+            value_id=lookup.get(1, 0),
+            name=encr,
+            key_length=key_len,
+        ),
+        Transform(
+            type_id=2,
+            type_name="PRF",
+            value_id=lookup.get(2, 0),
+            name=f"PRF_HMAC_{hash_alg}",
+        ),
+        Transform(
+            type_id=3,
+            type_name="INTEG",
+            value_id=lookup.get(2, 0),
+            name=f"AUTH_HMAC_{hash_alg}",
+        ),
+        Transform(
+            type_id=4,
+            type_name="DH",
+            value_id=group or 0,
+            name=str(C.DH_GROUPS.get(group or 0, {}).get("name", f"GROUP_{group}")),
+        ),
     )
 
 
@@ -308,9 +311,7 @@ def _parse_v1_sa(data: bytes, msg: IkeMessage) -> list[Proposal]:
     guard = 0
     while off + 8 <= len(data) and guard < 32:
         guard += 1
-        _nxt, _res, plen, pnum, proto, spi_size, ntrans = struct.unpack_from(
-            "!BBHBBBB", data, off
-        )
+        _nxt, _res, plen, pnum, proto, spi_size, ntrans = struct.unpack_from("!BBHBBBB", data, off)
         if plen < 8 or off + plen > len(data):
             msg.parse_errors.append("truncated IKEv1 proposal")
             break
@@ -390,9 +391,7 @@ def parse_message(pkt: Packet) -> IkeMessage | None:
 
     ispi = data[0:8]
     rspi = data[8:16]
-    next_payload, version, exch, flags, msgid, length = struct.unpack_from(
-        "!BBBBII", data, 16
-    )
+    next_payload, version, exch, flags, msgid, length = struct.unpack_from("!BBBBII", data, 16)
 
     if version not in (C.IKE_VERSION_1, C.IKE_VERSION_2):
         return None
@@ -402,9 +401,7 @@ def parse_message(pkt: Packet) -> IkeMessage | None:
         return None
 
     is_v2 = version == C.IKE_VERSION_2
-    exch_name = (C.EXCHANGE_TYPES_V2 if is_v2 else C.EXCHANGE_TYPES_V1).get(
-        exch, f"EXCHANGE_{exch}"
-    )
+    exch_name = (C.EXCHANGE_TYPES_V2 if is_v2 else C.EXCHANGE_TYPES_V1).get(exch, f"EXCHANGE_{exch}")
     if is_v2 and exch not in C.EXCHANGE_TYPES_V2:
         return None
 
@@ -452,9 +449,7 @@ def parse_message(pkt: Packet) -> IkeMessage | None:
 
 
 def is_ike_port(pkt: Packet) -> bool:
-    return pkt.protocol == 17 and (
-        pkt.sport in (500, 4500) or pkt.dport in (500, 4500)
-    )
+    return pkt.protocol == 17 and (pkt.sport in (500, 4500) or pkt.dport in (500, 4500))
 
 
 def group_sessions(messages: list[IkeMessage]) -> list[IkeSession]:

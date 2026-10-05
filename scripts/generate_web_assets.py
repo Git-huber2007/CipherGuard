@@ -3,12 +3,14 @@
 - apple-touch-icon.png (180x180)
 - og-image.png (1200x630 high-res social card)
 """
+
 import os
 from PIL import Image, ImageDraw, ImageFont
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "cipherguard", "api", "static")
 IMG_DIR = os.path.join(STATIC_DIR, "img")
 os.makedirs(IMG_DIR, exist_ok=True)
+
 
 def draw_shield_icon(size=180):
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
@@ -35,22 +37,46 @@ def draw_shield_icon(size=180):
     lh = h * 0.3
     lx0 = cx - lw / 2
     ly0 = pad + h * 0.45
-    draw.rectangle([lx0, ly0, lx0 + lw, ly0 + lh], fill=(2, 132, 199, 255), outline=(224, 242, 254, 255), width=max(1, int(size * 0.02)))
+    draw.rectangle(
+        [lx0, ly0, lx0 + lw, ly0 + lh],
+        fill=(2, 132, 199, 255),
+        outline=(224, 242, 254, 255),
+        width=max(1, int(size * 0.02)),
+    )
 
     # Lock shackle
     shackle_pad = lw * 0.2
     sw = lw - 2 * shackle_pad
-    draw.arc([lx0 + shackle_pad, ly0 - sw * 0.9, lx0 + lw - shackle_pad, ly0 + sw * 0.4], 180, 0, fill=(224, 242, 254, 255), width=max(2, int(size * 0.035)))
+    draw.arc(
+        [lx0 + shackle_pad, ly0 - sw * 0.9, lx0 + lw - shackle_pad, ly0 + sw * 0.4],
+        180,
+        0,
+        fill=(224, 242, 254, 255),
+        width=max(2, int(size * 0.035)),
+    )
 
     # Keyhole
     draw.ellipse([cx - size * 0.03, ly0 + lh * 0.3, cx + size * 0.03, ly0 + lh * 0.5], fill=(15, 23, 42, 255))
     draw.rectangle([cx - size * 0.015, ly0 + lh * 0.45, cx + size * 0.015, ly0 + lh * 0.75], fill=(15, 23, 42, 255))
 
     # Wi-Fi arcs at top
-    draw.arc([cx - w * 0.25, pad + h * 0.15, cx + w * 0.25, pad + h * 0.45], 200, 340, fill=(56, 189, 248, 255), width=max(2, int(size * 0.03)))
-    draw.arc([cx - w * 0.15, pad + h * 0.23, cx + w * 0.15, pad + h * 0.45], 200, 340, fill=(56, 189, 248, 255), width=max(2, int(size * 0.025)))
+    draw.arc(
+        [cx - w * 0.25, pad + h * 0.15, cx + w * 0.25, pad + h * 0.45],
+        200,
+        340,
+        fill=(56, 189, 248, 255),
+        width=max(2, int(size * 0.03)),
+    )
+    draw.arc(
+        [cx - w * 0.15, pad + h * 0.23, cx + w * 0.15, pad + h * 0.45],
+        200,
+        340,
+        fill=(56, 189, 248, 255),
+        width=max(2, int(size * 0.025)),
+    )
 
     return img
+
 
 # 1. Favicon.ico and apple-touch-icon.png
 icon_180 = draw_shield_icon(180)
@@ -124,7 +150,9 @@ for i, (text, color) in enumerate(badges):
     og_draw.text((x + 14, y + 10), text, fill=(241, 245, 249), font=font_meta)
 
 # Footer bar
-og_draw.text((400, 540), "Self-Contained • Sovereign Cyber Security • Air-Gapped Ready", fill=(100, 116, 139), font=font_meta)
+og_draw.text(
+    (400, 540), "Self-Contained • Sovereign Cyber Security • Air-Gapped Ready", fill=(100, 116, 139), font=font_meta
+)
 
 # Save compressed optimized image
 og_path = os.path.join(IMG_DIR, "og-image.png")

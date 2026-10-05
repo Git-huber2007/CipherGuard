@@ -25,20 +25,28 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NOW = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
 
 WEAK = [Transform(1, "ENCR", 3, "ENCR_3DES"), Transform(4, "DH", 2, "1024-bit MODP")]
-STRONG = [Transform(1, "ENCR", 20, "ENCR_AES_GCM_16", key_length=256),
-          Transform(4, "DH", 19, "256-bit random ECP")]
+STRONG = [Transform(1, "ENCR", 20, "ENCR_AES_GCM_16", key_length=256), Transform(4, "DH", 19, "256-bit random ECP")]
 
 
 def _session(n: int, transforms) -> IkeSession:
     """A session whose responder was observed agreeing, so it is recordable."""
     a, b = f"10.8.{n}.1", f"10.8.{n}.2"
     response = IkeMessage(
-        frame=n, timestamp=1.0, src=b, dst=a, sport=500, dport=500,
-        version="IKEv2", exchange="IKE_SA_INIT", initiator_spi=bytes([n]) * 8,
-        responder_spi=b"\x02" * 8, message_id=0, is_initiator=False, is_response=True,
+        frame=n,
+        timestamp=1.0,
+        src=b,
+        dst=a,
+        sport=500,
+        dport=500,
+        version="IKEv2",
+        exchange="IKE_SA_INIT",
+        initiator_spi=bytes([n]) * 8,
+        responder_spi=b"\x02" * 8,
+        message_id=0,
+        is_initiator=False,
+        is_response=True,
     )
-    response.proposals = [Proposal(number=1, protocol_id=1, protocol="IKE",
-                                   transforms=list(transforms))]
+    response.proposals = [Proposal(number=1, protocol_id=1, protocol="IKE", transforms=list(transforms))]
     s = IkeSession(bytes([n]) * 8, b"\x02" * 8, "IKEv2", a, b)
     s.messages = [response]
     return s
@@ -75,8 +83,7 @@ def test_observations_are_bounded_per_peer(tmp_path):
 
     with BaselineStore(str(tmp_path / "b.db"), retain_per_peer=5, retain_days=None) as store:
         for i in range(30):
-            store.record(_assessment(f"w{i}.pcap", _session(1, WEAK)),
-                         now=NOW + timedelta(minutes=i))
+            store.record(_assessment(f"w{i}.pcap", _session(1, WEAK)), now=NOW + timedelta(minutes=i))
         rows = _rows(store, PEER1)
         captures = [r["capture"] for r in rows]
 
@@ -93,8 +100,7 @@ def test_old_observations_age_out_but_the_baseline_row_does_not(tmp_path):
     with BaselineStore(str(tmp_path / "b.db"), retain_per_peer=None, retain_days=90) as store:
         store.record(_assessment("first.pcap", _session(1, WEAK)), now=NOW - timedelta(days=120))
         for d in (110, 100, 95):
-            store.record(_assessment(f"d{d}.pcap", _session(1, WEAK)),
-                         now=NOW - timedelta(days=d))
+            store.record(_assessment(f"d{d}.pcap", _session(1, WEAK)), now=NOW - timedelta(days=d))
         store.record(_assessment("recent.pcap", _session(1, WEAK)), now=NOW - timedelta(days=5))
         store.record(_assessment("today.pcap", _session(1, WEAK)), now=NOW)
         captures = [r["capture"] for r in _rows(store)]
@@ -111,17 +117,15 @@ def test_promoted_baseline_row_survives_retention(tmp_path):
 
     with BaselineStore(str(tmp_path / "b.db"), retain_per_peer=3, retain_days=None) as store:
         store.record(_assessment("weak0.pcap", _session(1, WEAK)), now=NOW)
-        store.record(_assessment("strong1.pcap", _session(1, STRONG)),
-                     now=NOW + timedelta(minutes=1))
-        store.record(_assessment("strong2.pcap", _session(1, STRONG)),
-                     now=NOW + timedelta(minutes=2))
-        best = store.conn.execute(
-            "SELECT best_observation_id, best_classical_bits FROM baselines").fetchone()
+        store.record(_assessment("strong1.pcap", _session(1, STRONG)), now=NOW + timedelta(minutes=1))
+        store.record(_assessment("strong2.pcap", _session(1, STRONG)), now=NOW + timedelta(minutes=2))
+        best = store.conn.execute("SELECT best_observation_id, best_classical_bits FROM baselines").fetchone()
 
         downgrades = []
         for i in range(20):
-            drifts = store.record(_assessment(f"weak{i + 3}.pcap", _session(1, WEAK)),
-                                  now=NOW + timedelta(minutes=3 + i))
+            drifts = store.record(
+                _assessment(f"weak{i + 3}.pcap", _session(1, WEAK)), now=NOW + timedelta(minutes=3 + i)
+            )
             downgrades += [d for d in drifts if d.kind == "downgrade"]
 
         kept = {r["id"]: r["capture"] for r in _rows(store)}
@@ -141,8 +145,7 @@ def test_a_quiet_link_stays_in_the_fleet_view(tmp_path):
 
     with BaselineStore(str(tmp_path / "b.db"), retain_per_peer=2, retain_days=30) as store:
         store.record(_assessment("old.pcap", _session(1, WEAK)), now=NOW - timedelta(days=200))
-        store.record(_assessment("old2.pcap", _session(1, WEAK)),
-                     now=NOW - timedelta(days=199))
+        store.record(_assessment("old2.pcap", _session(1, WEAK)), now=NOW - timedelta(days=199))
         store.record(_assessment("new.pcap", _session(2, STRONG)), now=NOW)
         fleet = {f["peer_key"]: f for f in store.fleet()}
 
@@ -157,8 +160,7 @@ def test_a_peer_without_a_baseline_ages_out_completely(tmp_path):
     from cipherguard.intel.baseline import BaselineStore
 
     with BaselineStore(str(tmp_path / "b.db"), retain_per_peer=None, retain_days=30) as store:
-        store.record(_assessment("spoof.pcap", _session(1, WEAK)), max_new_peers=0,
-                     now=NOW - timedelta(days=60))
+        store.record(_assessment("spoof.pcap", _session(1, WEAK)), max_new_peers=0, now=NOW - timedelta(days=60))
         store.record(_assessment("real.pcap", _session(2, STRONG)), now=NOW)
         peers = {r["peer_key"] for r in _rows(store)}
 
@@ -173,10 +175,8 @@ def test_the_latest_assessment_survives_a_clock_step(tmp_path):
     from cipherguard.intel.baseline import BaselineStore
 
     with BaselineStore(str(tmp_path / "b.db"), retain_per_peer=None, retain_days=30) as store:
-        store.record(_assessment("earlier.pcap", _session(1, WEAK)), max_new_peers=0,
-                     now=NOW - timedelta(minutes=5))
-        store.record(_assessment("latest.pcap", _session(2, WEAK), _session(3, WEAK)),
-                     max_new_peers=0, now=NOW)
+        store.record(_assessment("earlier.pcap", _session(1, WEAK)), max_new_peers=0, now=NOW - timedelta(minutes=5))
+        store.record(_assessment("latest.pcap", _session(2, WEAK), _session(3, WEAK)), max_new_peers=0, now=NOW)
         store.prune(now=NOW + timedelta(days=365))
         captures = [r["capture"] for r in _rows(store)]
 
@@ -189,8 +189,7 @@ def test_retention_can_be_disabled(tmp_path):
 
     with BaselineStore(str(tmp_path / "b.db"), retain_per_peer=None, retain_days=None) as store:
         for i in range(10):
-            store.record(_assessment(f"w{i}.pcap", _session(1, WEAK)),
-                         now=NOW - timedelta(days=1000 - i))
+            store.record(_assessment(f"w{i}.pcap", _session(1, WEAK)), now=NOW - timedelta(days=1000 - i))
         assert store.prune(now=NOW) == 0
         assert len(_rows(store)) == 10
 
@@ -227,8 +226,7 @@ def test_stores_from_before_retention_are_migrated(tmp_path):
     conn.close()
 
     with BaselineStore(path, retain_per_peer=1, retain_days=None) as store:
-        assert store.conn.execute(
-            "SELECT best_observation_id FROM baselines").fetchone()[0] == 2
+        assert store.conn.execute("SELECT best_observation_id FROM baselines").fetchone()[0] == 2
         store.prune()
         assert [r["capture"] for r in _rows(store)] == ["b", "c"]
 
@@ -333,13 +331,12 @@ def test_concurrent_writers_neither_corrupt_nor_lose_a_line(tmp_path):
     path = str(tmp_path / "audit.jsonl")
     writers, per = 4, 150
     script = _WRITER.format(root=ROOT, path=path, n=per)
-    procs = [subprocess.Popen([sys.executable, "-c", script, str(w)])
-             for w in range(writers)]
+    procs = [subprocess.Popen([sys.executable, "-c", script, str(w)]) for w in range(writers)]
     assert all(p.wait(timeout=120) == 0 for p in procs)
 
     log = AuditLog(path, max_bytes=4096, backups=400)
     assert len(log.generations()) > 5, "rotation never happened; test is vacuous"
-    seen = [r["detail"] for r in _read_all(log)]    # raises on any torn line
+    seen = [r["detail"] for r in _read_all(log)]  # raises on any torn line
     assert len(seen) == writers * per
     assert set(seen) == {f"{w}:{i}" for w in range(writers) for i in range(per)}
 
@@ -360,8 +357,8 @@ def test_a_lock_error_that_is_not_contention_is_raised_not_retried(tmp_path, mon
     def locking(fd, mode, nbytes):
         calls["n"] += 1
         if calls["n"] == 1:
-            raise OSError(errno.EDEADLOCK, "contended")     # retried
-        raise OSError(errno.EBADF, "bad file descriptor")    # must surface
+            raise OSError(errno.EDEADLOCK, "contended")  # retried
+        raise OSError(errno.EBADF, "bad file descriptor")  # must surface
 
     monkeypatch.setattr(msvcrt, "locking", locking)
     with pytest.raises(OSError) as exc:
@@ -432,11 +429,18 @@ def test_library_sensor_loop_bounds_its_evidence(tmp_path, monkeypatch):
 
     monkeypatch.setattr(sensor, "LiveCapture", _FakeCapture)
     evidence = tmp_path / "evidence"
-    results = sensor.run(sensor.SensorConfig(
-        interface="Local Area Connection* 2", window_seconds=0.01, max_windows=12,
-        baseline_db=None, audit_log=None, model_dir=str(tmp_path / "no-model"),
-        evidence_dir=str(evidence), retain_windows=3,
-    ))
+    results = sensor.run(
+        sensor.SensorConfig(
+            interface="Local Area Connection* 2",
+            window_seconds=0.01,
+            max_windows=12,
+            baseline_db=None,
+            audit_log=None,
+            model_dir=str(tmp_path / "no-model"),
+            evidence_dir=str(evidence),
+            retain_windows=3,
+        )
+    )
 
     kept = sorted(os.listdir(evidence))
     pcaps = [n for n in kept if n.endswith(".pcap")]
@@ -465,9 +469,24 @@ def _deployment(tmp_path, model_dir: str) -> list[str]:
     with BaselineStore(str(db)) as store:
         store.record(_assessment("w.pcap", _session(1, STRONG)))
     write_sensor_state(str(out), window=1, window_seconds=300)
-    return ["--models", model_dir, "healthcheck", "--out", str(out), "--db", str(db),
-            "--audit-log", str(tmp_path / "audit.jsonl"), "--max-disk-mb", "1",
-            "--max-window-mb", "1", "--audit-max-mb", "1", "--json"]
+    return [
+        "--models",
+        model_dir,
+        "healthcheck",
+        "--out",
+        str(out),
+        "--db",
+        str(db),
+        "--audit-log",
+        str(tmp_path / "audit.jsonl"),
+        "--max-disk-mb",
+        "1",
+        "--max-window-mb",
+        "1",
+        "--audit-max-mb",
+        "1",
+        "--json",
+    ]
 
 
 def _healthcheck(argv, capsys) -> tuple[int, dict]:
@@ -536,22 +555,23 @@ def test_healthcheck_does_not_create_a_missing_store(tmp_path):
 @pytest.mark.no_model
 def test_healthcheck_grades_the_age_of_the_last_window(tmp_path):
     from cipherguard.core.health import (
-        DEGRADED, FAILED, OK, check_last_window, write_sensor_state,
+        DEGRADED,
+        FAILED,
+        OK,
+        check_last_window,
+        write_sensor_state,
     )
 
-    assert check_last_window(str(tmp_path)).status == DEGRADED   # never ran
+    assert check_last_window(str(tmp_path)).status == DEGRADED  # never ran
 
     write_sensor_state(str(tmp_path), window=7, window_seconds=300)
     assert not [n for n in os.listdir(tmp_path) if n.endswith(".tmp")]
     now = datetime.now(timezone.utc)
     stale = 2 * 300 + 120
     assert check_last_window(str(tmp_path), now=now).status == OK
-    assert check_last_window(
-        str(tmp_path), now=now + timedelta(seconds=stale + 5)).status == DEGRADED
-    assert check_last_window(
-        str(tmp_path), now=now + timedelta(seconds=3 * stale + 5)).status == FAILED
-    assert check_last_window(
-        str(tmp_path), now=now - timedelta(hours=1)).status == DEGRADED  # clock stepped
+    assert check_last_window(str(tmp_path), now=now + timedelta(seconds=stale + 5)).status == DEGRADED
+    assert check_last_window(str(tmp_path), now=now + timedelta(seconds=3 * stale + 5)).status == FAILED
+    assert check_last_window(str(tmp_path), now=now - timedelta(hours=1)).status == DEGRADED  # clock stepped
 
 
 @pytest.mark.no_model
@@ -563,20 +583,18 @@ def test_healthcheck_compares_free_disk_with_the_retention_ceiling(tmp_path, mon
     from cipherguard.core import health
 
     (tmp_path / "window-1.pcap").write_bytes(b"\x00" * (1 << 20))
-    need = (100 << 20) + (10 << 20) - (1 << 20)            # evidence only
+    need = (100 << 20) + (10 << 20) - (1 << 20)  # evidence only
     usage = namedtuple("usage", "total used free")
 
     def disk(free):
         monkeypatch.setattr(health.shutil, "disk_usage", lambda _p: usage(0, 0, free))
-        return health.check_disk(str(tmp_path), 100 << 20, 10 << 20, False,
-                                 None, 0, 0).status
+        return health.check_disk(str(tmp_path), 100 << 20, 10 << 20, False, None, 0, 0).status
 
     assert disk(need - 1) == health.FAILED
     assert disk(need + 1) == health.DEGRADED
     assert disk(2 * need) == health.OK
 
-    audit = health.check_disk(str(tmp_path), 100 << 20, 10 << 20, False,
-                              str(tmp_path / "a.jsonl"), 0, 0)
+    audit = health.check_disk(str(tmp_path), 100 << 20, 10 << 20, False, str(tmp_path / "a.jsonl"), 0, 0)
     assert audit.status == health.DEGRADED and "unbounded" in audit.detail
 
 
@@ -637,12 +655,22 @@ def test_systemd_unit_command_line_parses_and_writes_only_where_allowed():
 def _soak(tmp_path, model_dir: str, *extra: str) -> tuple[int, dict, str]:
     report = tmp_path / "soak.json"
     proc = subprocess.run(
-        [sys.executable, os.path.join(ROOT, "scripts", "soak.py"),
-         "--models", model_dir,
-         "--captures", str(tmp_path / "generated"),   # absent: soak generates them
-         "--workdir", str(tmp_path / "work"),
-         "--json-out", str(report), *extra],
-        capture_output=True, text=True, timeout=900,
+        [
+            sys.executable,
+            os.path.join(ROOT, "scripts", "soak.py"),
+            "--models",
+            model_dir,
+            "--captures",
+            str(tmp_path / "generated"),  # absent: soak generates them
+            "--workdir",
+            str(tmp_path / "work"),
+            "--json-out",
+            str(report),
+            *extra,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=900,
     )
     output = proc.stdout + proc.stderr
     assert report.exists(), output
@@ -658,8 +686,7 @@ def test_sixty_second_soak_stays_within_every_bound(tmp_path, model_dir):
     which is asserted below, so a regression in any of them shows up as a
     bound being exceeded rather than as a bound never being reached.
     """
-    code, report, output = _soak(tmp_path, model_dir, "--duration", "60",
-                                 "--retain-per-peer", "10")
+    code, report, output = _soak(tmp_path, model_dir, "--duration", "60", "--retain-per-peer", "10")
     assert code == 0 and report["passed"], output
     assert report["elapsed_seconds"] >= 60
     ex = report["exercised"]
@@ -673,8 +700,7 @@ def test_sixty_second_soak_stays_within_every_bound(tmp_path, model_dir):
 def test_the_soak_detects_a_leak(tmp_path, model_dir):
     """A leak detector that has never been seen to detect a leak proves
     nothing. Leak 4 MB per window and the soak must fail on RSS, and only RSS."""
-    code, report, output = _soak(tmp_path, model_dir, "--duration", "20",
-                                 "--inject-leak-kb", "4096")
+    code, report, output = _soak(tmp_path, model_dir, "--duration", "20", "--inject-leak-kb", "4096")
     assert code == 1, output
     failed = {name for name, c in report["checks"].items() if not c["ok"]}
     assert failed == {"rss_growth_mb"}, report["checks"]

@@ -78,25 +78,33 @@ def test_the_demo_sequence_replays_as_128_to_80(demo_db):
     assert (second["baseline_bits"], second["classical_bits"], second["delta_bits"]) == (128, 80, -48)
     assert second["baseline_transforms"] == first["transforms"]
     assert second["transforms"] != first["transforms"]
-    assert replay["baseline"]["classical_bits"] == 128      # a downgrade never lowers it
+    assert replay["baseline"]["classical_bits"] == 128  # a downgrade never lowers it
 
 
 @pytest.mark.no_model
 def test_every_verdict_is_what_record_decided(tmp_path):
     """One link through each branch of record(): the stored verdicts must match
     the drifts it returned, including the ones that return no drift at all."""
-    seq = [(WEAK, "new"), (STRONG, "unconfirmed"), (STRONG, "improvement"),
-           (STRONG, "steady"), (WEAK, "downgrade"), (STRONG, "steady")]
+    seq = [
+        (WEAK, "new"),
+        (STRONG, "unconfirmed"),
+        (STRONG, "improvement"),
+        (STRONG, "steady"),
+        (WEAK, "downgrade"),
+        (STRONG, "steady"),
+    ]
     returned = []
     with BaselineStore(str(tmp_path / "b.db")) as store:
         for i, (tx, _) in enumerate(seq):
-            returned.append([d.kind for d in store.record(
-                _assessment(f"w{i}.pcap", _session(1, tx)), now=T0 + timedelta(minutes=i))])
-        store.record(_assessment("spoof.pcap", _session(9, WEAK)), max_new_peers=0,
-                     now=T0 + timedelta(minutes=10))
+            returned.append(
+                [
+                    d.kind
+                    for d in store.record(_assessment(f"w{i}.pcap", _session(1, tx)), now=T0 + timedelta(minutes=i))
+                ]
+            )
+        store.record(_assessment("spoof.pcap", _session(9, WEAK)), max_new_peers=0, now=T0 + timedelta(minutes=10))
         replay = store.replay(PEER1)
-        withheld = store.conn.execute(
-            "SELECT verdict FROM observations WHERE capture = 'spoof.pcap'").fetchone()[0]
+        withheld = store.conn.execute("SELECT verdict FROM observations WHERE capture = 'spoof.pcap'").fetchone()[0]
 
     assert [o["verdict"] for o in replay["observations"]] == [v for _, v in seq]
     assert returned == [["new"], [], ["improvement"], [], ["downgrade"], []]
@@ -213,8 +221,7 @@ def test_history_endpoint_takes_only_a_peer_key_that_exists(demo_db, tmp_path):
     # naming a path through it neither reads nor creates anything there
     elsewhere = tmp_path / "probe" / "other.db"
     links = client.get("/api/fleet").json()["links"]
-    r = client.get("/api/fleet/history",
-                   params={"peer": links[0]["peer_key"], "db": str(elsewhere)})
+    r = client.get("/api/fleet/history", params={"peer": links[0]["peer_key"], "db": str(elsewhere)})
     assert r.status_code == 200 and not elsewhere.parent.exists()
 
 
@@ -230,9 +237,8 @@ def test_history_endpoint_without_a_store(tmp_path):
 def test_history_endpoint_is_behind_the_token(demo_db):
     client = _client(demo_db, auth_token="s3cret")
     assert client.get("/api/fleet/history", params={"peer": "a|b"}).status_code == 401
-    ok = client.get("/api/fleet/history", params={"peer": "a|b"},
-                    headers={"Authorization": "Bearer s3cret"})
-    assert ok.status_code == 404        # authenticated, and still only known links
+    ok = client.get("/api/fleet/history", params={"peer": "a|b"}, headers={"Authorization": "Bearer s3cret"})
+    assert ok.status_code == 404  # authenticated, and still only known links
 
 
 @pytest.mark.no_model
@@ -262,7 +268,7 @@ def test_static_export_bakes_the_demo_from_real_watch_runs(tmp_path):
 
     caps = tmp_path / "caps"
     caps.mkdir()
-    pcapgen.scenario_mixed_backbone(str(caps / "backbone.pcap"))   # demo captures absent
+    pcapgen.scenario_mixed_backbone(str(caps / "backbone.pcap"))  # demo captures absent
     out = tmp_path / "site"
     export(capture_dir=str(caps), out_dir=str(out), model_dir="models", verbose=False)
 
@@ -292,7 +298,7 @@ def _read(*parts: str) -> str:
 def _module() -> str:
     js = _read("js", "dashboard.js")
     start = js.index("const PostureReplay = (() => {")
-    return js[start: js.index("})();", start) + len("})();")]
+    return js[start : js.index("})();", start) + len("})();")]
 
 
 _PRELUDE = r"""
@@ -319,9 +325,14 @@ const out = x => process.stdout.write(JSON.stringify(x));
 
 def _node(body: str, data) -> Any:
     # the replay formats bits through the shared Fmt module
-    proc = subprocess.run(["node", "-e", _PRELUDE + module("Fmt") + "\n" + _module() + "\n" + body],
-                          input=json.dumps(data), capture_output=True, text=True,
-                          encoding="utf-8", timeout=30)
+    proc = subprocess.run(
+        ["node", "-e", _PRELUDE + module("Fmt") + "\n" + _module() + "\n" + body],
+        input=json.dumps(data),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+    )
     assert proc.returncode == 0, proc.stderr
     return json.loads(proc.stdout)
 
@@ -347,8 +358,8 @@ def test_chart_draws_one_mark_per_observation_and_marks_downgrades(tmp_path):
     assert len(circles) + len(triangles) == n
     assert len(triangles) == len(downs) == 2
     assert len(re.findall(r'class="rp-drop"', svg)) == 2
-    assert svg.count("−48") == 2                          # the bit delta, labelled
-    assert len(re.findall(r'rp-unconf', svg)) == 1             # the unpromoted sighting
+    assert svg.count("−48") == 2  # the bit delta, labelled
+    assert len(re.findall(r"rp-unconf", svg)) == 1  # the unpromoted sighting
     assert f"over {n} observations, 2 downgrades" in svg
     # the selection cursor sits behind the data, never drawn over it
     assert svg.index('class="rp-cursor"') < svg.index('class="rp-line"')
@@ -359,8 +370,7 @@ def test_chart_draws_one_mark_per_observation_and_marks_downgrades(tmp_path):
 def test_downgrade_detail_sets_the_transform_sets_side_by_side(tmp_path):
     hist = _long_history(tmp_path)
     i = next(i for i, o in enumerate(hist["observations"]) if o["verdict"] == "downgrade")
-    html = _node("out(PostureReplay.detailHTML(input.h.observations, input.i, input.h.verdicts));",
-                 {"h": hist, "i": i})
+    html = _node("out(PostureReplay.detailHTML(input.h.observations, input.i, input.h.verdicts));", {"h": hist, "i": i})
     o = hist["observations"][i]
     assert "Downgrade: 128 → 80 bits (−48)" in html
     before, after = html.split('<div class="rp-col">')[1:3]
@@ -377,7 +387,8 @@ def test_downgrade_detail_sets_the_transform_sets_side_by_side(tmp_path):
 @needs_node
 def test_play_steps_through_the_history_and_stops_at_the_end(tmp_path):
     hist = _long_history(tmp_path)
-    got = _node("""
+    got = _node(
+        """
       PostureReplay.show(input);
       const start = PostureReplay.index;
       PostureReplay.play();                      // at the latest downgrade: restarts from 1
@@ -387,10 +398,12 @@ def test_play_steps_through_the_history_and_stops_at_the_end(tmp_path):
                       pressed: $("replay-play").attrs["aria-pressed"] };
       out({ start, seen, ended, valuetext: $("replay-scrub").attrs["aria-valuetext"],
             pos: $("replay-pos").textContent });
-    """, hist)
+    """,
+        hist,
+    )
     n = len(hist["observations"])
-    assert got["start"] == n - 1                     # opens on the most recent downgrade
-    assert got["seen"] == list(range(n))             # one step per observation, in order
+    assert got["start"] == n - 1  # opens on the most recent downgrade
+    assert got["seen"] == list(range(n))  # one step per observation, in order
     assert got["ended"] == {"playing": False, "label": "Play", "pressed": "false"}
     assert got["pos"] == f"{n} / {n}"
     assert got["valuetext"].startswith(f"Observation {n} of {n}: 80 bits, downgrade")
@@ -402,22 +415,26 @@ def test_a_single_observation_cannot_play(tmp_path):
     with BaselineStore(str(tmp_path / "b.db")) as store:
         store.record(_assessment("w.pcap", _session(1, STRONG)))
         hist = store.replay(PEER1)
-    got = _node("PostureReplay.show(input); PostureReplay.play();"
-                "out({disabled: $('replay-play').disabled, playing: PostureReplay.playing});", hist)
+    got = _node(
+        "PostureReplay.show(input); PostureReplay.play();"
+        "out({disabled: $('replay-play').disabled, playing: PostureReplay.playing});",
+        hist,
+    )
     assert got == {"disabled": True, "playing": False}
 
 
 @pytest.mark.no_model
 def test_panel_copy_and_reduced_motion():
     html = _read("index.html")
-    panel = html[html.index('id="replay-panel"'):]
+    panel = html[html.index('id="replay-panel"') :]
     panel = panel[: panel.index("</section>")]
     assert "This change is invisible in either capture alone" in panel
     assert 'type="range" id="replay-scrub"' in panel and 'id="replay-play"' in panel
 
     css = _read("css", "dashboard.css")
-    reduced = [m for m in re.findall(r"@media \(prefers-reduced-motion:reduce\)\{(.*?)\}\s*\}", css, re.S)
-               if "rp-cursor" in m]
+    reduced = [
+        m for m in re.findall(r"@media \(prefers-reduced-motion:reduce\)\{(.*?)\}\s*\}", css, re.S) if "rp-cursor" in m
+    ]
     assert reduced and "transition:none" in reduced[0]
     for rule in re.findall(r"\.rp-[^{]*\{([^}]*)\}", css):
         assert "animation" not in rule

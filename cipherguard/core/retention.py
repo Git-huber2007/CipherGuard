@@ -13,9 +13,7 @@ EVIDENCE_PREFIX = "window-"
 EVIDENCE_SUFFIX = ".pcap"
 
 
-def prune_evidence(
-    directory: str, keep: int, max_bytes: int, protect: str | None = None
-) -> tuple[int, int]:
+def prune_evidence(directory: str, keep: int, max_bytes: int, protect: str | None = None) -> tuple[int, int]:
     """Enforce the evidence retention policy, oldest first.
 
     A sensor is a long-running process writing one capture per window. Without a
@@ -39,8 +37,11 @@ def prune_evidence(
     """
     try:
         files = sorted(
-            (os.path.join(directory, n) for n in os.listdir(directory)
-             if n.startswith(EVIDENCE_PREFIX) and n.endswith(EVIDENCE_SUFFIX)),
+            (
+                os.path.join(directory, n)
+                for n in os.listdir(directory)
+                if n.startswith(EVIDENCE_PREFIX) and n.endswith(EVIDENCE_SUFFIX)
+            ),
             key=os.path.getmtime,
         )
     except OSError:

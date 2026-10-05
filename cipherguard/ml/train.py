@@ -23,8 +23,7 @@ class FlowScorer(Protocol):
 
 
 def _print_real_corpus(corpus, directory: str) -> None:
-    print(f"Real captures from {directory}/: {len(corpus.samples)} labelled flows "
-          f"from {len(corpus.captures)} captures")
+    print(f"Real captures from {directory}/: {len(corpus.samples)} labelled flows from {len(corpus.captures)} captures")
     for name in corpus.unlabelled:
         print(f"  unlabelled, not used: {name} (no {name}.label.json)")
     for item in corpus.empty:
@@ -32,8 +31,7 @@ def _print_real_corpus(corpus, directory: str) -> None:
     for item in corpus.unmatched_entries:
         print(f"  label entry matched no flow: {item['capture']} {item['label']}")
     if corpus.unlabelled_flows:
-        print(f"  {len(corpus.unlabelled_flows)} ESP flow(s) in labelled captures "
-              "carry no label and were not used")
+        print(f"  {len(corpus.unlabelled_flows)} ESP flow(s) in labelled captures carry no label and were not used")
 
 
 def holdout_eval(model: SuiteClassifier, seed: int = 909, per_suite: int = 40) -> dict:
@@ -58,9 +56,7 @@ def holdout_eval(model: SuiteClassifier, seed: int = 909, per_suite: int = 40) -
         pred_cls, _ = framing_class_of(pred.label)
         grouped += true_cls == pred_cls
         confusion.setdefault(true_cls or "?", {})
-        confusion[true_cls or "?"][pred_cls or "?"] = (
-            confusion[true_cls or "?"].get(pred_cls or "?", 0) + 1
-        )
+        confusion[true_cls or "?"][pred_cls or "?"] = confusion[true_cls or "?"].get(pred_cls or "?", 0) + 1
 
     n = len(flows)
     return {
@@ -104,13 +100,10 @@ def leave_one_capture_out(
         trained_ids = {id(s.flow) for s in train_set}
         leaked = [s for s in test_set if id(s.flow) in trained_ids]
         if leaked:
-            raise LeakageError(
-                f"fold {held_out}: {len(leaked)} flow(s) in both train and test"
-            )
+            raise LeakageError(f"fold {held_out}: {len(leaked)} flow(s) in both train and test")
 
         if verbose:
-            print(f"  fold: hold out {held_out} "
-                  f"({len(test_set)} test, {len(train_set)} real train flows)")
+            print(f"  fold: hold out {held_out} ({len(test_set)} test, {len(train_set)} real train flows)")
         model = fit(train_set)
 
         fold_rows = []
@@ -120,13 +113,15 @@ def leave_one_capture_out(
             row["label_source"] = s.source
             fold_rows.append(row)
         hits = sum(1 for r in fold_rows if r["hit"])
-        folds.append({
-            "held_out": held_out,
-            "test_flows": len(test_set),
-            "real_train_flows": len(train_set),
-            "real_train_captures": len({s.capture for s in train_set}),
-            "framing_class_hits": hits,
-        })
+        folds.append(
+            {
+                "held_out": held_out,
+                "test_flows": len(test_set),
+                "real_train_flows": len(train_set),
+                "real_train_captures": len({s.capture for s in train_set}),
+                "framing_class_hits": hits,
+            }
+        )
         rows += fold_rows
 
     n = len(rows)
@@ -211,9 +206,7 @@ def train(
     if real_validation is not None:
         metrics["real_validation"] = real_validation
     model.metrics = metrics
-    model.corpus = corpus_composition(
-        len(flows), real_train, corpus.unlabelled if corpus else None
-    )
+    model.corpus = corpus_composition(len(flows), real_train, corpus.unlabelled if corpus else None)
     if corpus is not None:
         model.corpus["real_capture_dir"] = include_real
         model.corpus["labelled_captures_without_usable_flows"] = corpus.empty
@@ -228,8 +221,10 @@ def train(
         print(f"  Held out, framing class             {h['framing_class_accuracy']:.1%}")
         rv = metrics.get("real_validation")
         if rv:
-            print(f"\n  Real flows, leave-one-capture-out   {rv['framing_class_hits']}/"
-                  f"{rv['flows']} framing class over {rv['captures']} captures")
+            print(
+                f"\n  Real flows, leave-one-capture-out   {rv['framing_class_hits']}/"
+                f"{rv['flows']} framing class over {rv['captures']} captures"
+            )
         print(f"\n  Corpus: {model.corpus['description']}")
         print(
             "\n  Exact-suite accuracy is capped well below 100% by design: suites\n"
@@ -247,8 +242,7 @@ def main() -> None:
     ap.add_argument("--epochs", type=int, default=60, help="CNN training epochs")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out", default=DEFAULT_MODEL_DIR)
-    ap.add_argument("--include-real", metavar="DIR",
-                    help="add labelled real captures (<capture>.label.json) from DIR")
+    ap.add_argument("--include-real", metavar="DIR", help="add labelled real captures (<capture>.label.json) from DIR")
     args = ap.parse_args()
     train(args.samples, args.epochs, args.seed, args.out, include_real=args.include_real)
 

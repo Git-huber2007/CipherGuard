@@ -39,14 +39,13 @@ SUITE_COST = {
 }
 
 PROFILES = {
-    "bulk": (0.15, 0.10, 0.75),      # backup / replication link
+    "bulk": (0.15, 0.10, 0.75),  # backup / replication link
     "interactive": (0.55, 0.35, 0.10),  # terminal, VoIP signalling
-    "mixed": (0.35, 0.30, 0.35),     # ordinary branch office tunnel
+    "mixed": (0.35, 0.30, 0.35),  # ordinary branch office tunnel
 }
 
 
-def esp_ciphertext_length(inner: int, block: int, iv: int, icv: int,
-                          tfc_pad: int = 0) -> int:
+def esp_ciphertext_length(inner: int, block: int, iv: int, icv: int, tfc_pad: int = 0) -> int:
     """Length of the ESP payload after the 8-byte SPI/sequence header."""
     alignment = max(block, 4)
     body = inner + tfc_pad + 2  # pad length byte + next header byte
@@ -108,9 +107,7 @@ def synth_flow(
         flow.payload_lengths.append(clen)
         flow.sequence_numbers.append(i + 1)
         if len(flow.entropy_samples) < 256:
-            flow.entropy_samples.append(
-                min(8.0, max(0.0, rng.gauss(base_entropy, 0.08)))
-            )
+            flow.entropy_samples.append(min(8.0, max(0.0, rng.gauss(base_entropy, 0.08))))
         flow.packets += 1
 
     flow.last_seen = t
@@ -148,15 +145,14 @@ def build_corpus(
 # ---------------------------------------------------------------------------
 
 
-def write_esp_pcap(path: str, suite: str, packets: int = 400, seed: int = 7,
-                   src: str = "203.0.113.10", dst: str = "198.51.100.20") -> str:
+def write_esp_pcap(
+    path: str, suite: str, packets: int = 400, seed: int = 7, src: str = "203.0.113.10", dst: str = "198.51.100.20"
+) -> str:
     rng = random.Random(seed)
     flow = synth_flow(suite, rng, packets=packets, src=src, dst=dst)
     with PcapWriter(path) as w:
         t = 1767225600.0
-        for i, (clen, seq) in enumerate(
-            zip(flow.payload_lengths, flow.sequence_numbers)
-        ):
+        for i, (clen, seq) in enumerate(zip(flow.payload_lengths, flow.sequence_numbers)):
             if i:
                 t += flow.inter_arrivals[i - 1]
             w.write_esp(t, src, dst, flow.spi, seq, bytes(rng.getrandbits(8) for _ in range(clen)), ident=i)

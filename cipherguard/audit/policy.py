@@ -54,9 +54,14 @@ ENCR_PREFERRED = {
 }
 
 AEAD_TRANSFORMS = {
-    "ENCR_AES_GCM_8", "ENCR_AES_GCM_12", "ENCR_AES_GCM_16",
-    "ENCR_AES_CCM_8", "ENCR_AES_CCM_12", "ENCR_AES_CCM_16",
-    "ENCR_CHACHA20_POLY1305", "ENCR_NULL_AUTH_AES_GMAC",
+    "ENCR_AES_GCM_8",
+    "ENCR_AES_GCM_12",
+    "ENCR_AES_GCM_16",
+    "ENCR_AES_CCM_8",
+    "ENCR_AES_CCM_12",
+    "ENCR_AES_CCM_16",
+    "ENCR_CHACHA20_POLY1305",
+    "ENCR_NULL_AUTH_AES_GMAC",
 }
 
 MIN_KEY_BITS = 128
@@ -121,7 +126,7 @@ WEAK_AUTH = {
     "HYBRID_INIT_RSA": "hybrid mode leaves the initiator unauthenticated at phase 1",
 }
 
-MAX_IKE_SA_LIFETIME = 86400   # 24h
+MAX_IKE_SA_LIFETIME = 86400  # 24h
 MAX_CHILD_SA_LIFETIME = 28800  # 8h
 
 # --------------------------------------------------------------------------
@@ -139,7 +144,7 @@ FRAMING_CLASSES = {
         "signature": "block 8, IV 8, ICV 12",
         "verdict": "prohibited",
         "reason": "64-bit block size is vulnerable to Sweet32 birthday collisions "
-                  "on long-lived tunnels; both DES and 3DES are withdrawn.",
+        "on long-lived tunnels; both DES and 3DES are withdrawn.",
     },
     "AES-CBC with 96-bit ICV": {
         "members": ["AES-CBC-128 / HMAC-SHA1-96"],
@@ -163,14 +168,14 @@ FRAMING_CLASSES = {
         "signature": "block 1 (4-byte aligned), IV 8, ICV 16",
         "verdict": "acceptable",
         "reason": "Modern construction. The exact member cannot be resolved from "
-                  "framing alone, but every member meets the baseline.",
+        "framing alone, but every member meets the baseline.",
     },
     "unencrypted payload": {
         "members": ["NULL encryption / HMAC-SHA1-96"],
         "signature": "no IV, ICV 12, low payload entropy",
         "verdict": "prohibited",
         "reason": "ESP-NULL provides integrity only. Traffic crosses the link in "
-                  "plaintext and is readable by anyone on path.",
+        "plaintext and is readable by anyone on path.",
     },
 }
 

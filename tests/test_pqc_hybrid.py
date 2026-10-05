@@ -33,7 +33,7 @@ A, B = "203.0.113.130", "198.51.100.140"
 ISPI, RSPI, NO_SPI = b"\x11" * 8, b"\x22" * 8, b"\x00" * 8
 
 CLASSICAL = dict(encr=20, key_bits=256, prf=6, dh=31, esn=1)
-HYBRID = dict(CLASSICAL, addke={6: [36]})                 # ADDKE1 = ML-KEM-768
+HYBRID = dict(CLASSICAL, addke={6: [36]})  # ADDKE1 = ML-KEM-768
 
 
 def _session(*messages: tuple[bytes, bool]) -> IkeSession:
@@ -42,8 +42,9 @@ def _session(*messages: tuple[bytes, bool]) -> IkeSession:
     parsed = []
     for i, (raw, from_initiator) in enumerate(messages):
         src, dst = (A, B) if from_initiator else (B, A)
-        msg = parse_message(Packet(frame=i + 1, timestamp=float(i), src=src, dst=dst,
-                                   protocol=17, sport=500, dport=500, payload=raw))
+        msg = parse_message(
+            Packet(frame=i + 1, timestamp=float(i), src=src, dst=dst, protocol=17, sport=500, dport=500, payload=raw)
+        )
         assert msg is not None, f"message {i + 1} was dropped by the dissector"
         parsed.append(msg)
     (sess,) = group_sessions(parsed)
@@ -51,8 +52,7 @@ def _session(*messages: tuple[bytes, bool]) -> IkeSession:
 
 
 def _init(suite: dict, response: bool, notifies: list[int] | None = None) -> tuple[bytes, bool]:
-    raw = pcapgen.ikev2_sa_init(ISPI, RSPI if response else NO_SPI, suite, response,
-                                extra_notifies=notifies)
+    raw = pcapgen.ikev2_sa_init(ISPI, RSPI if response else NO_SPI, suite, response, extra_notifies=notifies)
     return raw, not response
 
 
@@ -90,8 +90,7 @@ def test_registries_cover_the_rfc_9370_and_9242_additions():
     assert [C.TRANSFORM_TYPE[t] for t in range(6, 13)] == [f"ADDKE{i}" for i in range(1, 8)]
     assert C.KE_TRANSFORM_TYPES == (4, 6, 7, 8, 9, 10, 11, 12)
     # the group numbers the rest of the tool already used, unchanged
-    assert {g: C.DH_GROUPS[g]["name"] for g in (35, 36, 37)} == {
-        35: "ML-KEM-512", 36: "ML-KEM-768", 37: "ML-KEM-1024"}
+    assert {g: C.DH_GROUPS[g]["name"] for g in (35, 36, 37)} == {35: "ML-KEM-512", 36: "ML-KEM-768", 37: "ML-KEM-1024"}
 
 
 @pytest.mark.no_model
@@ -100,10 +99,8 @@ def test_encrypted_key_exchange_messages_are_no_longer_dropped(exchange, name):
     """Regression: parse_message returned None for every IKEv2 exchange type
     outside 34-37, so these messages vanished from the session."""
     sk = pcapgen._generic(C.PAYLOAD_KE_V2, b"\xaa" * 1217)
-    raw = pcapgen.ike_header(ISPI, RSPI, 46, C.IKE_VERSION_2, exchange,
-                             C.FLAG_INITIATOR, 1, len(sk)) + sk
-    msg = parse_message(Packet(frame=1, timestamp=1.0, src=A, dst=B, protocol=17,
-                               sport=500, dport=500, payload=raw))
+    raw = pcapgen.ike_header(ISPI, RSPI, 46, C.IKE_VERSION_2, exchange, C.FLAG_INITIATOR, 1, len(sk)) + sk
+    msg = parse_message(Packet(frame=1, timestamp=1.0, src=A, dst=B, protocol=17, sport=500, dport=500, payload=raw))
     assert msg is not None
     assert msg.exchange == name and msg.message_id == 1
     # stops at the SK payload: nothing inside is read, and that is not an error
@@ -118,10 +115,10 @@ def test_generated_intermediate_message_has_the_rfc_layout():
     raw = pcapgen.ikev2_intermediate(ISPI, RSPI, response=True, message_id=3, ke_data_len=1088)
     nxt, version, exchange, flags, mid, length = struct.unpack_from("!BBBBII", raw, 16)
     assert raw[:8] == ISPI and raw[8:16] == RSPI
-    assert (nxt, version, exchange, mid) == (46, 0x20, 43, 3)       # SK, IKEv2, IKE_INTERMEDIATE
+    assert (nxt, version, exchange, mid) == (46, 0x20, 43, 3)  # SK, IKEv2, IKE_INTERMEDIATE
     assert flags == C.FLAG_RESPONSE and length == len(raw)
     inner_next, _crit, sk_len = struct.unpack_from("!BBH", raw, 28)
-    assert inner_next == 34 and sk_len == len(raw) - 28             # first inner payload: KE
+    assert inner_next == 34 and sk_len == len(raw) - 28  # first inner payload: KE
     # IV 8, the KE payload (4 + 4 + data) plus a pad-length byte, ICV 16
     assert sk_len - 4 == 8 + (4 + 4 + 1088 + 1) + 16
 
@@ -132,8 +129,9 @@ def test_additional_key_exchange_transforms_are_named():
     offer = dict(CLASSICAL, addke={6: [36, 0], 7: [37], 12: [999]})
     sess = _session(_init(offer, False))
     (prop,) = sess.messages[0].proposals
-    named = [(t.type_id, t.type_name, t.value_id, t.name) for t in prop.transforms
-             if t.type_id in C.ADDKE_TRANSFORM_TYPES]
+    named = [
+        (t.type_id, t.type_name, t.value_id, t.name) for t in prop.transforms if t.type_id in C.ADDKE_TRANSFORM_TYPES
+    ]
     assert named == [
         (6, "ADDKE1", 36, "ML-KEM-768"),
         (6, "ADDKE1", 0, "NONE"),
@@ -155,18 +153,15 @@ def test_generated_addke_transform_has_the_rfc_layout():
 @pytest.mark.no_model
 def test_session_records_the_intermediate_exchange():
     sess = _hybrid_session()
-    assert [m.exchange for m in sess.messages] == [
-        "IKE_SA_INIT", "IKE_SA_INIT", "IKE_INTERMEDIATE", "IKE_INTERMEDIATE"]
+    assert [m.exchange for m in sess.messages] == ["IKE_SA_INIT", "IKE_SA_INIT", "IKE_INTERMEDIATE", "IKE_INTERMEDIATE"]
     # request and response are one exchange
     assert sess.exchanges_seen("IKE_INTERMEDIATE") == 1
     assert sess.retransmissions == 0
 
     kx = sess.to_dict()["key_exchange"]
     assert kx["confirmed"] is True and kx["hybrid"] is True
-    assert kx["method"] == {"slot": "DH", "group": 31, "name": "Curve25519",
-                            "post_quantum": False}
-    assert kx["additional"] == [{"slot": "ADDKE1", "group": 36, "name": "ML-KEM-768",
-                                 "post_quantum": True}]
+    assert kx["method"] == {"slot": "DH", "group": 31, "name": "Curve25519", "post_quantum": False}
+    assert kx["additional"] == [{"slot": "ADDKE1", "group": 36, "name": "ML-KEM-768", "post_quantum": True}]
     assert kx["intermediate_exchanges"] == 1 and kx["followup_ke_exchanges"] == 0
     assert "INTERMEDIATE_EXCHANGE_SUPPORTED" in sess.all_notifies()
 
@@ -177,7 +172,7 @@ def test_hybrid_capture_round_trips_through_the_pipeline(tmp_path):
     a = _assess(path)
     (sess,) = a.sessions
     assert len(sess.messages) == 6
-    assert [m.message_id for m in sess.messages] == [0, 0, 1, 1, 2, 2]   # RFC 9242 s3.2
+    assert [m.message_id for m in sess.messages] == [0, 0, 1, 1, 2, 2]  # RFC 9242 s3.2
     assert sess.exchanges_seen("IKE_INTERMEDIATE") == 1
     assert sess.exchanges_seen("IKE_AUTH") == 1
     assert a.stats.get("parse_errors", 0) == 0
@@ -223,8 +218,11 @@ def test_ike_007_fires_when_the_hybrid_is_offered_but_not_selected(tmp_path):
     (finding,) = [f for f in a.findings if f.rule_id == "IKE-007"]
     assert finding.severity is Severity.MEDIUM and finding.inferred is False
     assert finding.evidence == {
-        "groups": [31], "ppk": False, "responder_confirmed": True,
-        "addke_selected": [], "pq_offered": ["ML-KEM-768 (ADDKE1)"],
+        "groups": [31],
+        "ppk": False,
+        "responder_confirmed": True,
+        "addke_selected": [],
+        "pq_offered": ["ML-KEM-768 (ADDKE1)"],
         "intermediate_exchanges_seen": 0,
     }
     assert "did not select it" in finding.detail
@@ -236,10 +234,13 @@ def test_ike_007_fires_when_the_hybrid_is_offered_but_not_selected(tmp_path):
 
 
 @pytest.mark.no_model
-@pytest.mark.parametrize("selected", [
-    dict(CLASSICAL, addke={6: [0]}),     # responder returns ADDKE1 = NONE
-    CLASSICAL,                           # responder omits the transform type
-])
+@pytest.mark.parametrize(
+    "selected",
+    [
+        dict(CLASSICAL, addke={6: [0]}),  # responder returns ADDKE1 = NONE
+        CLASSICAL,  # responder omits the transform type
+    ],
+)
 def test_both_ways_of_declining_an_optional_exchange_are_a_decline(selected):
     """RFC 9370 lets the initiator make the exchange optional by listing NONE.
     A responder may answer with NONE or leave the type out; either way no
@@ -272,7 +273,7 @@ def test_an_unanswered_hybrid_offer_is_not_credited():
     strength = sess.strength()
     assert strength.quantum_bits == 0 and strength.kex_quantum_bits == 0
     assert not strength.quantum_safe
-    assert strength.classical_bits == 192          # the rest of the offer is still scored
+    assert strength.classical_bits == 192  # the rest of the offer is still scored
 
     plan = roadmap(Assessment(capture="x", started="now", sessions=[sess]))
     (link,) = plan["links"]
@@ -305,12 +306,15 @@ def test_negotiated_exchange_that_was_not_observed_is_reported_as_such():
     encrypted IKE_INTERMEDIATE. Seeing one without the other is said plainly,
     at a severity that changes no score."""
     sess = _hybrid_session(intermediate=False)
-    assert engine.rule_post_quantum(sess) == []          # the negotiation is what is credited
+    assert engine.rule_post_quantum(sess) == []  # the negotiation is what is credited
     (note,) = engine.rule_additional_exchange_not_observed(sess)
     assert note.rule_id == "IKE-014" and note.severity is Severity.INFO
     assert note.inferred is False and Severity.INFO.weight == 0
-    assert note.evidence == {"addke_selected": ["ADDKE1=ML-KEM-768"],
-                             "intermediate_exchanges_seen": 0, "messages_seen": 2}
+    assert note.evidence == {
+        "addke_selected": ["ADDKE1=ML-KEM-768"],
+        "intermediate_exchanges_seen": 0,
+        "messages_seen": 2,
+    }
 
     assert engine.rule_additional_exchange_not_observed(_hybrid_session()) == []
 
@@ -324,21 +328,23 @@ SHA384 = Transform(2, "PRF", 6, "PRF_HMAC_SHA2_384")
 
 
 def _ke(type_id: int, group: int) -> Transform:
-    return Transform(type_id, C.TRANSFORM_TYPE[type_id], group,
-                     str(C.DH_GROUPS.get(group, {}).get("name", f"GROUP_{group}")))
+    return Transform(
+        type_id, C.TRANSFORM_TYPE[type_id], group, str(C.DH_GROUPS.get(group, {}).get("name", f"GROUP_{group}"))
+    )
 
 
 @pytest.mark.no_model
 def test_hybrid_takes_the_stronger_component_against_each_adversary():
     s = score_proposal([AES256, SHA384, _ke(4, 31), _ke(6, 36)])
     assert s.hybrid and s.kex_family == "ecp+ml-kem"
-    assert s.detail["key_exchange"] == 192          # ML-KEM-768, not Curve25519's 128
+    assert s.detail["key_exchange"] == 192  # ML-KEM-768, not Curve25519's 128
     assert s.kex_quantum_bits == 192
-    assert s.classical_bits == 192                  # bounded by the PRF, the next link
+    assert s.classical_bits == 192  # bounded by the PRF, the next link
     assert s.quantum_bits == 128 and s.quantum_safe  # AES-256 under Grover
-    assert [(c["slot"], c["name"], c["classical_bits"], c["quantum_bits"])
-            for c in s.kex_components] == [
-        ("DH", "Curve25519", 128, 0), ("ADDKE1", "ML-KEM-768", 192, 192)]
+    assert [(c["slot"], c["name"], c["classical_bits"], c["quantum_bits"]) for c in s.kex_components] == [
+        ("DH", "Curve25519", 128, 0),
+        ("ADDKE1", "ML-KEM-768", 192, 192),
+    ]
     assert s.to_dict()["hybrid"] is True
 
 
@@ -368,12 +374,15 @@ def test_every_classical_key_exchange_has_zero_quantum_strength_in_any_combinati
 @pytest.mark.no_model
 def test_an_unused_or_unknown_additional_slot_earns_nothing():
     alone = score_proposal([AES256, _ke(4, 31)])
-    for extra in ([_ke(6, 0)],                       # NONE selected
-                  [_ke(6, 36), _ke(6, 0)],           # optional in an offer: NONE may be chosen
-                  [_ke(6, 999)]):                    # a group this tool does not know
+    for extra in (
+        [_ke(6, 0)],  # NONE selected
+        [_ke(6, 36), _ke(6, 0)],  # optional in an offer: NONE may be chosen
+        [_ke(6, 999)],
+    ):  # a group this tool does not know
         s = score_proposal([AES256, _ke(4, 31), *extra])
-        assert (s.classical_bits, s.quantum_bits, s.kex_family, s.hybrid) == (
-            alone.classical_bits, 0, "ecp", False), extra
+        assert (s.classical_bits, s.quantum_bits, s.kex_family, s.hybrid) == (alone.classical_bits, 0, "ecp", False), (
+            extra
+        )
     # and the single-exchange scoring is what it always was
     assert alone.kex_family == "ecp" and len(alone.kex_components) == 1
     assert score_proposal([AES256]).kex_components == []
@@ -389,8 +398,9 @@ def test_roadmap_ranks_the_hybrid_link_as_safe_and_leaves_it_out_of_the_phases()
     from cipherguard.intel.pqc import roadmap
 
     hybrid = _hybrid_session()
-    declined = _session(_init(dict(HYBRID, classical_fallback=True), False),
-                        _init(dict(CLASSICAL, proposal_num=2), True))
+    declined = _session(
+        _init(dict(HYBRID, classical_fallback=True), False), _init(dict(CLASSICAL, proposal_num=2), True)
+    )
     declined.peer_a, declined.peer_b = "10.9.9.1", "10.9.9.2"
     plan = roadmap(Assessment(capture="x", started="now", sessions=[hybrid, declined]))
 
@@ -414,8 +424,7 @@ def test_roadmap_does_not_tell_a_hybrid_link_to_fix_its_key_exchange():
     from cipherguard.intel.pqc import roadmap
 
     suite = dict(HYBRID, key_bits=128)
-    sess = _session(_init(suite, False), _init(suite, True),
-                    _intermediate(False), _intermediate(True))
+    sess = _session(_init(suite, False), _init(suite, True), _intermediate(False), _intermediate(True))
     plan = roadmap(Assessment(capture="x", started="now", sessions=[sess]))
     (link,) = plan["links"]
     assert link["quantum_safe"] is False and link["kex_quantum_bits"] == 192
@@ -428,12 +437,10 @@ def test_roadmap_does_not_tell_a_hybrid_link_to_fix_its_key_exchange():
 def test_cbom_inventories_ml_kem_as_a_kem_and_no_empty_slot():
     from cipherguard.export.cbom import build_cbom
 
-    selected = dict(HYBRID, addke={6: [36], 7: [0]})          # ADDKE2 explicitly NONE
-    sess = _session(_init(selected, False), _init(selected, True),
-                    _intermediate(False), _intermediate(True))
+    selected = dict(HYBRID, addke={6: [36], 7: [0]})  # ADDKE2 explicitly NONE
+    sess = _session(_init(selected, False), _init(selected, True), _intermediate(False), _intermediate(True))
     bom = build_cbom(Assessment(capture="x", started="now", sessions=[sess]))
-    algs = {c["name"]: c for c in bom["components"]
-            if c["cryptoProperties"]["assetType"] == "algorithm"}
+    algs = {c["name"]: c for c in bom["components"] if c["cryptoProperties"]["assetType"] == "algorithm"}
 
     assert "NONE" not in algs
     kem = algs["ML-KEM-768"]
@@ -461,8 +468,9 @@ def test_dashboard_shows_the_additional_exchange_as_part_of_a_hybrid():
     js = dashboard_js()
     consts = "\n".join(re.findall(r"^const (?:BAD|BAD_HASH|WEAK_HASH|PQ_GROUPS) = .*$", js, re.M))
     got = run_node(
-        consts + "\n" + "\n".join(function(n, js) for n in
-                                  ("isAddKe", "pretty", "algClass", "keyExchangeLabel", "hybridNote"))
+        consts
+        + "\n"
+        + "\n".join(function(n, js) for n in ("isAddKe", "pretty", "algClass", "keyExchangeLabel", "hybridNote"))
         + r"""
         const t = (type_id, type_name, value_id, name) => ({type_id, type_name, value_id, name});
         const dh = t(4, "DH", 31, "Curve25519"), kem = t(6, "ADDKE1", 36, "ML-KEM-768");
@@ -476,7 +484,8 @@ def test_dashboard_shows_the_additional_exchange_as_part_of_a_hybrid():
           none: [hybridNote({key_exchange: {hybrid: false, intermediate_exchanges: 0}}),
                  hybridNote({})],
         }));
-    """)
+    """
+    )
     assert got["pretty"] == ["Curve25519", "ADDKE1: ML-KEM-768", "ADDKE2: none"]
     assert got["cls"] == ["good", "good", "", "bad", "good"]
     assert got["label"] == "Curve25519 + ML-KEM-768" and got["classical"] == "Curve25519"
@@ -526,8 +535,12 @@ def test_the_two_scenarios_differ_only_in_what_the_responder_selected(tmp_path):
     hybrid, declined = (_assess(paths[n]) for n in ("pqc_hybrid", "pqc_declined"))
 
     def offered_addke(a):
-        return [(t.type_name, t.name) for p in a.sessions[0].offered("IKE")
-                for t in p.transforms if t.type_id in C.ADDKE_TRANSFORM_TYPES]
+        return [
+            (t.type_name, t.name)
+            for p in a.sessions[0].offered("IKE")
+            for t in p.transforms
+            if t.type_id in C.ADDKE_TRANSFORM_TYPES
+        ]
 
     assert offered_addke(hybrid) == offered_addke(declined) == [("ADDKE1", "ML-KEM-768")]
     assert hybrid.sessions[0].strength().quantum_safe

@@ -139,9 +139,7 @@ class AuditLog:
                 "esp_flows": len(assessment.flows),
                 # rule IDs and subjects only — never finding detail, which
                 # would duplicate the intelligence into the audit trail
-                "findings": sorted(
-                    {f"{f.rule_id}:{f.subject}" for f in assessment.findings}
-                ),
+                "findings": sorted({f"{f.rule_id}:{f.subject}" for f in assessment.findings}),
                 "report_digest": assessment.digest(),
                 "disabled_rules": list(assessment.stats.get("disabled_rules", [])),
             }
@@ -157,8 +155,7 @@ class AuditLog:
             }
         )
 
-    def remediation(self, action: str, plan, declared_actor: str = "",
-                    outcome: str = "") -> None:
+    def remediation(self, action: str, plan, declared_actor: str = "", outcome: str = "") -> None:
         """Record an approval or a dry-run of a hardening plan.
 
         The plan is identified, never copied: the generated configuration stays

@@ -15,6 +15,7 @@ is_windows = sys.platform.startswith("win")
 if is_windows:
     try:
         from ctypes import wintypes
+
         wlanapi = ctypes.windll.wlanapi
 
         class GUID(ctypes.Structure):

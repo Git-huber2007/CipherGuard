@@ -63,8 +63,7 @@ VERDICTS = {
 # Columns added after a store may already exist, with their SQL types.
 _ADDED_COLUMNS = {
     "baselines": {"best_observation_id": "INTEGER"},
-    "observations": {"verdict": "TEXT", "baseline_bits": "INTEGER",
-                     "baseline_transforms": "TEXT"},
+    "observations": {"verdict": "TEXT", "baseline_bits": "INTEGER", "baseline_transforms": "TEXT"},
 }
 
 SCHEMA = """
@@ -104,7 +103,7 @@ CREATE TABLE IF NOT EXISTS baselines (
 @dataclass
 class Drift:
     peer_key: str
-    kind: str            # "downgrade" | "improvement" | "new"
+    kind: str  # "downgrade" | "improvement" | "new"
     previous_bits: int
     current_bits: int
     previous_transforms: list[str]
@@ -276,23 +275,31 @@ class BaselineStore:
                 "INSERT INTO observations (peer_key, observed_at, capture, "
                 "ike_version, vendor_family, classical_bits, quantum_bits, "
                 "dh_group, transforms, score) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (key, stamp, assessment.capture, sess.version, sess.vendor_family(),
-                 strength.classical_bits, strength.quantum_bits, dh,
-                 json.dumps(transforms), assessment.score()),
+                (
+                    key,
+                    stamp,
+                    assessment.capture,
+                    sess.version,
+                    sess.vendor_family(),
+                    strength.classical_bits,
+                    strength.quantum_bits,
+                    dh,
+                    json.dumps(transforms),
+                    assessment.score(),
+                ),
             ).lastrowid
 
-            row = self.conn.execute(
-                "SELECT * FROM baselines WHERE peer_key = ?", (key,)
-            ).fetchone()
+            row = self.conn.execute("SELECT * FROM baselines WHERE peer_key = ?", (key,)).fetchone()
 
             def mark(verdict: str, against: sqlite3.Row | None = None) -> None:
                 self.conn.execute(
-                    "UPDATE observations SET verdict = ?, baseline_bits = ?, "
-                    "baseline_transforms = ? WHERE id = ?",
-                    (verdict,
-                     against["best_classical_bits"] if against else None,
-                     against["best_transforms"] if against else None,
-                     obs_id),
+                    "UPDATE observations SET verdict = ?, baseline_bits = ?, baseline_transforms = ? WHERE id = ?",
+                    (
+                        verdict,
+                        against["best_classical_bits"] if against else None,
+                        against["best_transforms"] if against else None,
+                        obs_id,
+                    ),
                 )
 
             if row is None:
@@ -309,12 +316,10 @@ class BaselineStore:
                     "INSERT INTO baselines (peer_key, best_classical_bits, "
                     "best_quantum_bits, best_transforms, best_seen_at, first_seen_at, "
                     "best_observation_id) VALUES (?,?,?,?,?,?,?)",
-                    (key, strength.classical_bits, strength.quantum_bits,
-                     json.dumps(transforms), stamp, stamp, obs_id),
+                    (key, strength.classical_bits, strength.quantum_bits, json.dumps(transforms), stamp, stamp, obs_id),
                 )
                 drifts.append(
-                    Drift(key, "new", strength.classical_bits, strength.classical_bits,
-                          transforms, transforms, stamp)
+                    Drift(key, "new", strength.classical_bits, strength.classical_bits, transforms, transforms, stamp)
                 )
                 continue
 
@@ -330,21 +335,28 @@ class BaselineStore:
                 if strength.quantum_bits < row["best_quantum_bits"]:
                     mark("downgrade-quantum", row)
                     drifts.append(
-                        Drift(key, "downgrade-quantum", best, strength.classical_bits,
-                              previous, transforms, row["best_seen_at"]))
+                        Drift(
+                            key,
+                            "downgrade-quantum",
+                            best,
+                            strength.classical_bits,
+                            previous,
+                            transforms,
+                            row["best_seen_at"],
+                        )
+                    )
                 else:
                     mark("steady", row)
             elif strength.classical_bits < best:
                 mark("downgrade", row)
                 drifts.append(
-                    Drift(key, "downgrade", best, strength.classical_bits,
-                          previous, transforms, row["best_seen_at"]))
+                    Drift(key, "downgrade", best, strength.classical_bits, previous, transforms, row["best_seen_at"])
+                )
             else:
                 # Promote only once the stronger suite has been seen enough
                 # times to be a configuration rather than an anomaly.
                 seen_at_least = self.conn.execute(
-                    "SELECT COUNT(*) FROM observations WHERE peer_key = ? "
-                    "AND classical_bits >= ?",
+                    "SELECT COUNT(*) FROM observations WHERE peer_key = ? AND classical_bits >= ?",
                     (key, strength.classical_bits),
                 ).fetchone()[0]
                 if seen_at_least < min_observations:
@@ -352,15 +364,13 @@ class BaselineStore:
                     continue
                 mark("improvement", row)
                 drifts.append(
-                    Drift(key, "improvement", best, strength.classical_bits,
-                          previous, transforms, row["best_seen_at"])
+                    Drift(key, "improvement", best, strength.classical_bits, previous, transforms, row["best_seen_at"])
                 )
                 self.conn.execute(
                     "UPDATE baselines SET best_classical_bits = ?, best_quantum_bits = ?, "
                     "best_transforms = ?, best_seen_at = ?, best_observation_id = ? "
                     "WHERE peer_key = ?",
-                    (strength.classical_bits, strength.quantum_bits,
-                     json.dumps(transforms), stamp, obs_id, key),
+                    (strength.classical_bits, strength.quantum_bits, json.dumps(transforms), stamp, obs_id, key),
                 )
 
         self.conn.commit()
@@ -399,10 +409,7 @@ class BaselineStore:
         if not (self.retain_per_peer or self.retain_days):
             return 0
         at = now or datetime.now(timezone.utc)
-        cutoff = (
-            (at - timedelta(days=self.retain_days)).isoformat(timespec="seconds")
-            if self.retain_days else None
-        )
+        cutoff = (at - timedelta(days=self.retain_days)).isoformat(timespec="seconds") if self.retain_days else None
         cur = self.conn.execute(
             """
             WITH ranked AS (
@@ -442,14 +449,11 @@ class BaselineStore:
             "ORDER BY observed_at DESC, id DESC LIMIT ?",
             (key, limit),
         ).fetchall()
-        return [
-            {**dict(r), "transforms": json.loads(r["transforms"])} for r in rows
-        ]
+        return [{**dict(r), "transforms": json.loads(r["transforms"])} for r in rows]
 
     def has_link(self, key: str) -> bool:
         """Whether `key` is a link with a baseline, i.e. one the fleet shows."""
-        return self.conn.execute(
-            "SELECT 1 FROM baselines WHERE peer_key = ?", (key,)).fetchone() is not None
+        return self.conn.execute("SELECT 1 FROM baselines WHERE peer_key = ?", (key,)).fetchone() is not None
 
     def replay(self, key: str, limit: int = 1000) -> dict:
         """A link's recorded history, oldest first, with the detector's verdicts.
@@ -465,8 +469,9 @@ class BaselineStore:
         if not self.has_link(key):
             raise KeyError(key)
         have = {r["name"] for r in self.conn.execute("PRAGMA table_info(observations)")}
-        extra = ", ".join(c if c in have else f"NULL AS {c}"
-                          for c in ("verdict", "baseline_bits", "baseline_transforms"))
+        extra = ", ".join(
+            c if c in have else f"NULL AS {c}" for c in ("verdict", "baseline_bits", "baseline_transforms")
+        )
         rows = self.conn.execute(
             "SELECT * FROM (SELECT id, observed_at, capture, classical_bits, quantum_bits, "
             f"dh_group, transforms, ike_version, {extra} FROM observations "
@@ -483,8 +488,7 @@ class BaselineStore:
             d["transforms"] = json.loads(d["transforms"])
             bt = d.pop("baseline_transforms")
             d["baseline_transforms"] = json.loads(bt) if bt else None
-            d["delta_bits"] = (d["classical_bits"] - d["baseline_bits"]
-                               if d["baseline_bits"] is not None else None)
+            d["delta_bits"] = d["classical_bits"] - d["baseline_bits"] if d["baseline_bits"] is not None else None
             observations.append(d)
 
         b = self.conn.execute("SELECT * FROM baselines WHERE peer_key = ?", (key,)).fetchone()

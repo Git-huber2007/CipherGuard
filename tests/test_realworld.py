@@ -33,9 +33,7 @@ def test_real_capture_matches_external_ground_truth(expectation):
     anything written here. That is what makes this a test and not a
     restatement of our own generator's assumptions."""
     result = realworld.check(expectation)
-    assert result["passed"], (
-        f"{expectation.filename}: " + "; ".join(result["problems"])
-    )
+    assert result["passed"], f"{expectation.filename}: " + "; ".join(result["problems"])
 
 
 @skip_if_absent
@@ -61,14 +59,11 @@ def test_aead_and_non_aead_contrast_holds_on_real_traffic():
         result = realworld.check(expectation)
         if expectation.aead:
             assert not result["integrity"], (
-                f"{expectation.filename} is AEAD but reported "
-                f"integrity {result['integrity']}"
+                f"{expectation.filename} is AEAD but reported integrity {result['integrity']}"
             )
             seen_aead = True
         else:
-            assert result["integrity"], (
-                f"{expectation.filename} is not AEAD but reported no integrity"
-            )
+            assert result["integrity"], f"{expectation.filename} is not AEAD but reported no integrity"
             seen_plain = True
     assert seen_aead and seen_plain, "corpus must contain both cases to be meaningful"
 
@@ -78,9 +73,7 @@ def test_real_windows_vendor_ids_are_fingerprinted():
     """A real Windows IKEv1 stack emits ten vendor IDs, most of which this
     project had never encountered. Unknown ones must degrade to a readable
     marker rather than crashing or being dropped."""
-    target = next(
-        (e for e in AVAILABLE if e.expect_vendor_ids), None
-    )
+    target = next((e for e in AVAILABLE if e.expect_vendor_ids), None)
     if target is None:
         pytest.skip("no vendor-ID-bearing capture downloaded")
 
@@ -106,10 +99,7 @@ def test_real_captures_produce_expected_findings():
         assessment = analyze(path, model_dir="models")
         fired = {f.rule_id for f in assessment.findings}
         missing = set(expectation.findings_expected) - fired
-        assert not missing, (
-            f"{expectation.filename} did not raise {sorted(missing)}; "
-            f"raised {sorted(fired)}"
-        )
+        assert not missing, f"{expectation.filename} did not raise {sorted(missing)}; raised {sorted(fired)}"
 
 
 @skip_if_absent
@@ -120,18 +110,13 @@ def test_modern_real_capture_scores_well():
 
     from cipherguard.pipeline import analyze
 
-    target = next(
-        (e for e in AVAILABLE if e.aead and e.encryption == "ENCR_AES_GCM_16"), None
-    )
+    target = next((e for e in AVAILABLE if e.aead and e.encryption == "ENCR_AES_GCM_16"), None)
     if target is None:
         pytest.skip("no AES-GCM capture downloaded")
 
     path = os.path.join(realworld.REAL_CAPTURE_DIR, target.filename)
     assessment = analyze(path, model_dir="models")
-    severe = [
-        f for f in assessment.findings
-        if f.severity.value in ("critical", "high")
-    ]
+    severe = [f for f in assessment.findings if f.severity.value in ("critical", "high")]
     assert not severe, f"sound real config flagged: {[f.rule_id for f in severe]}"
     assert assessment.score() >= 75
 

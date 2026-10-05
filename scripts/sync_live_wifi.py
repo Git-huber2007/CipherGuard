@@ -78,7 +78,9 @@ def sync_live_wifi(force_scan: bool = True, verbose: bool = True) -> dict:
         vpn = data.get("vpn") or {}
         # the public-address lookup is off unless CIPHERGUARD_EGRESS_LOOKUP=1
         egress = vpn.get("egress_isp") or ("no answer" if vpn.get("egress_queried") else "not queried")
-        print(f"[OK] Live Wi-Fi posture synchronized: '{ssid}' (Ch {ch}) | Score {score}/100 (Grade {grade}) | Egress: {egress}")
+        print(
+            f"[OK] Live Wi-Fi posture synchronized: '{ssid}' (Ch {ch}) | Score {score}/100 (Grade {grade}) | Egress: {egress}"
+        )
 
     return data
 

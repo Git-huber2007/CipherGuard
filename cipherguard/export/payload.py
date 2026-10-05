@@ -65,9 +65,7 @@ def provenance(assessment: Assessment, capture_path: str, model_dir: str) -> dic
 def build_payload(assessment: Assessment, capture_path: str, model_dir: str) -> dict[str, Any]:
     payload = assessment.to_dict()
     payload["throughput"] = throughput_estimate(assessment)
-    payload["platforms"] = [
-        {"id": p, "name": PLATFORM_NAMES[p]} for p in detect_platforms(assessment)
-    ]
+    payload["platforms"] = [{"id": p, "name": PLATFORM_NAMES[p]} for p in detect_platforms(assessment)]
     payload["roadmap"] = roadmap(assessment)
     payload["provenance"] = provenance(assessment, capture_path, model_dir)
     return payload

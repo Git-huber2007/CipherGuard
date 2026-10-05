@@ -90,12 +90,12 @@ def check_model(model_dir: str) -> Check:
     )
 
     present = [
-        f for f in ("rf.joblib", "cnn.npz", "meta.json", "MANIFEST.sha256")
+        f
+        for f in ("rf.joblib", "cnn.npz", "meta.json", "MANIFEST.sha256")
         if os.path.exists(os.path.join(model_dir, f))
     ]
     if not present:
-        return Check("model", DEGRADED,
-                     f"no trained model in {model_dir}; ESP inference is disabled")
+        return Check("model", DEGRADED, f"no trained model in {model_dir}; ESP inference is disabled")
     try:
         result = SuiteClassifier.verify(model_dir, require_manifest=True)
     except ModelIntegrityError as exc:
@@ -110,19 +110,19 @@ def check_model(model_dir: str) -> Check:
         return Check("model", FAILED, f"meta.json unreadable: {exc}")
     stored = meta.get("feature_hash")
     if stored is not None and stored != feature_hash():
-        return Check("model", FAILED,
-                     "feature schema changed since training; the sensor will "
-                     "refuse to load it. Retrain with: cipherguard train")
+        return Check(
+            "model",
+            FAILED,
+            "feature schema changed since training; the sensor will refuse to load it. Retrain with: cipherguard train",
+        )
     if meta.get("schema_version") != SCHEMA_VERSION:
-        return Check("model", FAILED,
-                     f"model schema version {meta.get('schema_version')} does not "
-                     f"match {SCHEMA_VERSION}")
+        return Check(
+            "model", FAILED, f"model schema version {meta.get('schema_version')} does not match {SCHEMA_VERSION}"
+        )
     missing = {"rf.joblib", "cnn.npz"} - set(result["files"])
     if missing:
-        return Check("model", FAILED,
-                     f"manifest does not cover {', '.join(sorted(missing))}")
-    return Check("model", OK,
-                 f"{len(result['files'])} files match MANIFEST.sha256")
+        return Check("model", FAILED, f"manifest does not cover {', '.join(sorted(missing))}")
+    return Check("model", OK, f"{len(result['files'])} files match MANIFEST.sha256")
 
 
 def check_baseline_db(path: str | None, timeout: float = 5.0) -> Check:
@@ -138,10 +138,8 @@ def check_baseline_db(path: str | None, timeout: float = 5.0) -> Check:
     if not os.path.exists(path):
         parent = os.path.dirname(os.path.abspath(path))
         if os.path.isdir(parent) and os.access(parent, os.W_OK):
-            return Check("baseline_db", OK,
-                         f"{path} not created yet; its directory is writable")
-        return Check("baseline_db", FAILED,
-                     f"{path} does not exist and {parent} is not writable")
+            return Check("baseline_db", OK, f"{path} not created yet; its directory is writable")
+        return Check("baseline_db", FAILED, f"{path} does not exist and {parent} is not writable")
 
     uri = "file:" + os.path.abspath(path).replace("\\", "/") + "?mode=rw"
     conn = None
@@ -155,8 +153,7 @@ def check_baseline_db(path: str | None, timeout: float = 5.0) -> Check:
     except sqlite3.OperationalError as exc:
         msg = str(exc)
         if "locked" in msg or "busy" in msg:
-            return Check("baseline_db", DEGRADED,
-                         f"{path} stayed locked for {timeout:.0f}s: {msg}")
+            return Check("baseline_db", DEGRADED, f"{path} stayed locked for {timeout:.0f}s: {msg}")
         return Check("baseline_db", FAILED, f"{path} is not writable: {msg}")
     except sqlite3.DatabaseError as exc:
         return Check("baseline_db", FAILED, f"{path}: {exc}")
@@ -164,9 +161,7 @@ def check_baseline_db(path: str | None, timeout: float = 5.0) -> Check:
         if conn is not None:
             conn.close()
     size = os.path.getsize(path)
-    return Check("baseline_db", OK,
-                 f"writable; {peers} links, {rows} observations, "
-                 f"{size / (1 << 20):.1f} MB")
+    return Check("baseline_db", OK, f"writable; {peers} links, {rows} observations, {size / (1 << 20):.1f} MB")
 
 
 def _existing_ancestor(path: str) -> str:
@@ -235,8 +230,12 @@ def check_disk(
         if audit_max_bytes and audit_backups:
             log = AuditLog(audit_log, max_bytes=audit_max_bytes, backups=audit_backups)
             used = sum(os.path.getsize(p) for p in log.generations())
-            add(os.path.dirname(os.path.abspath(audit_log)), "audit log",
-                retention_ceiling(audit_max_bytes, audit_backups), used)
+            add(
+                os.path.dirname(os.path.abspath(audit_log)),
+                "audit log",
+                retention_ceiling(audit_max_bytes, audit_backups),
+                used,
+            )
         else:
             unbounded.append("audit log rotation is disabled, so its growth is unbounded")
 
@@ -246,8 +245,10 @@ def check_disk(
         free = shutil.disk_usage(slot["anchor"]).free
         remaining = slot["remaining"]
         what = " + ".join(slot["labels"])
-        parts.append(f"{slot['anchor']}: {free / (1 << 20):,.0f} MB free, "
-                     f"{remaining / (1 << 20):,.0f} MB still needed for {what}")
+        parts.append(
+            f"{slot['anchor']}: {free / (1 << 20):,.0f} MB free, "
+            f"{remaining / (1 << 20):,.0f} MB still needed for {what}"
+        )
         if free < remaining:
             status = FAILED
         elif free < remaining * DISK_MARGIN:
@@ -273,8 +274,7 @@ def check_last_window(
     """
     state = read_sensor_state(evidence_dir)
     if state is None:
-        return Check("last_window", DEGRADED,
-                     f"no completed sensor window recorded in {evidence_dir}")
+        return Check("last_window", DEGRADED, f"no completed sensor window recorded in {evidence_dir}")
     try:
         completed = datetime.fromisoformat(state["completed_at"])
         window = float(state.get("window_seconds") or 60)
@@ -284,12 +284,13 @@ def check_last_window(
     now = now or datetime.now(timezone.utc)
     age = (now - completed).total_seconds()
     limit = stale_after if stale_after is not None else 2 * window + 120
-    detail = (f"window {state.get('window', '?')} completed {age:,.0f}s ago "
-              f"({window:.0f}s windows; stale after {limit:.0f}s)")
+    detail = (
+        f"window {state.get('window', '?')} completed {age:,.0f}s ago ({window:.0f}s windows; stale after {limit:.0f}s)"
+    )
     if age < -60:
-        return Check("last_window", DEGRADED,
-                     f"last window is stamped {-age:,.0f}s in the future; "
-                     "the clock has been stepped")
+        return Check(
+            "last_window", DEGRADED, f"last window is stamped {-age:,.0f}s in the future; the clock has been stepped"
+        )
     if age > 3 * limit:
         return Check("last_window", FAILED, detail)
     if age > limit:
@@ -312,8 +313,9 @@ def run_checks(
     return [
         check_model(model_dir),
         check_baseline_db(baseline_db),
-        check_disk(evidence_dir, max_disk_bytes, max_window_bytes, no_evidence,
-                   audit_log, audit_max_bytes, audit_backups),
+        check_disk(
+            evidence_dir, max_disk_bytes, max_window_bytes, no_evidence, audit_log, audit_max_bytes, audit_backups
+        ),
         check_last_window(evidence_dir, stale_after),
     ]
 

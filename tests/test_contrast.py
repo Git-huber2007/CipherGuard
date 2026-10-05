@@ -17,12 +17,30 @@ import re
 
 import pytest
 
-CSS = os.path.join(os.path.dirname(__file__), "..", "cipherguard", "api", "static", "css",
-                   "dashboard.css")
+CSS = os.path.join(os.path.dirname(__file__), "..", "cipherguard", "api", "static", "css", "dashboard.css")
 
-TEXT = ["ink", "muted", "faint", "observed", "inferred", "crit", "high", "med", "low", "info",
-        "ok", "accent", "dim", "text-primary", "text-secondary", "text-muted", "text-brand",
-        "text-success", "text-warning", "text-danger"]
+TEXT = [
+    "ink",
+    "muted",
+    "faint",
+    "observed",
+    "inferred",
+    "crit",
+    "high",
+    "med",
+    "low",
+    "info",
+    "ok",
+    "accent",
+    "dim",
+    "text-primary",
+    "text-secondary",
+    "text-muted",
+    "text-brand",
+    "text-success",
+    "text-warning",
+    "text-danger",
+]
 SURFACES = ["surface", "sunk", "paper", "observed-bg", "inferred-bg", "accent-bg"]
 AA = 4.5
 
@@ -38,9 +56,11 @@ def _luminance(hex_colour: str) -> float:
     h = hex_colour.lstrip("#")
     if len(h) == 3:
         h = "".join(c * 2 for c in h)
+
     def lin(v: float) -> float:
         return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
-    r, g, b = (int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+
+    r, g, b = (int(h[i : i + 2], 16) / 255 for i in (0, 2, 4))
     return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
 
 
@@ -72,7 +92,7 @@ def _dark_block(css: str) -> str:
     start = css.find(DARK)
     while start != -1:
         end = css.index("}", start)
-        blocks.append(css[start + len(DARK): end])
+        blocks.append(css[start + len(DARK) : end])
         start = css.find(DARK, end)
     assert blocks, "no dark theme block"
     return "\n".join(blocks)
@@ -93,7 +113,7 @@ def _dark_tokens(css: str) -> dict[str, str]:
 
 def test_contrast_helper_matches_known_values():
     assert contrast("#000000", "#ffffff") == pytest.approx(21.0)
-    assert contrast("#8798a4", "#ffffff") == pytest.approx(2.98, abs=0.01)   # the old --faint
+    assert contrast("#8798a4", "#ffffff") == pytest.approx(2.98, abs=0.01)  # the old --faint
 
 
 @pytest.mark.parametrize("scheme", ["light", "dark"])
@@ -102,8 +122,10 @@ def test_every_text_token_clears_aa_on_every_surface(scheme):
     tokens = _light_tokens(css) if scheme == "light" else _dark_tokens(css)
     failures = [
         f"--{t} {tokens[t]} on --{s} {tokens[s]}: {contrast(tokens[t], tokens[s]):.2f}"
-        for t in TEXT if t in tokens
-        for s in SURFACES if s in tokens
+        for t in TEXT
+        if t in tokens
+        for s in SURFACES
+        if s in tokens
         if contrast(tokens[t], tokens[s]) < AA
     ]
     assert not failures, "\n".join(failures)
@@ -131,8 +153,9 @@ def test_generated_dark_counterparts_clear_aa():
     bg = [v for k, v in gen.items() if k.startswith("--dk-bg-")]
     assert fg and bg
     worst_bg = max(bg + [_dark_tokens(css)["sunk"]], key=_luminance)
-    failures = [f"{k} {v} on {worst_bg}: {contrast(v, worst_bg):.2f}"
-                for k, v in fg.items() if contrast(v, worst_bg) < AA]
+    failures = [
+        f"{k} {v} on {worst_bg}: {contrast(v, worst_bg):.2f}" for k, v in fg.items() if contrast(v, worst_bg) < AA
+    ]
     assert not failures, "\n".join(failures)
 
     # every generated variable the stylesheet references is defined

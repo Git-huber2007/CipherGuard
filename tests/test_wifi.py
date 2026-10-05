@@ -75,6 +75,7 @@ def test_wifi_auditor_live_or_fallback():
 
 def test_is_private_ip():
     from cipherguard.wifi.auditor import _is_private_ip
+
     assert _is_private_ip("192.168.1.1") is True
     assert _is_private_ip("10.0.0.1") is True
     assert _is_private_ip("172.16.0.1") is True
@@ -121,6 +122,7 @@ SSID 1 : Campus-Mesh
          Band               : 5 GHz
 """
     import unittest.mock as mock
+
     WifiAuditor._bss_cache.clear()
     with mock.patch("subprocess.check_output", return_value=raw_output):
         # Target only BSSID 2
@@ -158,10 +160,19 @@ def test_evil_twin_detected_for_connected_network():
     score penalty when a weaker clone of it is in range."""
     auditor = WifiAuditor()
     iface = WifiInterfaceInfo(
-        name="Wi-Fi", description="", mac_address="", state="connected",
-        ssid="Office-WiFi", bssid="AA:AA:AA:AA:AA:01", band="5 GHz", channel=36,
-        radio_type="802.11ac", authentication="WPA2-Personal", cipher="CCMP",
-        signal_percent=90, rssi_dbm=-40,
+        name="Wi-Fi",
+        description="",
+        mac_address="",
+        state="connected",
+        ssid="Office-WiFi",
+        bssid="AA:AA:AA:AA:AA:01",
+        band="5 GHz",
+        channel=36,
+        radio_type="802.11ac",
+        authentication="WPA2-Personal",
+        cipher="CCMP",
+        signal_percent=90,
+        rssi_dbm=-40,
     )
     networks = [
         _net("Office-WiFi", "AA:AA:AA:AA:AA:01", "WPA2-Personal", connected=True),
@@ -183,10 +194,19 @@ def test_evil_twin_detected_for_network_host_is_not_connected_to():
     the one the host happens to be on."""
     auditor = WifiAuditor()
     iface = WifiInterfaceInfo(
-        name="Wi-Fi", description="", mac_address="", state="connected",
-        ssid="My-Home-Network", bssid="CC:CC:CC:CC:CC:01", band="5 GHz", channel=36,
-        radio_type="802.11ac", authentication="WPA3-Personal", cipher="CCMP",
-        signal_percent=90, rssi_dbm=-40,
+        name="Wi-Fi",
+        description="",
+        mac_address="",
+        state="connected",
+        ssid="My-Home-Network",
+        bssid="CC:CC:CC:CC:CC:01",
+        band="5 GHz",
+        channel=36,
+        radio_type="802.11ac",
+        authentication="WPA3-Personal",
+        cipher="CCMP",
+        signal_percent=90,
+        rssi_dbm=-40,
     )
     networks = [
         _net("My-Home-Network", "CC:CC:CC:CC:CC:01", "WPA3-Personal", connected=True),
@@ -212,10 +232,19 @@ def test_matching_security_across_bssids_is_not_flagged_as_rogue():
     mesh/roaming deployment, not an Evil Twin."""
     auditor = WifiAuditor()
     iface = WifiInterfaceInfo(
-        name="Wi-Fi", description="", mac_address="", state="connected",
-        ssid="Campus-Mesh", bssid="11:11:11:11:11:01", band="5 GHz", channel=36,
-        radio_type="802.11ax", authentication="WPA2-Personal", cipher="CCMP",
-        signal_percent=90, rssi_dbm=-40,
+        name="Wi-Fi",
+        description="",
+        mac_address="",
+        state="connected",
+        ssid="Campus-Mesh",
+        bssid="11:11:11:11:11:01",
+        band="5 GHz",
+        channel=36,
+        radio_type="802.11ax",
+        authentication="WPA2-Personal",
+        cipher="CCMP",
+        signal_percent=90,
+        rssi_dbm=-40,
     )
     networks = [
         _net("Campus-Mesh", "11:11:11:11:11:01", "WPA2-Personal", connected=True),
@@ -228,5 +257,3 @@ def test_matching_security_across_bssids_is_not_flagged_as_rogue():
     assert not any(f.rule_id == "WIFI-020" for f in findings)
     assert any(f.rule_id == "WIFI-021" for f in findings)
     assert all(not n.is_rogue for n in networks)
-
-

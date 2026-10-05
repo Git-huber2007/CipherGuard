@@ -20,12 +20,9 @@ from ..lab.fieldmodel import build_field_corpus
 from ..ml.classifier import SuiteClassifier
 
 
-def cross_validate(model_dir: str = "models", samples_per_suite: int = 40,
-                   seed: int = 5150) -> dict:
+def cross_validate(model_dir: str = "models", samples_per_suite: int = 40, seed: int = 5150) -> dict:
     if not SuiteClassifier.is_trained(model_dir):
-        raise FileNotFoundError(
-            f"no trained model in {model_dir}/ — run: cipherguard train"
-        )
+        raise FileNotFoundError(f"no trained model in {model_dir}/ — run: cipherguard train")
     model = SuiteClassifier.load(model_dir)
     flows, labels, conditions = build_field_corpus(samples_per_suite, seed=seed)
 
@@ -64,19 +61,16 @@ def cross_validate(model_dir: str = "models", samples_per_suite: int = 40,
         "transfer_gap": round(same_model - cross, 4) if same_model else None,
         "low_confidence_fraction": round(low_confidence / n, 4),
         "by_condition": {
-            k: {"accuracy": round(sum(v) / len(v), 4), "n": len(v)}
-            for k, v in sorted(by_condition.items())
+            k: {"accuracy": round(sum(v) / len(v), 4), "n": len(v)} for k, v in sorted(by_condition.items())
         },
         "by_framing_class": {
-            k: {"accuracy": round(sum(v) / len(v), 4), "n": len(v)}
-            for k, v in sorted(by_class.items())
+            k: {"accuracy": round(sum(v) / len(v), 4), "n": len(v)} for k, v in sorted(by_class.items())
         },
         "confusion": {k: dict(v) for k, v in confusion.items()},
     }
 
 
-def ablate(model_dir: str = "models", samples_per_suite: int = 30,
-           seed: int = 5150) -> dict:
+def ablate(model_dir: str = "models", samples_per_suite: int = 30, seed: int = 5150) -> dict:
     """Separate what the arithmetic contributes from what the models contribute.
 
     A 100% framing-class result is not by itself evidence that the machine
@@ -127,8 +121,7 @@ def ablate(model_dir: str = "models", samples_per_suite: int = 30,
     }
 
 
-def mask_alone(model_dir: str = "models", samples_per_suite: int = 30,
-               seed: int = 5150) -> dict:
+def mask_alone(model_dir: str = "models", samples_per_suite: int = 30, seed: int = 5150) -> dict:
     """How far the RFC 4303 constraints get with no learned model at all.
 
     The ablation reports a delta; this reports the arithmetic's standalone
@@ -173,8 +166,7 @@ def mask_alone(model_dir: str = "models", samples_per_suite: int = 30,
     }
 
 
-def calibration(model_dir: str = "models", samples_per_suite: int = 30,
-                seed: int = 5150, bins: int = 10) -> dict:
+def calibration(model_dir: str = "models", samples_per_suite: int = 30, seed: int = 5150, bins: int = 10) -> dict:
     """Expected Calibration Error over framing-class predictions.
 
     An audit tool that prints "78% confidence" is making a claim, and a finding
@@ -205,12 +197,14 @@ def calibration(model_dir: str = "models", samples_per_suite: int = 30,
         conf = sum(c for c, _ in bucket) / len(bucket)
         acc = sum(1 for _, h in bucket if h) / len(bucket)
         ece += (len(bucket) / n) * abs(acc - conf)
-        table.append({
-            "range": f"{i / bins:.1f}-{(i + 1) / bins:.1f}",
-            "n": len(bucket),
-            "mean_confidence": round(conf, 3),
-            "accuracy": round(acc, 3),
-        })
+        table.append(
+            {
+                "range": f"{i / bins:.1f}-{(i + 1) / bins:.1f}",
+                "n": len(bucket),
+                "mean_confidence": round(conf, 3),
+                "accuracy": round(acc, 3),
+            }
+        )
     return {"n": n, "ece": round(ece, 4), "bins": table}
 
 

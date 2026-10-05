@@ -30,10 +30,7 @@ from dataclasses import dataclass, field
 
 REAL_CAPTURE_DIR = os.path.join("samples", "real")
 
-SOURCE = (
-    "Wireshark project test suite, "
-    "https://github.com/wireshark/wireshark/tree/master/test/captures"
-)
+SOURCE = "Wireshark project test suite, https://github.com/wireshark/wireshark/tree/master/test/captures"
 
 
 @dataclass
@@ -42,10 +39,10 @@ class Expectation:
 
     filename: str
     version: str
-    encryption: str                    # transform name the filename declares
+    encryption: str  # transform name the filename declares
     key_bits: int | None
     dh_group: int
-    aead: bool                         # AEAD suites carry no INTEG transform
+    aead: bool  # AEAD suites carry no INTEG transform
     min_ike_messages: int = 2
     notes: str = ""
     expect_vendor_ids: bool = False
@@ -62,7 +59,7 @@ EXPECTATIONS: list[Expectation] = [
         dh_group=19,
         aead=True,
         notes="AES-GCM with a 16-byte ICV on NIST P-256. A compliant suite: the "
-              "only finding should be the post-quantum one.",
+        "only finding should be the post-quantum one.",
         findings_expected=["IKE-007"],
     ),
     Expectation(
@@ -73,7 +70,7 @@ EXPECTATIONS: list[Expectation] = [
         dh_group=19,
         aead=True,
         notes="An 8-byte ICV. Distinguishing GCM_8 from GCM_16 exercises the "
-              "transform table rather than a guess from the algorithm family.",
+        "transform table rather than a guess from the algorithm family.",
         findings_expected=["IKE-007"],
     ),
     Expectation(
@@ -95,9 +92,9 @@ EXPECTATIONS: list[Expectation] = [
         aead=False,
         integrity="AUTH_HMAC_SHA2_512_256",
         notes="Counter mode is NOT AEAD, so this capture must carry a separate "
-              "INTEG transform where the GCM and CCM captures must not. That "
-              "contrast is the sharpest correctness check in the corpus, and it "
-              "is verified against real implementations rather than assumed.",
+        "INTEG transform where the GCM and CCM captures must not. That "
+        "contrast is the sharpest correctness check in the corpus, and it "
+        "is verified against real implementations rather than assumed.",
         findings_expected=["IKE-007"],
     ),
     Expectation(
@@ -111,11 +108,10 @@ EXPECTATIONS: list[Expectation] = [
         min_ike_messages=4,
         expect_vendor_ids=True,
         notes="A real Windows IKEv1 Main Mode exchange with certificate "
-              "authentication. Carries ten vendor IDs including Microsoft "
-              "NAT-T drafts this project had never seen. Should raise the full "
-              "set of legacy findings: IKEv1, 3DES, MD5 and DH Group 2.",
-        findings_expected=["IKE-001", "IKE-004", "IKE-005", "IKE-006",
-                           "IKE-012", "IKE-013"],
+        "authentication. Carries ten vendor IDs including Microsoft "
+        "NAT-T drafts this project had never seen. Should raise the full "
+        "set of legacy findings: IKEv1, 3DES, MD5 and DH Group 2.",
+        findings_expected=["IKE-001", "IKE-004", "IKE-005", "IKE-006", "IKE-012", "IKE-013"],
     ),
 ]
 
@@ -126,10 +122,7 @@ def available(directory: str = REAL_CAPTURE_DIR) -> list[Expectation]:
 
 
 def missing(directory: str = REAL_CAPTURE_DIR) -> list[str]:
-    return [
-        e.filename for e in EXPECTATIONS
-        if not os.path.exists(os.path.join(directory, e.filename))
-    ]
+    return [e.filename for e in EXPECTATIONS if not os.path.exists(os.path.join(directory, e.filename))]
 
 
 def check(expectation: Expectation, directory: str = REAL_CAPTURE_DIR) -> dict:
@@ -139,18 +132,12 @@ def check(expectation: Expectation, directory: str = REAL_CAPTURE_DIR) -> dict:
 
     path = os.path.join(directory, expectation.filename)
     packets = list(read_packets(path))
-    messages = [
-        m for m in (ike_mod.parse_message(p) for p in packets if ike_mod.is_ike_port(p))
-        if m is not None
-    ]
+    messages = [m for m in (ike_mod.parse_message(p) for p in packets if ike_mod.is_ike_port(p)) if m is not None]
     sessions = ike_mod.group_sessions(messages)
 
     problems: list[str] = []
     if len(messages) < expectation.min_ike_messages:
-        problems.append(
-            f"parsed {len(messages)} IKE messages, expected at least "
-            f"{expectation.min_ike_messages}"
-        )
+        problems.append(f"parsed {len(messages)} IKE messages, expected at least {expectation.min_ike_messages}")
 
     parse_errors = [e for m in messages for e in m.parse_errors]
     if parse_errors:
@@ -167,14 +154,10 @@ def check(expectation: Expectation, directory: str = REAL_CAPTURE_DIR) -> dict:
         if encr.name != expectation.encryption:
             problems.append(f"encryption {encr.name}, expected {expectation.encryption}")
         if encr.key_length != expectation.key_bits:
-            problems.append(
-                f"key length {encr.key_length}, expected {expectation.key_bits}"
-            )
+            problems.append(f"key length {encr.key_length}, expected {expectation.key_bits}")
 
     if dh is None or dh.value_id != expectation.dh_group:
-        problems.append(
-            f"DH group {dh.value_id if dh else None}, expected {expectation.dh_group}"
-        )
+        problems.append(f"DH group {dh.value_id if dh else None}, expected {expectation.dh_group}")
 
     # The AEAD contrast: combined-mode suites must carry no INTEG transform.
     if expectation.aead and integ:

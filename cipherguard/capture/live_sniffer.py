@@ -48,8 +48,7 @@ def _explain_socket_error(exc: OSError) -> str:
     """One sentence an operator can act on, for a raw socket that would not open."""
     denied = isinstance(exc, PermissionError) or getattr(exc, "winerror", None) == 10013
     if denied:
-        need = ("an Administrator terminal" if os.name == "nt"
-                else "CAP_NET_RAW (or root)")
+        need = "an Administrator terminal" if os.name == "nt" else "CAP_NET_RAW (or root)"
         return f"Live capture needs {need}: the raw socket was refused ({exc})."
     return f"Live capture could not open a raw socket on this machine ({exc})."
 
@@ -208,8 +207,7 @@ class LiveSniffer:
             for q in dead:
                 self.subscribers.remove(q)
 
-    def _record_packet(self, ts: float, src: str, dst: str, proto: int,
-                       sport: int, dport: int, payload: bytes) -> None:
+    def _record_packet(self, ts: float, src: str, dst: str, proto: int, sport: int, dport: int, payload: bytes) -> None:
         """Count, buffer and announce one IKE or ESP packet.
 
         `payload` is the transport payload: the ESP packet for protocol 50, the
@@ -350,8 +348,9 @@ class LiveSniffer:
             try:
                 for pkt in read_packets(path):
                     if pkt.ip_version == 4:
-                        packets.append((pkt.timestamp, pkt.src, pkt.dst, pkt.protocol,
-                                        pkt.sport, pkt.dport, pkt.payload))
+                        packets.append(
+                            (pkt.timestamp, pkt.src, pkt.dst, pkt.protocol, pkt.sport, pkt.dport, pkt.payload)
+                        )
             except Exception:
                 continue
         return packets

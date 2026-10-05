@@ -77,9 +77,7 @@ def v2_sa_payload(next_payload: int, proposals: list[bytes]) -> bytes:
 
 
 def v2_ke_payload(next_payload: int, group: int, keylen: int = 256) -> bytes:
-    body = struct.pack("!HH", group, 0) + bytes(
-        random.Random(group).getrandbits(8) for _ in range(keylen)
-    )
+    body = struct.pack("!HH", group, 0) + bytes(random.Random(group).getrandbits(8) for _ in range(keylen))
     return _generic(next_payload, body)
 
 
@@ -109,7 +107,12 @@ def ike_header(
         ispi
         + rspi
         + struct.pack(
-            "!BBBBII", next_payload, version, exchange, flags, message_id,
+            "!BBBBII",
+            next_payload,
+            version,
+            exchange,
+            flags,
+            message_id,
             C.IKE_HEADER_LEN + body_len,
         )
     )
@@ -187,10 +190,10 @@ def ikev2_sa_init(
     # a legacy gateway also advertises a broken fallback proposal
     if suite.get("legacy_fallback"):
         fallback = [
-            v2_transform(T_ENCR, 3, False),                 # 3DES
-            v2_transform(T_PRF, 1, False),                  # MD5
-            v2_transform(T_INTEG, 1, False),                # HMAC-MD5-96
-            v2_transform(T_DH, 2, False),                   # 1024-bit MODP
+            v2_transform(T_ENCR, 3, False),  # 3DES
+            v2_transform(T_PRF, 1, False),  # MD5
+            v2_transform(T_INTEG, 1, False),  # HMAC-MD5-96
+            v2_transform(T_DH, 2, False),  # 1024-bit MODP
             v2_transform(T_ESN, 0, True),
         ]
         proposals = [
@@ -234,8 +237,7 @@ def ikev2_auth(ispi: bytes, rspi: bytes, response: bool, message_id: int = 1) ->
     return ike_header(ispi, rspi, 46, C.IKE_VERSION_2, 35, flags, message_id, len(body)) + body
 
 
-def ikev2_intermediate(ispi: bytes, rspi: bytes, response: bool, message_id: int,
-                       ke_data_len: int) -> bytes:
+def ikev2_intermediate(ispi: bytes, rspi: bytes, response: bool, message_id: int, ke_data_len: int) -> bytes:
     """IKE_INTERMEDIATE (RFC 9242, exchange type 43) carrying one additional
     key exchange (RFC 9370 s2.2.2).
 
@@ -246,8 +248,8 @@ def ikev2_intermediate(ispi: bytes, rspi: bytes, response: bool, message_id: int
     and the size. The SK payload's Next Payload field names the first payload
     inside it (RFC 7296 s3.14), which is KE.
     """
-    inner = 4 + 4 + ke_data_len + 1          # KE payload, then the pad-length byte
-    sk_body = os.urandom(8) + os.urandom(inner) + os.urandom(16)   # IV, ciphertext, ICV
+    inner = 4 + 4 + ke_data_len + 1  # KE payload, then the pad-length byte
+    sk_body = os.urandom(8) + os.urandom(inner) + os.urandom(16)  # IV, ciphertext, ICV
     body = _generic(C.PAYLOAD_KE_V2, sk_body)
     flags = C.FLAG_RESPONSE if response else C.FLAG_INITIATOR
     return ike_header(ispi, rspi, 46, C.IKE_VERSION_2, 43, flags, message_id, len(body)) + body
@@ -301,19 +303,18 @@ def ikev1_message(
 # ---------------------------------------------------------------------------
 
 SUITE_HARDENED = dict(encr=20, key_bits=256, prf=5, integ=12, dh=31, esn=1)
-SUITE_TRANSITIONAL = dict(encr=12, key_bits=128, prf=2, integ=2, dh=14, esn=0,
-                          legacy_fallback=True)
+SUITE_TRANSITIONAL = dict(encr=12, key_bits=128, prf=2, integ=2, dh=14, esn=0, legacy_fallback=True)
 SUITE_WEAK = dict(encr=3, prf=1, integ=1, dh=2, esn=0)
 # AES-GCM-256 / SHA2-384 on Curve25519, with ML-KEM-768 as Additional Key
 # Exchange 1: the hybrid the roadmap recommends.
-SUITE_HYBRID = dict(encr=20, key_bits=256, prf=6, dh=31, esn=1,
-                    addke={T_ADDKE1: [KE_ML_KEM_768]})
+SUITE_HYBRID = dict(encr=20, key_bits=256, prf=6, dh=31, esn=1, addke={T_ADDKE1: [KE_ML_KEM_768]})
 # The same suite with no additional key exchange.
 SUITE_CLASSICAL_384 = dict(encr=20, key_bits=256, prf=6, dh=31, esn=1)
 
 
-def _write_ike_pair(w: PcapWriter, t: float, a: str, b: str, req: bytes, resp: bytes,
-                    port: int = 500, ident: int = 0) -> float:
+def _write_ike_pair(
+    w: PcapWriter, t: float, a: str, b: str, req: bytes, resp: bytes, port: int = 500, ident: int = 0
+) -> float:
     w.write_udp(t, a, b, port, port, req, ident)
     w.write_udp(t + 0.018, b, a, port, port, resp, ident + 1)
     return t + 0.036
@@ -370,8 +371,7 @@ def _write_esp_flow(
             t += flow.inter_arrivals[i - 1]
         body = _esp_payload(rng, clen, suite)
         if udp_encap:
-            w.write_udp(t, a, b, 4500, 4500,
-                        struct.pack("!II", flow.spi, seq) + body, i)
+            w.write_udp(t, a, b, 4500, 4500, struct.pack("!II", flow.spi, seq) + body, i)
         else:
             w.write_esp(t, a, b, flow.spi, seq, body, ident=i)
     return t
@@ -393,8 +393,7 @@ def scenario_legacy(path: str) -> str:
 
     with PcapWriter(path) as w:
         t = _write_ike_pair(w, BASE_TS, a, b, req, resp)
-        _write_esp_flow(w, t, a, b, "3DES-CBC / HMAC-MD5-96", rng,
-                        packets=520, profile="mixed")
+        _write_esp_flow(w, t, a, b, "3DES-CBC / HMAC-MD5-96", rng, packets=520, profile="mixed")
     return path
 
 
@@ -404,19 +403,22 @@ def scenario_transitional(path: str) -> str:
     ispi, rspi = os.urandom(8), os.urandom(8)
     rng = random.Random(23)
 
-    req = ikev2_sa_init(ispi, b"\x00" * 8, SUITE_TRANSITIONAL, response=False,
-                        extra_notifies=[16388, 16389],
-                        vendor=bytes.fromhex("8404ad0330a7e4a41325229166d0cfff"))
-    resp = ikev2_sa_init(ispi, rspi, SUITE_TRANSITIONAL, response=True,
-                         extra_notifies=[16389])
+    req = ikev2_sa_init(
+        ispi,
+        b"\x00" * 8,
+        SUITE_TRANSITIONAL,
+        response=False,
+        extra_notifies=[16388, 16389],
+        vendor=bytes.fromhex("8404ad0330a7e4a41325229166d0cfff"),
+    )
+    resp = ikev2_sa_init(ispi, rspi, SUITE_TRANSITIONAL, response=True, extra_notifies=[16389])
 
     with PcapWriter(path) as w:
         t = _write_ike_pair(w, BASE_TS, a, b, req, resp)
         w.write_udp(t, a, b, 500, 500, ikev2_auth(ispi, rspi, False), 10)
         w.write_udp(t + 0.02, b, a, 500, 500, ikev2_auth(ispi, rspi, True), 11)
         t += 0.05
-        _write_esp_flow(w, t, a, b, "AES-CBC-128 / HMAC-SHA1-96", rng,
-                        packets=680, profile="bulk")
+        _write_esp_flow(w, t, a, b, "AES-CBC-128 / HMAC-SHA1-96", rng, packets=680, profile="bulk")
     return path
 
 
@@ -426,11 +428,10 @@ def scenario_hardened(path: str) -> str:
     ispi, rspi = os.urandom(8), os.urandom(8)
     rng = random.Random(37)
 
-    req = ikev2_sa_init(ispi, b"\x00" * 8, SUITE_HARDENED, response=False,
-                        extra_notifies=[16430, 16388, 16389],
-                        vendor=b"strongSwan")
-    resp = ikev2_sa_init(ispi, rspi, SUITE_HARDENED, response=True,
-                         extra_notifies=[16430, 16389])
+    req = ikev2_sa_init(
+        ispi, b"\x00" * 8, SUITE_HARDENED, response=False, extra_notifies=[16430, 16388, 16389], vendor=b"strongSwan"
+    )
+    resp = ikev2_sa_init(ispi, rspi, SUITE_HARDENED, response=True, extra_notifies=[16430, 16389])
 
     marker = b"\x00\x00\x00\x00"
     with PcapWriter(path) as w:
@@ -438,8 +439,7 @@ def scenario_hardened(path: str) -> str:
         w.write_udp(t, a, b, 4500, 4500, marker + req, 0)
         w.write_udp(t + 0.014, b, a, 4500, 4500, marker + resp, 1)
         t += 0.04
-        _write_esp_flow(w, t, a, b, "AES-GCM-256 (ICV 16)", rng,
-                        packets=740, profile="mixed", udp_encap=True)
+        _write_esp_flow(w, t, a, b, "AES-GCM-256 (ICV 16)", rng, packets=740, profile="mixed", udp_encap=True)
     return path
 
 
@@ -466,14 +466,18 @@ def scenario_mixed_backbone(path: str) -> str:
                 resp = ikev1_message(ispi, rspi, 4, [(1, sa), (4, ke), (10, nonce), (13, vid)])
                 suite = "3DES-CBC / HMAC-MD5-96"
             elif kind == "transitional":
-                req = ikev2_sa_init(ispi, b"\x00" * 8, SUITE_TRANSITIONAL, False,
-                                    [16388, 16389],
-                                    bytes.fromhex("0d33611a5d521b5e3c9c03d2fc107e12"))
+                req = ikev2_sa_init(
+                    ispi,
+                    b"\x00" * 8,
+                    SUITE_TRANSITIONAL,
+                    False,
+                    [16388, 16389],
+                    bytes.fromhex("0d33611a5d521b5e3c9c03d2fc107e12"),
+                )
                 resp = ikev2_sa_init(ispi, rspi, SUITE_TRANSITIONAL, True, [14])
                 suite = "AES-CBC-128 / HMAC-SHA1-96"
             elif kind == "hardened":
-                req = ikev2_sa_init(ispi, b"\x00" * 8, SUITE_HARDENED, False,
-                                    [16430, 16388], b"strongSwan")
+                req = ikev2_sa_init(ispi, b"\x00" * 8, SUITE_HARDENED, False, [16430, 16388], b"strongSwan")
                 resp = ikev2_sa_init(ispi, rspi, SUITE_HARDENED, True, [16430])
                 suite = "AES-GCM-256 (ICV 16)"
             else:
@@ -505,14 +509,12 @@ def scenario_downgrade(path: str) -> str:
     rng = random.Random(71)
 
     downgraded = dict(encr=12, key_bits=128, prf=2, integ=2, dh=2, esn=0)
-    req = ikev2_sa_init(ispi, b"\x00" * 8, downgraded, response=False,
-                        extra_notifies=[16388], vendor=b"strongSwan")
+    req = ikev2_sa_init(ispi, b"\x00" * 8, downgraded, response=False, extra_notifies=[16388], vendor=b"strongSwan")
     resp = ikev2_sa_init(ispi, rspi, downgraded, response=True, extra_notifies=[14])
 
     with PcapWriter(path) as w:
         t = _write_ike_pair(w, BASE_TS + 86400, a, b, req, resp)
-        _write_esp_flow(w, t, a, b, "AES-CBC-128 / HMAC-SHA1-96", rng,
-                        packets=420, profile="mixed")
+        _write_esp_flow(w, t, a, b, "AES-CBC-128 / HMAC-SHA1-96", rng, packets=420, profile="mixed")
     return path
 
 
@@ -530,24 +532,31 @@ def scenario_pqc_hybrid(path: str) -> str:
     rng = random.Random(53)
 
     # 16438 = INTERMEDIATE_EXCHANGE_SUPPORTED (RFC 9242), sent by both ends
-    req = ikev2_sa_init(ispi, b"\x00" * 8, SUITE_HYBRID, response=False,
-                        extra_notifies=[16430, 16438, 16388, 16389],
-                        vendor=b"strongSwan")
-    resp = ikev2_sa_init(ispi, rspi, SUITE_HYBRID, response=True,
-                         extra_notifies=[16430, 16438, 16389])
+    req = ikev2_sa_init(
+        ispi,
+        b"\x00" * 8,
+        SUITE_HYBRID,
+        response=False,
+        extra_notifies=[16430, 16438, 16388, 16389],
+        vendor=b"strongSwan",
+    )
+    resp = ikev2_sa_init(ispi, rspi, SUITE_HYBRID, response=True, extra_notifies=[16430, 16438, 16389])
 
     with PcapWriter(path) as w:
         t = _write_ike_pair(w, BASE_TS, a, b, req, resp)
         t = _write_ike_pair(
-            w, t, a, b,
+            w,
+            t,
+            a,
+            b,
             ikev2_intermediate(ispi, rspi, False, 1, ML_KEM_768_ENCAPSULATION_KEY),
             ikev2_intermediate(ispi, rspi, True, 1, ML_KEM_768_CIPHERTEXT),
-            ident=2)
-        t = _write_ike_pair(w, t, a, b,
-                            ikev2_auth(ispi, rspi, False, message_id=2),
-                            ikev2_auth(ispi, rspi, True, message_id=2), ident=4)
-        _write_esp_flow(w, t + 0.02, a, b, "AES-GCM-256 (ICV 16)", rng,
-                        packets=700, profile="mixed")
+            ident=2,
+        )
+        t = _write_ike_pair(
+            w, t, a, b, ikev2_auth(ispi, rspi, False, message_id=2), ikev2_auth(ispi, rspi, True, message_id=2), ident=4
+        )
+        _write_esp_flow(w, t + 0.02, a, b, "AES-GCM-256 (ICV 16)", rng, packets=700, profile="mixed")
     return path
 
 
@@ -567,18 +576,15 @@ def scenario_pqc_declined(path: str) -> str:
 
     offer = dict(SUITE_HYBRID, classical_fallback=True)
     selected = dict(SUITE_CLASSICAL_384, proposal_num=2)
-    req = ikev2_sa_init(ispi, b"\x00" * 8, offer, response=False,
-                        extra_notifies=[16430, 16438, 16388, 16389],
-                        vendor=b"strongSwan")
-    resp = ikev2_sa_init(ispi, rspi, selected, response=True,
-                         extra_notifies=[16430, 16389])
+    req = ikev2_sa_init(
+        ispi, b"\x00" * 8, offer, response=False, extra_notifies=[16430, 16438, 16388, 16389], vendor=b"strongSwan"
+    )
+    resp = ikev2_sa_init(ispi, rspi, selected, response=True, extra_notifies=[16430, 16389])
 
     with PcapWriter(path) as w:
         t = _write_ike_pair(w, BASE_TS, a, b, req, resp)
-        t = _write_ike_pair(w, t, a, b, ikev2_auth(ispi, rspi, False),
-                            ikev2_auth(ispi, rspi, True), ident=2)
-        _write_esp_flow(w, t + 0.02, a, b, "AES-GCM-256 (ICV 16)", rng,
-                        packets=640, profile="mixed")
+        t = _write_ike_pair(w, t, a, b, ikev2_auth(ispi, rspi, False), ikev2_auth(ispi, rspi, True), ident=2)
+        _write_esp_flow(w, t + 0.02, a, b, "AES-GCM-256 (ICV 16)", rng, packets=640, profile="mixed")
     return path
 
 
@@ -588,10 +594,8 @@ SCENARIOS = {
     "hardened": (scenario_hardened, "IKEv2 AES-GCM-256, Curve25519, NAT-T"),
     "downgrade": (scenario_downgrade, "The hardened peer pair, later, renegotiated weaker"),
     "backbone": (scenario_mixed_backbone, "Four gateways on one mirror port"),
-    "pqc_hybrid": (scenario_pqc_hybrid,
-                   "IKEv2 AES-GCM-256, Curve25519 + ML-KEM-768 hybrid (RFC 9370)"),
-    "pqc_declined": (scenario_pqc_declined,
-                     "The same hybrid offer; the responder selects the classical proposal"),
+    "pqc_hybrid": (scenario_pqc_hybrid, "IKEv2 AES-GCM-256, Curve25519 + ML-KEM-768 hybrid (RFC 9370)"),
+    "pqc_declined": (scenario_pqc_declined, "The same hybrid offer; the responder selects the classical proposal"),
 }
 
 

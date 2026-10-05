@@ -220,8 +220,7 @@ class IkeSession:
         confirmed = self.negotiated("IKE", confirmed_only=True)
         selected = confirmed.transforms if confirmed else []
         method = next((describe(t) for t in selected if t.type_id == TRANSFORM_KE), None)
-        additional = [describe(t) for t in selected
-                      if t.type_id in ADDKE_TRANSFORM_TYPES and t.value_id != 0]
+        additional = [describe(t) for t in selected if t.type_id in ADDKE_TRANSFORM_TYPES and t.value_id != 0]
 
         offered: list[dict[str, Any]] = []
         for prop in self.offered("IKE"):
@@ -362,9 +361,7 @@ class EspFlow:
     def to_dict(self) -> dict[str, Any]:
         cls_name, members, mass = self.framing()
         trace = self.framing_arithmetic()
-        exclusions = self.exclusions or [
-            (r["suite"], r["reason"]) for r in trace["suites"] if r["eliminated_by"]
-        ]
+        exclusions = self.exclusions or [(r["suite"], r["reason"]) for r in trace["suites"] if r["eliminated_by"]]
         return {
             "key": self.key,
             "spi": f"0x{self.spi:08x}",
@@ -393,9 +390,16 @@ class EspFlow:
             "distinct_lengths": trace["distinct_lengths"],
             "mean_entropy": trace["mean_entropy"],
             "framing_arithmetic": {
-                k: trace[k] for k in (
-                    "method", "lengths_observed", "entropy_samples", "constraints",
-                    "suites", "survivors", "classes", "fallback",
+                k: trace[k]
+                for k in (
+                    "method",
+                    "lengths_observed",
+                    "entropy_samples",
+                    "constraints",
+                    "suites",
+                    "survivors",
+                    "classes",
+                    "fallback",
                 )
             },
         }
@@ -463,9 +467,7 @@ class Assessment:
         return "E"
 
     def counts(self) -> dict[str, int]:
-        return {
-            sev.value: sum(1 for f in self.findings if f.severity is sev) for sev in Severity
-        }
+        return {sev.value: sum(1 for f in self.findings if f.severity is sev) for sev in Severity}
 
     def digest(self) -> str:
         raw = "|".join(sorted(f"{f.rule_id}:{f.subject}" for f in self.findings))

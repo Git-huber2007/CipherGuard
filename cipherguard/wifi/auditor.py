@@ -213,9 +213,7 @@ class WifiAuditor:
         # 4. Rogue AP / Evil Twin Analysis, across every SSID seen in range --
         # not only the one this host happens to be connected to. A clone of a
         # neighbouring network is just as real a threat to whoever's near it.
-        rogue_findings, rogue_aps, rogue_score_delta = self._detect_rogue_aps(
-            interface_info, networks
-        )
+        rogue_findings, rogue_aps, rogue_score_delta = self._detect_rogue_aps(interface_info, networks)
         findings.extend(rogue_findings)
         score += rogue_score_delta
 
@@ -264,7 +262,19 @@ class WifiAuditor:
         )
 
         score = max(0, min(100, score))
-        grade = "A+" if score >= 95 else "A" if score >= 90 else "B" if score >= 80 else "C" if score >= 70 else "D" if score >= 55 else "F"
+        grade = (
+            "A+"
+            if score >= 95
+            else "A"
+            if score >= 90
+            else "B"
+            if score >= 80
+            else "C"
+            if score >= 70
+            else "D"
+            if score >= 55
+            else "F"
+        )
 
         summary = (
             f"Connected to '{interface_info.ssid}' on {interface_info.band} (Channel {interface_info.channel}). "
@@ -363,6 +373,7 @@ class WifiAuditor:
         if force_scan or len(self._bss_cache) <= 1:
             try:
                 from .wlan_native import trigger_scan
+
                 trigger_scan(wait_secs=1.5 if force_scan else 0.8)
             except Exception:
                 logger.debug("Wi-Fi probe failed; reporting what was read so far", exc_info=True)
@@ -401,9 +412,9 @@ class WifiAuditor:
                 bssid_val = line_str.split(":", 1)[1].strip().lower()
                 is_conn = False
                 if connected_bssid and bssid_val:
-                    is_conn = (bssid_val.lower() == connected_bssid.lower())
+                    is_conn = bssid_val.lower() == connected_bssid.lower()
                 elif connected_ssid and current_ssid and not connected_bssid:
-                    is_conn = (current_ssid.lower() == connected_ssid.lower())
+                    is_conn = current_ssid.lower() == connected_ssid.lower()
 
                 net = WifiNetwork(
                     ssid=current_ssid or "(Hidden SSID)",
@@ -472,19 +483,22 @@ class WifiAuditor:
 
         # If the active connected AP was missing from scan results, inject it
         if not found_conn and interface_info and interface_info.state.lower() == "connected":
-            networks.insert(0, WifiNetwork(
-                ssid=interface_info.ssid or "(Connected Network)",
-                bssid=interface_info.bssid or "—",
-                signal_percent=interface_info.signal_percent or 80,
-                rssi_dbm=interface_info.rssi_dbm or -60,
-                channel=interface_info.channel or 0,
-                band=interface_info.band or "5 GHz",
-                radio_type=interface_info.radio_type or "802.11",
-                authentication=interface_info.authentication or "WPA2-Personal",
-                encryption=interface_info.cipher or "CCMP",
-                security_grade=self._grade_network(interface_info.authentication, interface_info.cipher),
-                connected=True,
-            ))
+            networks.insert(
+                0,
+                WifiNetwork(
+                    ssid=interface_info.ssid or "(Connected Network)",
+                    bssid=interface_info.bssid or "—",
+                    signal_percent=interface_info.signal_percent or 80,
+                    rssi_dbm=interface_info.rssi_dbm or -60,
+                    channel=interface_info.channel or 0,
+                    band=interface_info.band or "5 GHz",
+                    radio_type=interface_info.radio_type or "802.11",
+                    authentication=interface_info.authentication or "WPA2-Personal",
+                    encryption=interface_info.cipher or "CCMP",
+                    security_grade=self._grade_network(interface_info.authentication, interface_info.cipher),
+                    connected=True,
+                ),
+            )
 
         # Sort: connected first, then by signal percent descending
         networks.sort(key=lambda n: (not n.connected, -n.signal_percent))
@@ -532,9 +546,7 @@ class WifiAuditor:
         rogue_aps: list[dict[str, Any]] = []
         score_delta = 0
 
-        connected_ssid = (
-            interface_info.ssid.lower() if interface_info and interface_info.ssid else ""
-        )
+        connected_ssid = interface_info.ssid.lower() if interface_info and interface_info.ssid else ""
 
         groups: dict[str, list[WifiNetwork]] = {}
         for n in networks:
@@ -572,18 +584,20 @@ class WifiAuditor:
             for rog in weak:
                 rog.is_rogue = True
                 rog.rogue_reason = f"Evil Twin Clone ({rog.authentication} vs {baseline_auth})"
-                rogue_aps.append({
-                    "ssid": rog.ssid,
-                    "bssid": rog.bssid,
-                    "band": rog.band,
-                    "channel": rog.channel,
-                    "signal_percent": rog.signal_percent,
-                    "authentication": rog.authentication,
-                    "encryption": rog.encryption,
-                    "reason": f"Downgraded security clone: operates under {rog.authentication} while the legitimate '{rog.ssid}' network enforces {baseline_auth}",
-                    "target_ssid": rog.ssid,
-                    "threat_level": "critical" if is_current else "high",
-                })
+                rogue_aps.append(
+                    {
+                        "ssid": rog.ssid,
+                        "bssid": rog.bssid,
+                        "band": rog.band,
+                        "channel": rog.channel,
+                        "signal_percent": rog.signal_percent,
+                        "authentication": rog.authentication,
+                        "encryption": rog.encryption,
+                        "reason": f"Downgraded security clone: operates under {rog.authentication} while the legitimate '{rog.ssid}' network enforces {baseline_auth}",
+                        "target_ssid": rog.ssid,
+                        "threat_level": "critical" if is_current else "high",
+                    }
+                )
 
             if is_current:
                 score_delta -= 35
@@ -605,8 +619,7 @@ class WifiAuditor:
                             "This is a classic indicator of an Evil Twin attack attempting to trick "
                             "clients into associating with a malicious clone."
                             if is_current
-                            else
-                            "This is not the network this host is connected to, but the clone is "
+                            else "This is not the network this host is connected to, but the clone is "
                             "broadcasting in range and can trick other nearby clients into associating "
                             "with it."
                         )
@@ -649,7 +662,9 @@ class WifiAuditor:
     def _get_linux_current_interface(self) -> WifiInterfaceInfo | None:
         # Check iwconfig or nmcli
         try:
-            out = subprocess.check_output(["nmcli", "-t", "-f", "ACTIVE,SSID,BSSID,CHAN,SIGNAL,SECURITY,DEVICE", "dev", "wifi"], text=True)
+            out = subprocess.check_output(
+                ["nmcli", "-t", "-f", "ACTIVE,SSID,BSSID,CHAN,SIGNAL,SECURITY,DEVICE", "dev", "wifi"], text=True
+            )
             for line in out.splitlines():
                 if line.startswith("yes:"):
                     parts = line.split(":")

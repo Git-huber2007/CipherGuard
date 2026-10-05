@@ -30,8 +30,7 @@ TDES = "3DES-CBC / HMAC-MD5-96"
 SOURCE = "swanctl --list-sas on the responder"
 
 
-def _capture(directory, name, suite, seed=3, src="203.0.113.10",
-             dst="198.51.100.20", packets=300, label=None):
+def _capture(directory, name, suite, seed=3, src="203.0.113.10", dst="198.51.100.20", packets=300, label=None):
     path = os.path.join(str(directory), name)
     write_esp_pcap(path, suite, packets=packets, seed=seed, src=src, dst=dst)
     if label is not None:
@@ -52,11 +51,14 @@ def _peer_label(suite, src="203.0.113.10", dst="198.51.100.20", source=SOURCE):
 @pytest.mark.no_model
 def test_label_parses_spi_in_the_forms_endpoints_print():
     label = L.parse_label(
-        {"source": SOURCE, "flows": [
-            {"spi": "c3a1f00d", "suite": GCM},
-            {"spi": "0xC3A1F00E", "suite": GCM},
-            {"spi": 42, "suite": CBC, "dst": "10.0.0.1"},
-        ]},
+        {
+            "source": SOURCE,
+            "flows": [
+                {"spi": "c3a1f00d", "suite": GCM},
+                {"spi": "0xC3A1F00E", "suite": GCM},
+                {"spi": 42, "suite": CBC, "dst": "10.0.0.1"},
+            ],
+        },
         "x.pcap",
     )
     assert [e.spi for e in label.entries] == [0xC3A1F00D, 0xC3A1F00E, 42]
@@ -64,19 +66,20 @@ def test_label_parses_spi_in_the_forms_endpoints_print():
 
 
 @pytest.mark.no_model
-@pytest.mark.parametrize("data, needle", [
-    ({"source": SOURCE, "flows": [{"spi": 1, "suite": "AES-GCM-512"}]}, "not in the catalogue"),
-    ({"flows": [{"spi": 1, "suite": GCM}]}, "no 'source'"),
-    ({"source": "  ", "flows": [{"spi": 1, "suite": GCM}]}, "no 'source'"),
-    ({"source": SOURCE, "flows": [{"suite": GCM}]}, "exactly one of"),
-    ({"source": SOURCE, "flows": [{"spi": 1, "peers": ["a", "b"], "suite": GCM}]},
-     "exactly one of"),
-    ({"source": SOURCE, "flows": [{"spi": 1, "suite": GCM}, {"spi": 1, "suite": CBC}]},
-     "labelled twice"),
-    ({"source": SOURCE, "flows": [{"peers": ["a", "a"], "suite": GCM}]}, "two distinct"),
-    ({"source": SOURCE, "flows": [{"spi": 0, "suite": GCM}]}, "32-bit"),
-    ({"source": SOURCE, "flows": []}, "non-empty"),
-])
+@pytest.mark.parametrize(
+    "data, needle",
+    [
+        ({"source": SOURCE, "flows": [{"spi": 1, "suite": "AES-GCM-512"}]}, "not in the catalogue"),
+        ({"flows": [{"spi": 1, "suite": GCM}]}, "no 'source'"),
+        ({"source": "  ", "flows": [{"spi": 1, "suite": GCM}]}, "no 'source'"),
+        ({"source": SOURCE, "flows": [{"suite": GCM}]}, "exactly one of"),
+        ({"source": SOURCE, "flows": [{"spi": 1, "peers": ["a", "b"], "suite": GCM}]}, "exactly one of"),
+        ({"source": SOURCE, "flows": [{"spi": 1, "suite": GCM}, {"spi": 1, "suite": CBC}]}, "labelled twice"),
+        ({"source": SOURCE, "flows": [{"peers": ["a", "a"], "suite": GCM}]}, "two distinct"),
+        ({"source": SOURCE, "flows": [{"spi": 0, "suite": GCM}]}, "32-bit"),
+        ({"source": SOURCE, "flows": []}, "non-empty"),
+    ],
+)
 def test_malformed_labels_are_rejected_with_a_reason(data, needle):
     with pytest.raises(L.LabelError, match=needle):
         L.parse_label(data, "x.pcap")
@@ -85,10 +88,13 @@ def test_malformed_labels_are_rejected_with_a_reason(data, needle):
 @pytest.mark.no_model
 def test_per_entry_source_overrides_the_capture_source():
     label = L.parse_label(
-        {"source": SOURCE, "flows": [
-            {"spi": 1, "suite": GCM},
-            {"spi": 2, "suite": GCM, "source": "ip xfrm state on the initiator"},
-        ]},
+        {
+            "source": SOURCE,
+            "flows": [
+                {"spi": 1, "suite": GCM},
+                {"spi": 2, "suite": GCM, "source": "ip xfrm state on the initiator"},
+            ],
+        },
         "x.pcap",
     )
     assert [e.source for e in label.entries] == [SOURCE, "ip xfrm state on the initiator"]
@@ -97,10 +103,13 @@ def test_per_entry_source_overrides_the_capture_source():
 @pytest.mark.no_model
 def test_spi_entry_beats_peer_entry_and_peers_match_both_directions():
     label = L.parse_label(
-        {"source": SOURCE, "flows": [
-            {"peers": ["10.0.0.1", "10.0.0.2"], "suite": CBC},
-            {"spi": 7, "suite": GCM},
-        ]},
+        {
+            "source": SOURCE,
+            "flows": [
+                {"peers": ["10.0.0.1", "10.0.0.2"], "suite": CBC},
+                {"spi": 7, "suite": GCM},
+            ],
+        },
         "x.pcap",
     )
     forward = EspFlow(spi=7, src="10.0.0.1", dst="10.0.0.2")
@@ -130,11 +139,16 @@ def test_malformed_json_sidecar_is_an_error_not_an_unlabelled_capture(tmp_path):
 def test_collect_reports_unlabelled_captures_and_dead_label_entries(tmp_path):
     _capture(tmp_path, "a.pcap", GCM, label=_peer_label(GCM))
     _capture(tmp_path, "b.pcap", CBC, seed=5)  # no sidecar
-    _capture(tmp_path, "c.pcap", CBC, seed=6, label={
-        "source": SOURCE,
-        "flows": [{"peers": ["203.0.113.10", "198.51.100.20"], "suite": CBC},
-                  {"spi": "deadbeef", "suite": GCM}],
-    })
+    _capture(
+        tmp_path,
+        "c.pcap",
+        CBC,
+        seed=6,
+        label={
+            "source": SOURCE,
+            "flows": [{"peers": ["203.0.113.10", "198.51.100.20"], "suite": CBC}, {"spi": "deadbeef", "suite": GCM}],
+        },
+    )
     (tmp_path / "notes.txt").write_text("not a capture")
 
     corpus = L.collect(str(tmp_path))
@@ -142,9 +156,7 @@ def test_collect_reports_unlabelled_captures_and_dead_label_entries(tmp_path):
     assert corpus.unlabelled == ["b.pcap"]
     assert [s.suite for s in corpus.samples] == [GCM, CBC]
     assert all(s.source == SOURCE for s in corpus.samples)
-    assert corpus.unmatched_entries == [
-        {"capture": "c.pcap", "label": "SPI 0xdeadbeef", "suite": GCM}
-    ]
+    assert corpus.unmatched_entries == [{"capture": "c.pcap", "label": "SPI 0xdeadbeef", "suite": GCM}]
 
 
 @pytest.mark.no_model
@@ -242,16 +254,16 @@ class _RecordingModel:
     def predict_one(self, flow):
         assert id(flow) not in self.trained, "scored a flow this model trained on"
         self.scored.append(id(flow))
-        return Prediction(label=GCM, confidence=1.0, ranked=[(GCM, 1.0)],
-                          group=[GCM], group_confidence=1.0, excluded=[])
+        return Prediction(
+            label=GCM, confidence=1.0, ranked=[(GCM, 1.0)], group=[GCM], group_confidence=1.0, excluded=[]
+        )
 
 
 def _samples(spec: dict[str, int]) -> list:
     out = []
     for capture, n in spec.items():
         for i in range(n):
-            flow = EspFlow(spi=len(out) + 1, src="10.0.0.1", dst=f"10.0.{i}.2",
-                           payload_lengths=[100] * 20, packets=20)
+            flow = EspFlow(spi=len(out) + 1, src="10.0.0.1", dst=f"10.0.{i}.2", payload_lengths=[100] * 20, packets=20)
             out.append(L.RealSample(capture=capture, flow=flow, suite=GCM, source=SOURCE))
     return out
 
@@ -269,8 +281,7 @@ def test_leave_one_capture_out_never_scores_a_flow_on_a_model_trained_with_it():
 
     # one model per capture, and each saw no flow from the capture it scored
     assert len(models) == 3
-    by_capture = {c: {id(s.flow) for s in samples if s.capture == c}
-                  for c in ("a.pcap", "b.pcap", "c.pcap")}
+    by_capture = {c: {id(s.flow) for s in samples if s.capture == c} for c in ("a.pcap", "b.pcap", "c.pcap")}
     for model, capture in zip(models, sorted(by_capture)):
         assert set(model.scored) == by_capture[capture]
         assert not model.trained & by_capture[capture]
@@ -288,8 +299,7 @@ def test_leave_one_capture_out_never_scores_a_flow_on_a_model_trained_with_it():
 @pytest.mark.no_model
 def test_leave_one_capture_out_refuses_a_flow_shared_between_captures():
     samples = _samples({"a.pcap": 1, "b.pcap": 1})
-    samples.append(L.RealSample(capture="b.pcap", flow=samples[0].flow,
-                                suite=GCM, source=SOURCE))
+    samples.append(L.RealSample(capture="b.pcap", flow=samples[0].flow, suite=GCM, source=SOURCE))
     with pytest.raises(LeakageError):
         leave_one_capture_out(samples, lambda train_set: _RecordingModel(train_set))
 
@@ -353,8 +363,7 @@ def test_train_include_real_records_provenance_and_loco(tmp_path):
     _capture(real, "unknown.pcap", CBC, seed=5)
     out = str(tmp_path / "model")
 
-    metrics = train(samples_per_suite=6, epochs=2, seed=3, out=out,
-                    verbose=False, include_real=str(real))
+    metrics = train(samples_per_suite=6, epochs=2, seed=3, out=out, verbose=False, include_real=str(real))
 
     rv = metrics["real_validation"]
     assert rv["method"] == "leave-one-capture-out"

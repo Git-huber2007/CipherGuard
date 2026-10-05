@@ -116,9 +116,18 @@ ADDKE_TRANSFORM_TYPES = (6, 7, 8, 9, 10, 11, 12)
 KE_TRANSFORM_TYPES = (TRANSFORM_KE,) + ADDKE_TRANSFORM_TYPES
 
 TRANSFORM_TYPE = {
-    1: "ENCR", 2: "PRF", 3: "INTEG", 4: "DH", 5: "ESN",
-    6: "ADDKE1", 7: "ADDKE2", 8: "ADDKE3", 9: "ADDKE4",
-    10: "ADDKE5", 11: "ADDKE6", 12: "ADDKE7",
+    1: "ENCR",
+    2: "PRF",
+    3: "INTEG",
+    4: "DH",
+    5: "ESN",
+    6: "ADDKE1",
+    7: "ADDKE2",
+    8: "ADDKE3",
+    9: "ADDKE4",
+    10: "ADDKE5",
+    11: "ADDKE6",
+    12: "ADDKE7",
 }
 
 ENCR = {
@@ -212,8 +221,7 @@ DH_GROUPS = {
 ESN = {0: "NO_ESN", 1: "ESN"}
 
 # None: the key exchange types are named from DH_GROUPS, not from a flat table.
-TRANSFORM_TABLES = {1: ENCR, 2: PRF, 3: INTEG, 4: None, 5: ESN,
-                    **{t: None for t in ADDKE_TRANSFORM_TYPES}}
+TRANSFORM_TABLES = {1: ENCR, 2: PRF, 3: INTEG, 4: None, 5: ESN, **{t: None for t in ADDKE_TRANSFORM_TYPES}}
 
 ATTR_KEY_LENGTH = 14  # RFC 7296 s3.3.5
 

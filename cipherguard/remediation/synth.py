@@ -54,8 +54,7 @@ def _header(platform: str, assessment: Assessment) -> list[str]:
     return [
         f"! CipherGuard hardening plan - {platform}",
         f"! Generated {ts} from capture '{_safe(assessment.capture, 80)}'",
-        f"! Posture score {assessment.score()}/100 (grade {assessment.grade()})"
-        f" - {crit} critical, {high} high",
+        f"! Posture score {assessment.score()}/100 (grade {assessment.grade()}) - {crit} critical, {high} high",
         "!",
         "! REVIEW BEFORE APPLYING. Staged as new policy entries; nothing existing",
         "! is removed. Cut over during a change window, verify the tunnel",
@@ -70,9 +69,7 @@ def _findings_summary(findings: list[Finding]) -> list[str]:
         if f.severity in (Severity.INFO,):
             continue
         tag = "inferred" if f.inferred else "observed"
-        lines.append(
-            f"!   [{f.severity.value:8}] {_safe(f.rule_id, 12)} ({tag}) {_safe(f.title, 90)}"
-        )
+        lines.append(f"!   [{f.severity.value:8}] {_safe(f.rule_id, 12)} ({tag}) {_safe(f.title, 90)}")
     lines.append("!")
     return lines
 
@@ -252,9 +249,7 @@ def detect_platforms(assessment: Assessment) -> list[str]:
 def synthesize(assessment: Assessment, platform: str) -> str:
     key = platform.lower()
     if key not in GENERATORS:
-        raise ValueError(
-            f"unknown platform '{platform}'; choose from {sorted(GENERATORS)}"
-        )
+        raise ValueError(f"unknown platform '{platform}'; choose from {sorted(GENERATORS)}")
     return GENERATORS[key](assessment)
 
 

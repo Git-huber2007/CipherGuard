@@ -84,8 +84,7 @@ class LinkExposure:
         }
 
 
-def mosca_gap(secrecy_years: float, migration_years: float,
-              crqc_years: float = DEFAULT_CRQC_YEARS) -> float:
+def mosca_gap(secrecy_years: float, migration_years: float, crqc_years: float = DEFAULT_CRQC_YEARS) -> float:
     """Mosca's inequality as a signed number of years.
 
     Positive means the data will still be sensitive when it becomes decryptable,
@@ -135,8 +134,11 @@ def assess_links(
 
         if strength.quantum_safe:
             index = 0.0
-            how = ("a hybrid of " + " and ".join(c["name"] for c in strength.kex_components)
-                   if strength.hybrid else strength.kex_family.upper())
+            how = (
+                "a hybrid of " + " and ".join(c["name"] for c in strength.kex_components)
+                if strength.hybrid
+                else strength.kex_family.upper()
+            )
             # quantum_bits is the association's figure, capped by the cipher's
             # Grover margin, so it is stated of the association, not the exchange
             rationale = (
@@ -227,55 +229,63 @@ def roadmap(
         planned = [l for l in rest if l.classical_bits >= 128]
 
         if immediate:
-            phases.append({
-                "phase": 1,
-                "window": "immediate",
-                "links": [l.peer for l in immediate],
-                "action": (
-                    "Replace broken classical cryptography first. These links are "
-                    "exposed to a conventional attacker today, so the quantum "
-                    "timeline is not the binding constraint — fix them regardless "
-                    "of PQC readiness."
-                ),
-                "target": "AES-GCM-256, DH Group 19 or 31, IKEv2, certificate auth",
-            })
+            phases.append(
+                {
+                    "phase": 1,
+                    "window": "immediate",
+                    "links": [l.peer for l in immediate],
+                    "action": (
+                        "Replace broken classical cryptography first. These links are "
+                        "exposed to a conventional attacker today, so the quantum "
+                        "timeline is not the binding constraint — fix them regardless "
+                        "of PQC readiness."
+                    ),
+                    "target": "AES-GCM-256, DH Group 19 or 31, IKEv2, certificate auth",
+                }
+            )
         if near:
-            phases.append({
-                "phase": 2,
-                "window": "next change window",
-                "links": [l.peer for l in near],
-                "action": (
-                    "Deploy RFC 8784 post-quantum pre-shared keys. This works on "
-                    "existing IKEv2 firmware and mixes a PPK into the key schedule, "
-                    "so it defeats harvest-now-decrypt-later without waiting for "
-                    "ML-KEM support to ship."
-                ),
-                "target": "RFC 8784 PPK layered over the current suite",
-            })
+            phases.append(
+                {
+                    "phase": 2,
+                    "window": "next change window",
+                    "links": [l.peer for l in near],
+                    "action": (
+                        "Deploy RFC 8784 post-quantum pre-shared keys. This works on "
+                        "existing IKEv2 firmware and mixes a PPK into the key schedule, "
+                        "so it defeats harvest-now-decrypt-later without waiting for "
+                        "ML-KEM support to ship."
+                    ),
+                    "target": "RFC 8784 PPK layered over the current suite",
+                }
+            )
         if planned:
-            phases.append({
-                "phase": 3,
-                "window": "as firmware allows",
-                "links": [l.peer for l in planned],
-                "action": (
-                    "Enable hybrid key establishment: ML-KEM alongside the existing "
-                    "elliptic-curve group under RFC 9370, so the link stays secure "
-                    "if either primitive fails."
-                ),
-                "target": "Hybrid ML-KEM-768 (Group 36) + Curve25519 (Group 31)",
-            })
+            phases.append(
+                {
+                    "phase": 3,
+                    "window": "as firmware allows",
+                    "links": [l.peer for l in planned],
+                    "action": (
+                        "Enable hybrid key establishment: ML-KEM alongside the existing "
+                        "elliptic-curve group under RFC 9370, so the link stays secure "
+                        "if either primitive fails."
+                    ),
+                    "target": "Hybrid ML-KEM-768 (Group 36) + Curve25519 (Group 31)",
+                }
+            )
         if cipher_limited:
-            phases.append({
-                "phase": 4,
-                "window": "next change window",
-                "links": [l.peer for l in cipher_limited],
-                "action": (
-                    "Key establishment on these links is already post-quantum. "
-                    "What remains is the cipher: raise it to a 256-bit key, so that "
-                    "Grover's search leaves a 128-bit margin."
-                ),
-                "target": "AES-GCM-256 or ChaCha20-Poly1305",
-            })
+            phases.append(
+                {
+                    "phase": 4,
+                    "window": "next change window",
+                    "links": [l.peer for l in cipher_limited],
+                    "action": (
+                        "Key establishment on these links is already post-quantum. "
+                        "What remains is the cipher: raise it to a 256-bit key, so that "
+                        "Grover's search leaves a 128-bit margin."
+                    ),
+                    "target": "AES-GCM-256 or ChaCha20-Poly1305",
+                }
+            )
 
     return {
         "assumptions": {

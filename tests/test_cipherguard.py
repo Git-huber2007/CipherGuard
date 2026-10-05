@@ -127,8 +127,12 @@ def test_ikev2_aead_proposal_omits_integrity():
 def test_ikev2_notifies_and_vendor_id():
     suite = dict(encr=12, key_bits=128, prf=2, integ=2, dh=14)
     raw = pcapgen.ikev2_sa_init(
-        b"\x05" * 8, b"\x06" * 8, suite, True,
-        extra_notifies=[16430, 16388], vendor=b"strongSwan",
+        b"\x05" * 8,
+        b"\x06" * 8,
+        suite,
+        True,
+        extra_notifies=[16430, 16388],
+        vendor=b"strongSwan",
     )
     msg = _parse_single(raw)
     assert msg is not None
@@ -162,8 +166,8 @@ def test_ikev1_attributes_are_recovered():
 def test_natt_non_esp_marker_required_on_4500():
     suite = dict(encr=20, key_bits=256, prf=5, integ=12, dh=31)
     raw = pcapgen.ikev2_sa_init(b"\x0a" * 8, b"\x0b" * 8, suite, True)
-    assert _parse_single(raw, 4500, 4500) is None          # no marker: it is ESP
-    assert _parse_single(b"\x00" * 4 + raw, 4500, 4500)    # marker present: it is IKE
+    assert _parse_single(raw, 4500, 4500) is None  # no marker: it is ESP
+    assert _parse_single(b"\x00" * 4 + raw, 4500, 4500)  # marker present: it is IKE
 
 
 def test_non_ike_traffic_is_rejected():
@@ -298,8 +302,7 @@ def test_plausibility_never_masks_everything():
     distribution the caller would normalise into NaNs."""
     from cipherguard.core.models import EspFlow
 
-    flow = EspFlow(spi=1, src="a", dst="b", packets=50,
-                   payload_lengths=[37, 41, 43, 47, 53, 59, 61, 67, 71, 73])
+    flow = EspFlow(spi=1, src="a", dst="b", packets=50, payload_lengths=[37, 41, 43, 47, 53, 59, 61, 67, 71, 73])
     mask, _e, notes = plausibility(flow, sorted(C.ESP_SUITES))
     assert mask.sum() > 0
     assert any("No catalogued suite" in n for n in notes)
@@ -372,8 +375,7 @@ def test_score_is_monotonic_in_severity():
 
     def mk(sev, n):
         return [
-            Finding(rule_id="T", title="t", severity=sev, subject=str(i),
-                    detail="", reference="", remediation="")
+            Finding(rule_id="T", title="t", severity=sev, subject=str(i), detail="", reference="", remediation="")
             for i in range(n)
         ]
 
@@ -397,9 +399,7 @@ def test_rule_exception_does_not_abort_the_audit(monkeypatch):
         raise ValueError("synthetic")
 
     a = Assessment(capture="x", started="now")
-    a.sessions = [
-        ike_mod.IkeSession(b"\x01" * 8, b"\x02" * 8, "IKEv2", "10.0.0.1", "10.0.0.2")
-    ]
+    a.sessions = [ike_mod.IkeSession(b"\x01" * 8, b"\x02" * 8, "IKEv2", "10.0.0.1", "10.0.0.2")]
     monkeypatch.setattr(eng, "IKE_RULES", [("BOOM", boom)])
     out = evaluate(a)
     assert out.findings and out.findings[0].rule_id == "BOOM"
@@ -419,10 +419,7 @@ def test_every_suite_belongs_to_exactly_one_framing_class():
 def test_framing_class_members_share_a_signature():
     """The whole point of a class is that its verdict holds for every member."""
     for name, spec in P.FRAMING_CLASSES.items():
-        sigs = {
-            (C.ESP_SUITES[m]["block"], C.ESP_SUITES[m]["iv"], C.ESP_SUITES[m]["icv"])
-            for m in spec["members"]
-        }
+        sigs = {(C.ESP_SUITES[m]["block"], C.ESP_SUITES[m]["iv"], C.ESP_SUITES[m]["icv"]) for m in spec["members"]}
         assert len(sigs) == 1, f"{name} mixes distinguishable framings"
 
 
@@ -454,10 +451,7 @@ def test_remediation_renders_for_every_platform(platform, tmp_path):
 
     # Only active lines matter. Comments legitimately name weak algorithms,
     # because they cite the finding each block is there to fix.
-    active = [
-        l for l in config.splitlines()
-        if l.strip() and not l.lstrip().startswith(("#", "!"))
-    ]
+    active = [l for l in config.splitlines() if l.strip() and not l.lstrip().startswith(("#", "!"))]
     body = "\n".join(active).lower()
     assert active, "generated a config with no executable lines"
     for weak in ("3des", "md5", "sha1", "des-cbc", "group2 ", "dh-group group2\n"):
@@ -541,17 +535,21 @@ def test_quantum_strength_bounded_by_key_exchange():
     from cipherguard.core.strength import score_proposal
 
     # AES-256 gives 128 bits under Grover, but a classical KEX zeroes it out
-    s = score_proposal([
-        Transform(1, "ENCR", 20, "ENCR_AES_GCM_16", key_length=256),
-        Transform(4, "DH", 31, "Curve25519"),
-    ])
+    s = score_proposal(
+        [
+            Transform(1, "ENCR", 20, "ENCR_AES_GCM_16", key_length=256),
+            Transform(4, "DH", 31, "Curve25519"),
+        ]
+    )
     assert s.quantum_bits == 0
     assert not s.quantum_safe
 
-    pq = score_proposal([
-        Transform(1, "ENCR", 20, "ENCR_AES_GCM_16", key_length=256),
-        Transform(4, "DH", 36, "ML-KEM-768"),
-    ])
+    pq = score_proposal(
+        [
+            Transform(1, "ENCR", 20, "ENCR_AES_GCM_16", key_length=256),
+            Transform(4, "DH", 36, "ML-KEM-768"),
+        ]
+    )
     assert pq.quantum_safe
 
 
@@ -618,7 +616,7 @@ def test_baseline_retains_best_not_latest(tmp_path):
     with BaselineStore(db) as store:
         store.record(_assess(strong))
         store.record(_assess(weak))
-        store.record(_assess(weak))          # repeated weakness
+        store.record(_assess(weak))  # repeated weakness
         rows = store.fleet()
     assert rows[0]["best_classical_bits"] > rows[0]["current_bits"]
     assert rows[0]["degraded"]
@@ -632,8 +630,8 @@ def test_baseline_retains_best_not_latest(tmp_path):
 def test_mosca_inequality_sign_convention():
     from cipherguard.intel.pqc import mosca_gap
 
-    assert mosca_gap(50, 3, 12) > 0     # strategic data: already late
-    assert mosca_gap(1, 1, 12) < 0      # short-lived data: margin remains
+    assert mosca_gap(50, 3, 12) > 0  # strategic data: already late
+    assert mosca_gap(1, 1, 12) < 0  # short-lived data: margin remains
 
 
 def test_roadmap_ranks_weak_links_first(tmp_path):
@@ -653,10 +651,12 @@ def test_quantum_safe_links_carry_zero_exposure(tmp_path):
     from cipherguard.core.models import Transform
     from cipherguard.core.strength import score_proposal
 
-    s = score_proposal([
-        Transform(1, "ENCR", 20, "ENCR_AES_GCM_16", key_length=256),
-        Transform(4, "DH", 37, "ML-KEM-1024"),
-    ])
+    s = score_proposal(
+        [
+            Transform(1, "ENCR", 20, "ENCR_AES_GCM_16", key_length=256),
+            Transform(4, "DH", 37, "ML-KEM-1024"),
+        ]
+    )
     assert s.quantum_safe and s.quantum_bits >= 128
 
 
@@ -695,8 +695,7 @@ def test_cbom_marks_inferred_assets(tmp_path):
     doc = build_cbom(_assess(path))
 
     def prov(c):
-        return next((p["value"] for p in c.get("properties", [])
-                     if p["name"] == "cipherguard:provenance"), None)
+        return next((p["value"] for p in c.get("properties", []) if p["name"] == "cipherguard:provenance"), None)
 
     provenances = {prov(c) for c in doc["components"]}
     assert provenances == {"observed", "inferred"}
@@ -768,8 +767,7 @@ def test_flow_table_is_bounded_against_spi_randomisation(tmp_path):
     path = str(tmp_path / "flood.pcap")
     with PcapWriter(path) as w:
         for i in range(5000):
-            w.write_esp(i * 1e-6, "10.0.0.1", "10.0.0.2",
-                        (i * 2654435761) & 0xFFFFFFFF, 1, b"x" * 64)
+            w.write_esp(i * 1e-6, "10.0.0.1", "10.0.0.2", (i * 2654435761) & 0xFFFFFFFF, 1, b"x" * 64)
 
     tracker = EspTracker(max_flows=256)
     for pkt in read_packets(path):
@@ -787,8 +785,7 @@ def test_flood_does_not_evict_established_tunnels(tmp_path):
         for i in range(400):  # a genuine, busy tunnel
             w.write_esp(i * 1e-4, "10.0.0.1", "10.0.0.2", 0xCAFEBABE, i, b"y" * 128)
         for i in range(3000):  # flood of singletons
-            w.write_esp(1.0 + i * 1e-6, "10.0.0.1", "10.0.0.2",
-                        (i * 2654435761) & 0xFFFFFFFF, 1, b"x" * 64)
+            w.write_esp(1.0 + i * 1e-6, "10.0.0.1", "10.0.0.2", (i * 2654435761) & 0xFFFFFFFF, 1, b"x" * 64)
 
     tracker = EspTracker(max_flows=128)
     for pkt in read_packets(path):
@@ -834,10 +831,7 @@ def test_remediation_output_cannot_be_injected_via_capture_name():
     a = Assessment(capture=hostile, started="now")
     for platform in GENERATORS:
         config = synthesize(a, platform)
-        active = [
-            l for l in config.splitlines()
-            if l.strip() and not l.lstrip().startswith(("#", "!"))
-        ]
+        active = [l for l in config.splitlines() if l.strip() and not l.lstrip().startswith(("#", "!"))]
         assert not any("ATTACKER" in l for l in active), platform
         assert not any("203.0.113.66" in l for l in active), platform
 
@@ -847,13 +841,19 @@ def test_finding_text_cannot_escape_the_comment_block():
 
     a = Assessment(capture="ok.pcap", started="now")
     a.findings = [
-        Finding(rule_id="X-1", title="bad\n set peer 198.51.100.9\n", severity=Severity.HIGH,
-                subject="s", detail="d", reference="r", remediation="fix")
+        Finding(
+            rule_id="X-1",
+            title="bad\n set peer 198.51.100.9\n",
+            severity=Severity.HIGH,
+            subject="s",
+            detail="d",
+            reference="r",
+            remediation="fix",
+        )
     ]
     for platform in GENERATORS:
         active = [
-            l for l in synthesize(a, platform).splitlines()
-            if l.strip() and not l.lstrip().startswith(("#", "!"))
+            l for l in synthesize(a, platform).splitlines() if l.strip() and not l.lstrip().startswith(("#", "!"))
         ]
         assert not any("198.51.100.9" in l for l in active), platform
 
@@ -1079,12 +1079,8 @@ def test_api_requires_bearer_token_when_configured(tmp_path):
     client = TestClient(create_app(capture_dir=str(tmp_path), auth_token="s3cret"))
     for endpoint in ("/api/captures", "/api/rules", "/api/model", "/api/fleet"):
         assert client.get(endpoint).status_code == 401, endpoint
-        assert client.get(
-            endpoint, headers={"Authorization": "Bearer wrong"}
-        ).status_code == 401, endpoint
-        assert client.get(
-            endpoint, headers={"Authorization": "Bearer s3cret"}
-        ).status_code == 200, endpoint
+        assert client.get(endpoint, headers={"Authorization": "Bearer wrong"}).status_code == 401, endpoint
+        assert client.get(endpoint, headers={"Authorization": "Bearer s3cret"}).status_code == 200, endpoint
 
 
 @pytest.mark.no_model
@@ -1217,8 +1213,9 @@ def test_nat_keepalive_is_not_counted_as_esp():
     from cipherguard.dissector.esp import EspTracker
 
     tracker = EspTracker()
-    keepalive = Packet(frame=1, timestamp=1.0, src="10.0.0.1", dst="10.0.0.2",
-                       protocol=17, sport=4500, dport=4500, payload=b"\xff")
+    keepalive = Packet(
+        frame=1, timestamp=1.0, src="10.0.0.1", dst="10.0.0.2", protocol=17, sport=4500, dport=4500, payload=b"\xff"
+    )
     assert tracker.consume(keepalive) is False
     assert not tracker.flows
 
@@ -1226,8 +1223,9 @@ def test_nat_keepalive_is_not_counted_as_esp():
 def test_nat_keepalive_is_not_parsed_as_ike():
     from cipherguard.dissector.pcap import Packet
 
-    pkt = Packet(frame=1, timestamp=1.0, src="10.0.0.1", dst="10.0.0.2",
-                 protocol=17, sport=4500, dport=4500, payload=b"\xff")
+    pkt = Packet(
+        frame=1, timestamp=1.0, src="10.0.0.1", dst="10.0.0.2", protocol=17, sport=4500, dport=4500, payload=b"\xff"
+    )
     assert ike_mod.parse_message(pkt) is None
 
 
@@ -1237,8 +1235,7 @@ def test_ikev2_fragmentation_is_recognised_not_flagged_malformed():
     malformed."""
     body = struct.pack("!HH", 1, 3) + os.urandom(64)
     payload = struct.pack("!BBH", 0, 0, len(body) + 4) + body
-    header = (b"\x01" * 8 + b"\x02" * 8
-              + struct.pack("!BBBBII", 53, 0x20, 35, 0x08, 1, 28 + len(payload)))
+    header = b"\x01" * 8 + b"\x02" * 8 + struct.pack("!BBBBII", 53, 0x20, 35, 0x08, 1, 28 + len(payload))
     msg = _parse_single(header + payload)
 
     assert msg is not None
@@ -1346,8 +1343,9 @@ def test_nat_keepalive_is_not_mistaken_for_esp():
     from cipherguard.dissector.esp import EspTracker
 
     tracker = EspTracker()
-    keepalive = Packet(frame=1, timestamp=1.0, src="10.0.0.1", dst="10.0.0.2",
-                       protocol=17, sport=4500, dport=4500, payload=b"\xff")
+    keepalive = Packet(
+        frame=1, timestamp=1.0, src="10.0.0.1", dst="10.0.0.2", protocol=17, sport=4500, dport=4500, payload=b"\xff"
+    )
     assert tracker.consume(keepalive) is False
     assert not tracker.flows
     assert ike_mod.parse_message(keepalive) is None
@@ -1358,10 +1356,8 @@ def test_ikev2_fragment_number_and_total_are_read_from_the_packet():
     field; a dissector that does not know the payload type reports a perfectly
     valid exchange as malformed."""
     body = struct.pack("!BBH", 0, 0, 4 + 4 + 64) + struct.pack("!HH", 2, 5) + b"\x00" * 64
-    raw = (b"\x11" * 8 + b"\x22" * 8
-           + struct.pack("!BBBBII", 53, 0x20, 35, 0x08, 1, 28 + len(body)) + body)
-    pkt = Packet(frame=1, timestamp=1.0, src="10.0.0.1", dst="10.0.0.2",
-                 protocol=17, sport=500, dport=500, payload=raw)
+    raw = b"\x11" * 8 + b"\x22" * 8 + struct.pack("!BBBBII", 53, 0x20, 35, 0x08, 1, 28 + len(body)) + body
+    pkt = Packet(frame=1, timestamp=1.0, src="10.0.0.1", dst="10.0.0.2", protocol=17, sport=500, dport=500, payload=raw)
 
     msg = ike_mod.parse_message(pkt)
     assert msg is not None
@@ -1447,15 +1443,19 @@ def test_policy_overlay_extends_rather_than_replaces(tmp_path, monkeypatch):
     monkeypatch.setattr(Pol, "MIN_DH_BITS", Pol.MIN_DH_BITS)
 
     overlay = tmp_path / "agency.json"
-    overlay.write_text(_json.dumps({
-        "name": "test directive",
-        "MIN_DH_BITS": 3072,
-        "DH_PROHIBITED": {"14": "below the 3072-bit floor"},
-    }))
+    overlay.write_text(
+        _json.dumps(
+            {
+                "name": "test directive",
+                "MIN_DH_BITS": 3072,
+                "DH_PROHIBITED": {"14": "below the 3072-bit floor"},
+            }
+        )
+    )
 
     PC.load_and_apply(str(overlay))
-    assert 14 in Pol.DH_PROHIBITED       # the agency's addition
-    assert 2 in Pol.DH_PROHIBITED        # baseline prohibitions retained
+    assert 14 in Pol.DH_PROHIBITED  # the agency's addition
+    assert 2 in Pol.DH_PROHIBITED  # baseline prohibitions retained
     assert Pol.MIN_DH_BITS == 3072
 
 
@@ -1547,8 +1547,7 @@ def test_packaging_includes_every_static_asset():
 
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     pyproject = open(os.path.join(root, "pyproject.toml"), encoding="utf-8").read()
-    found = re.search(r"\[tool\.setuptools\.package-data\](.*?)(\n\[|\Z)",
-                      pyproject, re.S)
+    found = re.search(r"\[tool\.setuptools\.package-data\](.*?)(\n\[|\Z)", pyproject, re.S)
     assert found is not None
     block = found.group(1)
     for pattern in ("static/*.html", "static/css/*.css", "static/js/*.js"):
@@ -1656,8 +1655,7 @@ def test_flood_does_not_collapse_throughput(tmp_path):
     path = str(tmp_path / "flood.pcap")
     with PcapWriter(path) as w:
         for i in range(30000):
-            w.write_esp(i * 1e-6, "10.0.0.1", "10.0.0.2",
-                        (i * 2654435761) & 0xFFFFFFFF, 1, b"x" * 64)
+            w.write_esp(i * 1e-6, "10.0.0.1", "10.0.0.2", (i * 2654435761) & 0xFFFFFFFF, 1, b"x" * 64)
     packets = list(read_packets(path))
 
     tracker = EspTracker(max_flows=4096)
@@ -1680,8 +1678,7 @@ def test_eviction_is_amortised_not_per_packet(tmp_path):
     path = str(tmp_path / "flood.pcap")
     with PcapWriter(path) as w:
         for i in range(8000):
-            w.write_esp(i * 1e-6, "10.0.0.1", "10.0.0.2",
-                        (i * 2654435761) & 0xFFFFFFFF, 1, b"x" * 64)
+            w.write_esp(i * 1e-6, "10.0.0.1", "10.0.0.2", (i * 2654435761) & 0xFFFFFFFF, 1, b"x" * 64)
 
     tracker = EspTracker(max_flows=1024)
     for pkt in read_packets(path):
@@ -1706,8 +1703,10 @@ def test_flow_reporting_uses_the_framing_class():
     flow.predicted_suite = "ChaCha20-Poly1305"
     flow.confidence = 0.30
     flow.ranked = [
-        ("ChaCha20-Poly1305", 0.30), ("AES-GCM-128 (ICV 16)", 0.27),
-        ("AES-GCM-256 (ICV 16)", 0.25), ("AES-CTR-128 / HMAC-SHA2-256-128", 0.18),
+        ("ChaCha20-Poly1305", 0.30),
+        ("AES-GCM-128 (ICV 16)", 0.27),
+        ("AES-GCM-256 (ICV 16)", 0.25),
+        ("AES-CTR-128 / HMAC-SHA2-256-128", 0.18),
     ]
 
     cls_name, members, mass = flow.framing()
@@ -1734,14 +1733,31 @@ def test_unanswered_proposal_cannot_write_the_baseline(tmp_path):
     from cipherguard.intel.baseline import BaselineStore
 
     spoofed = IkeMessage(
-        frame=1, timestamp=1.0, src="10.0.0.1", dst="10.0.0.2", sport=500, dport=500,
-        version="IKEv2", exchange="IKE_SA_INIT", initiator_spi=b"\x01" * 8,
-        responder_spi=b"\x00" * 8, message_id=0, is_initiator=True, is_response=False,
+        frame=1,
+        timestamp=1.0,
+        src="10.0.0.1",
+        dst="10.0.0.2",
+        sport=500,
+        dport=500,
+        version="IKEv2",
+        exchange="IKE_SA_INIT",
+        initiator_spi=b"\x01" * 8,
+        responder_spi=b"\x00" * 8,
+        message_id=0,
+        is_initiator=True,
+        is_response=False,
     )
-    spoofed.proposals = [Proposal(number=1, protocol_id=1, protocol="IKE", transforms=[
-        Transform(1, "ENCR", 20, "ENCR_AES_GCM_16", key_length=256),
-        Transform(4, "DH", 31, "Curve25519"),
-    ])]
+    spoofed.proposals = [
+        Proposal(
+            number=1,
+            protocol_id=1,
+            protocol="IKE",
+            transforms=[
+                Transform(1, "ENCR", 20, "ENCR_AES_GCM_16", key_length=256),
+                Transform(4, "DH", 31, "Curve25519"),
+            ],
+        )
+    ]
     session = IkeSession(b"\x01" * 8, b"\x00" * 8, "IKEv2", "10.0.0.1", "10.0.0.2")
     session.messages = [spoofed]
 
@@ -1753,7 +1769,7 @@ def test_unanswered_proposal_cannot_write_the_baseline(tmp_path):
         assert drifts == []
         assert store.fleet() == []
 
-    assert session.negotiated("IKE") is not None          # still reportable
+    assert session.negotiated("IKE") is not None  # still reportable
     assert session.negotiated("IKE", confirmed_only=True) is None
     assert not session.is_confirmed()
 
@@ -1792,13 +1808,23 @@ def test_new_peer_creation_is_rate_limited(tmp_path):
     sessions = []
     for i in range(50):
         response = IkeMessage(
-            frame=i, timestamp=1.0, src=f"10.9.{i}.2", dst=f"10.9.{i}.1",
-            sport=500, dport=500, version="IKEv2", exchange="IKE_SA_INIT",
-            initiator_spi=bytes([i]) * 8, responder_spi=b"\x02" * 8,
-            message_id=0, is_initiator=False, is_response=True,
+            frame=i,
+            timestamp=1.0,
+            src=f"10.9.{i}.2",
+            dst=f"10.9.{i}.1",
+            sport=500,
+            dport=500,
+            version="IKEv2",
+            exchange="IKE_SA_INIT",
+            initiator_spi=bytes([i]) * 8,
+            responder_spi=b"\x02" * 8,
+            message_id=0,
+            is_initiator=False,
+            is_response=True,
         )
-        response.proposals = [Proposal(number=1, protocol_id=1, protocol="IKE",
-                                       transforms=[Transform(4, "DH", 2, "1024-bit MODP")])]
+        response.proposals = [
+            Proposal(number=1, protocol_id=1, protocol="IKE", transforms=[Transform(4, "DH", 2, "1024-bit MODP")])
+        ]
         s = IkeSession(bytes([i]) * 8, b"\x02" * 8, "IKEv2", f"10.9.{i}.1", f"10.9.{i}.2")
         s.messages = [response]
         sessions.append(s)
@@ -1852,11 +1878,9 @@ def test_static_export_is_self_contained(tmp_path):
     pcapgen.scenario_mixed_backbone(str(caps / "backbone.pcap"))
 
     out = tmp_path / "site"
-    manifest = export(capture_dir=str(caps), out_dir=str(out),
-                      model_dir="models", verbose=False)
+    manifest = export(capture_dir=str(caps), out_dir=str(out), model_dir="models", verbose=False)
 
-    for rel in ("index.html", "css/dashboard.css", "js/dashboard.js",
-                "data/manifest.json", ".nojekyll"):
+    for rel in ("index.html", "css/dashboard.css", "js/dashboard.js", "data/manifest.json", ".nojekyll"):
         assert (out / rel).exists(), f"{rel} missing from the static build"
 
     # absolute /static/ paths break under a Pages project subpath
@@ -1865,8 +1889,7 @@ def test_static_export_is_self_contained(tmp_path):
 
     entry = manifest["captures"][0]
     payload = _json.loads((out / entry["file"]).read_text(encoding="utf-8"))
-    for key in ("score", "grade", "findings", "flows", "sessions",
-                "platforms", "roadmap", "remediation"):
+    for key in ("score", "grade", "findings", "flows", "sessions", "platforms", "roadmap", "remediation"):
         assert key in payload, f"exported analysis is missing {key}"
     assert payload["remediation"], "no hardening plan baked into the static build"
 
@@ -1887,8 +1910,7 @@ def test_static_export_carries_real_analysis(tmp_path):
     pcapgen.scenario_legacy(path)
 
     out = tmp_path / "site"
-    manifest = export(capture_dir=str(caps), out_dir=str(out),
-                      model_dir="models", verbose=False)
+    manifest = export(capture_dir=str(caps), out_dir=str(out), model_dir="models", verbose=False)
     payload = _json.loads((out / manifest["captures"][0]["file"]).read_text(encoding="utf-8"))
 
     live = pipeline.analyze(path, model_dir="models")

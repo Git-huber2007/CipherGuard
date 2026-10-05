@@ -19,15 +19,41 @@ pytestmark = pytest.mark.no_model
 needs_node = pytest.mark.skipif(NODE is None, reason="node not installed")
 
 REQUIRED = {
-    "ike": "IKE", "ike-sa-init": "IKE_SA_INIT", "ike-auth": "IKE_AUTH", "esp": "ESP",
-    "spi": "SPI", "dh-group": "Diffie-Hellman group", "aead": "AEAD",
-    "framing-class": "Framing class", "sweet32": "Sweet32", "mosca": "Mosca's inequality",
-    "crqc": "CRQC", "cbom": "CBOM", "hndl": "Harvest now, decrypt later",
-    "observed": "Observed", "inferred": "Inferred",
+    "ike": "IKE",
+    "ike-sa-init": "IKE_SA_INIT",
+    "ike-auth": "IKE_AUTH",
+    "esp": "ESP",
+    "spi": "SPI",
+    "dh-group": "Diffie-Hellman group",
+    "aead": "AEAD",
+    "framing-class": "Framing class",
+    "sweet32": "Sweet32",
+    "mosca": "Mosca's inequality",
+    "crqc": "CRQC",
+    "cbom": "CBOM",
+    "hndl": "Harvest now, decrypt later",
+    "observed": "Observed",
+    "inferred": "Inferred",
 }
 # vocabulary a definition may not lean on: the terms themselves, and protocol words
-JARGON = ["IKE", "ESP", "SPI", "AEAD", "CRQC", "CBOM", "Sweet32", "Diffie-Hellman", "IPsec",
-          "SA ", "PRF", "HMAC", "MODP", "nonce", "cipher suite", "transform"]
+JARGON = [
+    "IKE",
+    "ESP",
+    "SPI",
+    "AEAD",
+    "CRQC",
+    "CBOM",
+    "Sweet32",
+    "Diffie-Hellman",
+    "IPsec",
+    "SA ",
+    "PRF",
+    "HMAC",
+    "MODP",
+    "nonce",
+    "cipher suite",
+    "transform",
+]
 
 
 def _glossary() -> dict:
@@ -65,7 +91,7 @@ def _keys_used() -> set[str]:
 
 def test_every_term_used_in_a_tooltip_exists_in_the_glossary():
     used = _keys_used()
-    assert len(used) >= 12, used                       # the markers are really there
+    assert len(used) >= 12, used  # the markers are really there
     missing = used - set(_glossary())
     assert not missing, f"tooltips reference terms with no definition: {sorted(missing)}"
 
@@ -82,18 +108,23 @@ def test_tooltips_are_not_hover_only():
 
 @needs_node
 def test_mark_labels_the_first_occurrence_only_and_never_part_of_a_word():
-    got = run_node(ESC + "const document = undefined;\n" + module("Glossary") + r"""
+    got = run_node(
+        ESC
+        + "const document = undefined;\n"
+        + module("Glossary")
+        + r"""
       const html = Glossary.mark(esc(
         "IKEv2 uses IKE_SA_INIT then IKE; ESP tunnels, ESP again; SPIs vs SPI; "
         + "Mosca's inequality <b>not a tag</b>"));
       process.stdout.write(JSON.stringify({ html, url: Glossary.url }));
-    """)
+    """
+    )
     html = got["html"]
     keys = re.findall(r'data-gl="([\w-]+)"', html)
     assert keys == ["ike-sa-init", "ike", "esp", "spi", "mosca"]
     assert "IKEv2" in html and 'data-gl="ike">IKE</span>v2' not in html
-    assert html.count('data-gl="esp"') == 1                    # first occurrence only
-    assert "&lt;b&gt;not a tag&lt;/b&gt;" in html              # input stays escaped
+    assert html.count('data-gl="esp"') == 1  # first occurrence only
+    assert "&lt;b&gt;not a tag&lt;/b&gt;" in html  # input stays escaped
     assert got["url"] == "glossary.json"
 
 
@@ -114,8 +145,12 @@ def test_finding_groups_carry_the_sentence():
     from cipherguard.core.grouping import group_findings
     from cipherguard.core.models import Finding, Severity
 
-    groups = group_findings([Finding("IKE-006", "t", Severity.HIGH, "a <-> b", "d", "r", "f"),
-                             Finding("IKE-006", "t", Severity.HIGH, "c <-> d", "d", "r", "f")])
+    groups = group_findings(
+        [
+            Finding("IKE-006", "t", Severity.HIGH, "a <-> b", "d", "r", "f"),
+            Finding("IKE-006", "t", Severity.HIGH, "c <-> d", "d", "r", "f"),
+        ]
+    )
     assert groups[0]["why_it_matters"] == WHY_IT_MATTERS["IKE-006"]
     js = dashboard_js()
     assert "why_it_matters" in js and "Why this matters:" in js

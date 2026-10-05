@@ -89,9 +89,7 @@ class PlanStore:
 
     def get_plan(self, plan_id: str) -> HardeningPlan | None:
         with self._conn() as conn:
-            row = conn.execute(
-                "SELECT * FROM hardening_plans WHERE plan_id = ?", (plan_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM hardening_plans WHERE plan_id = ?", (plan_id,)).fetchone()
             if not row:
                 return None
             return self._row_to_plan(row)
@@ -104,9 +102,7 @@ class PlanStore:
                     (capture,),
                 ).fetchall()
             else:
-                rows = conn.execute(
-                    "SELECT * FROM hardening_plans ORDER BY created_at DESC"
-                ).fetchall()
+                rows = conn.execute("SELECT * FROM hardening_plans ORDER BY created_at DESC").fetchall()
             return [self._row_to_plan(r) for r in rows]
 
     def update_status(

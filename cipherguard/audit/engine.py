@@ -151,10 +151,7 @@ def rule_weak_auth(sess: IkeSession) -> list[Finding]:
                     + ". On a backbone link this is a credential-management liability: "
                     "the same secret is typically shared across peers and rarely rotated.",
                     reference="NIST SP 800-77 Rev. 1 s3.4",
-                    remediation=(
-                        "Move to certificate-based authentication (RSA or ECDSA) "
-                        "backed by the agency PKI."
-                    ),
+                    remediation=("Move to certificate-based authentication (RSA or ECDSA) backed by the agency PKI."),
                     evidence={"auth_method": msg.auth_method, "frame": msg.frame},
                 )
             )
@@ -176,8 +173,7 @@ def rule_encryption(sess: IkeSession) -> list[Finding]:
                     title=f"Prohibited IKE encryption algorithm: {tr.label()}",
                     severity=Severity.CRITICAL,
                     subject=_peer(sess),
-                    detail=P.ENCR_PROHIBITED[tr.name]
-                    + ". This protects the IKE control channel itself, so a break "
+                    detail=P.ENCR_PROHIBITED[tr.name] + ". This protects the IKE control channel itself, so a break "
                     "exposes the negotiated child SA keys.",
                     reference="RFC 8247 s2.1; NIST SP 800-131A Rev. 2",
                     remediation="Configure AES-GCM-256, or AES-CBC-256 where AEAD is unavailable.",
@@ -286,8 +282,7 @@ def rule_dh_group(sess: IkeSession) -> list[Finding]:
                     title=f"Prohibited Diffie-Hellman group {gid} ({meta['name']})",
                     severity=Severity.CRITICAL,
                     subject=_peer(sess),
-                    detail=P.DH_PROHIBITED[gid]
-                    + ". A single precomputation against a standard modulus breaks "
+                    detail=P.DH_PROHIBITED[gid] + ". A single precomputation against a standard modulus breaks "
                     "every session that ever used it, including traffic already recorded.",
                     reference="RFC 8247 s2.4; NIST SP 800-77 Rev. 1 s3.3",
                     remediation="Configure Group 19 (256-bit ECP) or Group 14 at minimum.",
@@ -315,13 +310,11 @@ def _key_exchanges(prop: Proposal | None) -> list:
     4, and any RFC 9370 additional key exchange that is not NONE."""
     if not prop:
         return []
-    return [t for t in prop.transforms
-            if t.type_id in C.KE_TRANSFORM_TYPES and t.value_id != 0]
+    return [t for t in prop.transforms if t.type_id in C.KE_TRANSFORM_TYPES and t.value_id != 0]
 
 
 def _addke_labels(prop: Proposal | None) -> list[str]:
-    return [f"{t.type_name}={t.name}" for t in _key_exchanges(prop)
-            if t.type_id in C.ADDKE_TRANSFORM_TYPES]
+    return [f"{t.type_name}={t.name}" for t in _key_exchanges(prop) if t.type_id in C.ADDKE_TRANSFORM_TYPES]
 
 
 @ike_rule("IKE-007")
@@ -343,12 +336,14 @@ def rule_post_quantum(sess: IkeSession) -> list[Finding]:
     if pq_selected or has_ppk:
         return []
 
-    offered_pq = sorted({
-        f"{t.name} ({t.type_name})"
-        for prop in sess.offered("IKE")
-        for t in _key_exchanges(prop)
-        if t.value_id in P.DH_PQ_GROUPS
-    })
+    offered_pq = sorted(
+        {
+            f"{t.name} ({t.type_name})"
+            for prop in sess.offered("IKE")
+            for t in _key_exchanges(prop)
+            if t.value_id in P.DH_PQ_GROUPS
+        }
+    )
     # what the finding is about: the selection if one was seen, else the offer
     basis = confirmed or _ike_proposal(sess)
     groups = {t.value_id for t in _key_exchanges(basis)}
@@ -481,9 +476,9 @@ def rule_lifetime(sess: IkeSession) -> list[Finding]:
 def rule_negotiation_failures(sess: IkeSession) -> list[Finding]:
     notifies = sess.all_notifies()
     alarming = [
-        n for n in notifies
-        if n in {"NO_PROPOSAL_CHOSEN", "AUTHENTICATION_FAILED", "INVALID_SYNTAX",
-                 "INVALID_KE_PAYLOAD"}
+        n
+        for n in notifies
+        if n in {"NO_PROPOSAL_CHOSEN", "AUTHENTICATION_FAILED", "INVALID_SYNTAX", "INVALID_KE_PAYLOAD"}
     ]
     if not alarming:
         return []
@@ -735,8 +730,7 @@ def rule_ke_reuse(sessions: list[IkeSession]) -> list[Finding]:
     SAs are distinct initiator SPIs, so retransmissions and COOKIE retries,
     which resend the same KE payload on the same SPI, never trigger it.
     """
-    reused = _by_distinct_sa(
-        sessions, lambda m: (m.src, m.ke_digest) if m.ke_digest else None)
+    reused = _by_distinct_sa(sessions, lambda m: (m.src, m.ke_digest) if m.ke_digest else None)
     out = []
     for (peer, digest), by_sa in reused.items():
         if len(by_sa) < 2:
@@ -834,8 +828,7 @@ def rule_nonce_hygiene(sessions: list[IkeSession]) -> list[Finding]:
             )
         )
 
-    reused = _by_distinct_sa(
-        sessions, lambda m: (m.nonce_digest,) if m.nonce_digest else None)
+    reused = _by_distinct_sa(sessions, lambda m: (m.nonce_digest,) if m.nonce_digest else None)
     for (digest,), by_sa in reused.items():
         if len(by_sa) < 2:
             continue
@@ -922,8 +915,7 @@ def rule_esp_framing(flow: EspFlow) -> list[Finding]:
             ),
             reference="RFC 4303 s2; RFC 8221; NIST SP 800-77 Rev. 1 s4.1",
             remediation=(
-                "Reconfigure the child SA proposal to AES-GCM-256 and confirm from "
-                "the gateway's own SA table."
+                "Reconfigure the child SA proposal to AES-GCM-256 and confirm from the gateway's own SA table."
             ),
             evidence={
                 "framing_class": cls_name,
@@ -1096,8 +1088,9 @@ def rule_catalogue() -> list[dict]:
             {
                 "id": rule_id,
                 "scope": "esp" if (rule_id, fn) in ESP_RULES else "ike",
-                "per": ("capture" if (rule_id, fn) in CAPTURE_RULES
-                        else "flow" if (rule_id, fn) in ESP_RULES else "session"),
+                "per": (
+                    "capture" if (rule_id, fn) in CAPTURE_RULES else "flow" if (rule_id, fn) in ESP_RULES else "session"
+                ),
                 "function": fn.__name__,
                 "doc": (fn.__doc__ or "").strip(),
             }
