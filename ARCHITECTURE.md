@@ -155,8 +155,8 @@ cipherguard/                       # Repository root
 │       ├── server.py              # FastAPI app and every route (REST under /api/)
 │       ├── security.py            # Host allowlist, cross-site refusal, headers, rate limits
 │       └── static/                # The dashboard: index.html, 404.html,
-│                                  #   css/dashboard.css, js/dashboard.js,
-│                                  #   js/theme-init.js, fonts/, img/
+│                                  #   css/dashboard.css, js/ (see below),
+│                                  #   fonts/, img/
 │
 ├── docs/                          # Output of `cipherguard export-demo` (GitHub Pages root):
 │                                  #   a copy of api/static/ plus precomputed data/
@@ -287,6 +287,31 @@ These hold across the codebase. `tests/test_guarantees.py` and
 The dashboard is one page of plain HTML, CSS and JavaScript with no build step
 and no framework. The source is `cipherguard/api/static/`. `docs/` is generated
 from it and should not be edited by hand.
+
+The script is split into classic scripts under `js/`, loaded in this order with
+`defer`. They share one global scope, so the order matters and a file may only
+use, at load time, what an earlier file defined.
+
+| File | Holds |
+|---|---|
+| `theme-init.js` | Applies the saved theme before first paint (the one script that is not deferred) |
+| `core.js` | Shared state, escaping, number formatting, the glossary |
+| `api.js` | Requests and the access token, toasts, in-page dialogs, the Server dialog |
+| `ipsec-view.js` | Wire ribbon, link list, score, sessions and tunnels |
+| `evidence.js` | The RFC 4303 working behind a tunnel's attribution; the findings list |
+| `postquantum.js` | Harvest clock and post-quantum exposure |
+| `replay.js` | Posture replay from the baseline store |
+| `hardening.js` | Hardening plans and their approval status |
+| `data.js` | Server or static build: where assessments are loaded from |
+| `report.js` | Loading placeholders, downloads, provenance, capture upload |
+| `shell.js` | Theme, presentation mode, running an assessment |
+| `compare.js` | Comparing two captures |
+| `wifi.js` | Tabs, the server status pill, the Wi-Fi view |
+| `spectrum.js` | Channel-use chart |
+| `export-report.js` | The printable report |
+| `live-capture.js` | Live capture panel and its packet stream |
+| `cbom.js` | The CBOM dialog |
+| `main.js` | Event wiring, keyboard shortcuts, first load |
 
 Colours, the type scale and corner radii are custom properties at the top of
 `css/dashboard.css`. The typefaces are IBM Plex Sans and IBM Plex Mono, bundled

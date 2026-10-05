@@ -60,7 +60,7 @@ the data work; the page renders what it is given.
 - **Works offline.** IBM Plex is bundled under `static/fonts/` (SIL Open Font
   License alongside) instead of loaded from Google Fonts, so the page renders
   on an isolated network or from a static export opened with no internet
-  connection. A test fails if `index.html` or `dashboard.js` references any
+  connection. A test fails if `index.html` or a dashboard script references any
   external domain.
 - **No outbound calls.** Neither the server nor the page contacts anything
   outside the machine by default. The one lookup that would (the public

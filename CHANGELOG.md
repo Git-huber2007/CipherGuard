@@ -42,6 +42,8 @@ Notable changes to CipherGuard. The format follows
   whatever process holds the port. `--port N` selects another port.
 - The README is a short overview; the method is in `METHOD.md` and operation
   in `OPERATIONS.md`.
+- The dashboard script is split into focused files under `js/`.
+- Python is formatted with `ruff format`, checked in CI.
 
 ## [1.0.0] - not yet tagged
 

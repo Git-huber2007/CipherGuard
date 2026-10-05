@@ -57,7 +57,7 @@ def test_tokenless_server_answers_loopback_names_only(tmp_path):
 
 def test_host_check_covers_pages_and_static_files(tmp_path):
     client = _client(tmp_path)
-    for path in ("/", "/static/js/dashboard.js", "/api/health"):
+    for path in ("/", "/static/js/main.js", "/api/health"):
         assert client.get(path, headers={"Host": "attacker.example"}).status_code == 400, path
 
 
@@ -153,7 +153,7 @@ def test_a_json_body_must_be_declared_as_json(lab_captures):
 # -- response headers and exposed surface -----------------------------------
 
 
-@pytest.mark.parametrize("path", ["/", "/api/rules", "/static/js/dashboard.js", "/api/nope"])
+@pytest.mark.parametrize("path", ["/", "/api/rules", "/static/js/main.js", "/api/nope"])
 def test_every_response_carries_the_security_headers(tmp_path, path):
     res = _client(tmp_path).get(path)
     csp = res.headers["content-security-policy"]

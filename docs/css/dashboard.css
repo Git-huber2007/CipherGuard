@@ -55,6 +55,11 @@
   --accent-bg:#e2eff4;
   --border:#c3cfd8;
   --dim:#4b5a66;
+  /* used by a few rules but never defined, so those declarations were
+     dropped: the status pill had no focus ring at all */
+  --primary:var(--observed);
+  --card:var(--surface);
+  --font:var(--sans);
 
   --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
@@ -3000,13 +3005,11 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   .wrap {
     padding: 0 8px 110px;
   }
+  /* a wrapping row, not a column: stacked, the header controls filled the
+     whole first screen of a phone */
   .brand {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-  .backend-status-pill {
-    align-self: flex-start;
+    justify-content: flex-start;
+    gap: 6px;
   }
   .panel {
     padding: 12px 8px;
@@ -4374,3 +4377,33 @@ button.fhead .fsub{display:block}
   html[data-theme="dark"] .rp-grid{stroke:#243440}
   html[data-theme="dark"] .rp-cursor .rp-band{fill:#22323e}
   html[data-theme="dark"] .rp-tip{background:var(--ink);color:var(--paper)}
+
+/* ---------- in-page dialog (Dialogs.ask) ---------- */
+.cg-dialog{
+  border:1px solid var(--rule);border-radius:var(--radius-lg);
+  background:var(--surface);color:var(--ink);
+  padding:0;width:min(440px, calc(100vw - 32px));
+  box-shadow:0 12px 40px rgba(20,33,43,.28);
+}
+.cg-dialog::backdrop{background:rgba(20,33,43,.55)}
+.cg-dialog-form{display:flex;flex-direction:column;gap:10px;padding:20px 22px}
+.cg-dialog-title{font-size:var(--text-md)}
+.cg-dialog-text{margin:0;color:var(--muted);font-size:var(--text-sm)}
+.cg-dialog-label{font-size:var(--text-sm);font-weight:600}
+.cg-dialog-input{
+  font-family:var(--mono);font-size:var(--text-base);
+  padding:8px 11px;border:1px solid var(--rule);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--ink);width:100%;
+}
+.cg-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+
+/* ---------- header on touch devices ---------- */
+/* No keyboard, so no shortcut list; and the bottom dock already carries
+   Assess and Export, so the header copies would be the same buttons twice. */
+@media (hover: none) and (pointer: coarse) {
+  #btn-shortcuts-help, .cta-badge { display: none; }
+}
+@media (max-width: 768px) {
+  #ipsec-export-report { display: none !important; }
+  .brand .shortcuts-trigger-btn, .brand .theme-pick select { min-height: 32px; }
+}

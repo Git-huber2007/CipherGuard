@@ -52,6 +52,9 @@ cipherguard export-demo --out docs   # regenerate the static dashboard
 - The page runs in two modes: static, from precomputed JSON with no backend,
   and live, against the FastAPI server. A change must keep both working.
 - Use the custom properties defined at the top of `css/dashboard.css`.
+- The script is split into files under `js/` that share one global scope and
+  load in the order listed in `index.html`. Put new code in the file for its
+  area; `ARCHITECTURE.md` lists them.
 
 ## Conventions
 

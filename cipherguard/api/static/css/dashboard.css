@@ -55,6 +55,11 @@
   --accent-bg:#e2eff4;
   --border:#c3cfd8;
   --dim:#4b5a66;
+  /* used by a few rules but never defined, so those declarations were
+     dropped: the status pill had no focus ring at all */
+  --primary:var(--observed);
+  --card:var(--surface);
+  --font:var(--sans);
 
   --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
@@ -3000,13 +3005,11 @@ footer{margin-top:34px;font-size:.79rem;color:var(--faint);max-width:74ch}
   .wrap {
     padding: 0 8px 110px;
   }
+  /* a wrapping row, not a column: stacked, the header controls filled the
+     whole first screen of a phone */
   .brand {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-  .backend-status-pill {
-    align-self: flex-start;
+    justify-content: flex-start;
+    gap: 6px;
   }
   .panel {
     padding: 12px 8px;
@@ -4393,3 +4396,14 @@ button.fhead .fsub{display:block}
   background:var(--surface);color:var(--ink);width:100%;
 }
 .cg-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+
+/* ---------- header on touch devices ---------- */
+/* No keyboard, so no shortcut list; and the bottom dock already carries
+   Assess and Export, so the header copies would be the same buttons twice. */
+@media (hover: none) and (pointer: coarse) {
+  #btn-shortcuts-help, .cta-badge { display: none; }
+}
+@media (max-width: 768px) {
+  #ipsec-export-report { display: none !important; }
+  .brand .shortcuts-trigger-btn, .brand .theme-pick select { min-height: 32px; }
+}

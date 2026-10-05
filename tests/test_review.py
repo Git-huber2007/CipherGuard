@@ -15,6 +15,8 @@ import time
 
 import pytest
 
+from tests.jsmodules import dashboard_js
+
 from cipherguard.core.grouping import (
     build_links,
     group_findings,
@@ -285,7 +287,7 @@ def test_ribbon_text_is_at_least_13px_and_the_seam_label_is_not_rotated():
 
 @pytest.mark.no_model
 def test_renderer_reads_server_structures_and_never_truncates_spis():
-    js = _read("js", "dashboard.js")
+    js = dashboard_js()
     assert "shortSpi" not in js
     for key in ("finding_groups", "a.links", "unlinked_findings", "tp.measurable"):
         assert key in js, key

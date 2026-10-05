@@ -18,7 +18,7 @@ import shutil
 import subprocess
 
 import pytest
-from tests.jsmodules import module
+from tests.jsmodules import dashboard_js, module
 
 from cipherguard.core import framing
 from cipherguard.core.constants import ESP_SUITES
@@ -263,7 +263,7 @@ def test_panel_is_an_accessible_dialog():
 
 @pytest.mark.no_model
 def test_panel_wiring_keyboard_and_no_chart_library():
-    js = _read("js", "dashboard.js")
+    js = dashboard_js()
     assert 'class="flow-open"' in js and '<button type="button" class="flow-open"' in js
     # Escape closes it from the global handler and from inside the dialog
     escape_block = js[js.index('if (e.key === "Escape" || e.key === "Esc") {') :][:400]
@@ -275,7 +275,7 @@ def test_panel_wiring_keyboard_and_no_chart_library():
 
 
 def _panel_source() -> str:
-    js = _read("js", "dashboard.js")
+    js = dashboard_js()
     start = js.index("const EvidencePanel = (() => {")
     end = js.index("})();", start) + len("})();")
     return js[start:end]

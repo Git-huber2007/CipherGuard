@@ -21,7 +21,7 @@ import pytest
 from cipherguard.api.server import STATIC_DIR
 from cipherguard.core.models import Assessment
 from cipherguard.intel.pqc import SECRECY_LIFETIME, mosca_gap, roadmap
-from tests.jsmodules import module
+from tests.jsmodules import dashboard_js, module
 
 needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
 
@@ -32,7 +32,7 @@ def _read(*parts: str) -> str:
 
 
 def _clock_source() -> str:
-    js = _read("js", "dashboard.js")
+    js = dashboard_js()
     start = js.index("const HarvestClock = (() => {")
     end = js.index("})();", start) + len("})();")
     return js[start:end]
@@ -369,7 +369,7 @@ def test_static_export_carries_the_clock(tmp_path):
 
     html = (out / "index.html").read_text(encoding="utf-8")
     assert 'id="hclock"' in html and 'id="hclock-class"' in html
-    assert "const HarvestClock" in (out / "js" / "dashboard.js").read_text(encoding="utf-8")
+    assert "const HarvestClock" in (out / "js" / "postquantum.js").read_text(encoding="utf-8")
     payload = _json.loads((out / manifest["captures"][0]["file"]).read_text(encoding="utf-8"))
     assert payload["roadmap"]["assumptions"]["secrecy_lifetimes"] == SECRECY_LIFETIME
     assert "harvest_rate_mbps" in payload["roadmap"]["summary"]

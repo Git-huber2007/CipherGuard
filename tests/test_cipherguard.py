@@ -1273,14 +1273,14 @@ def test_static_assets_are_served(tmp_path):
     page = client.get("/")
     assert page.status_code == 200
     assert 'href="/static/css/dashboard.css"' in page.text
-    assert 'src="/static/js/dashboard.js"' in page.text
+    assert 'src="/static/js/core.js"' in page.text and 'src="/static/js/main.js"' in page.text
 
     css = client.get("/static/css/dashboard.css")
     assert css.status_code == 200
     assert "text/css" in css.headers["content-type"]
     assert "--observed" in css.text
 
-    js = client.get("/static/js/dashboard.js")
+    js = client.get("/static/js/ipsec-view.js")
     assert js.status_code == 200
     assert "renderRibbon" in js.text
 
@@ -1322,13 +1322,15 @@ def test_every_dashboard_element_id_exists_in_the_markup():
 
     from cipherguard.api.server import STATIC_DIR
 
+    from tests.jsmodules import dashboard_js
+
     html = open(os.path.join(STATIC_DIR, "index.html"), encoding="utf-8").read()
-    js = open(os.path.join(STATIC_DIR, "js", "dashboard.js"), encoding="utf-8").read()
+    js = dashboard_js()
 
     declared = set(re.findall(r'id="([^"]+)"', html))
     referenced = set(re.findall(r'\$\("([^"]+)"\)', js))
     missing = referenced - declared
-    assert not missing, f"dashboard.js addresses ids absent from index.html: {missing}"
+    assert not missing, f"the dashboard scripts address ids absent from index.html: {missing}"
 
 
 # ---------------------------------------------------------------------------
@@ -1513,7 +1515,9 @@ def test_dashboard_assets_are_separate_files():
     for fragment in html.lower().split("<script")[1:]:
         assert "src=" in fragment.split(">")[0]
 
-    for rel in ("css/dashboard.css", "js/dashboard.js"):
+    from tests.jsmodules import dashboard_scripts
+
+    for rel in ("css/dashboard.css", *(f"js/{name}" for name in dashboard_scripts())):
         path = os.path.join(STATIC_DIR, *rel.split("/"))
         assert os.path.exists(path), f"{rel} is missing"
         assert os.path.getsize(path) > 500, f"{rel} looks truncated"
@@ -1532,7 +1536,7 @@ def test_dashboard_assets_are_actually_served(tmp_path):
     for url, marker in (
         ("/", "<!DOCTYPE html>"),
         ("/static/css/dashboard.css", "--observed"),
-        ("/static/js/dashboard.js", "function"),
+        ("/static/js/main.js", "function"),
     ):
         response = client.get(url)
         assert response.status_code == 200, url
@@ -1880,7 +1884,7 @@ def test_static_export_is_self_contained(tmp_path):
     out = tmp_path / "site"
     manifest = export(capture_dir=str(caps), out_dir=str(out), model_dir="models", verbose=False)
 
-    for rel in ("index.html", "css/dashboard.css", "js/dashboard.js", "data/manifest.json", ".nojekyll"):
+    for rel in ("index.html", "css/dashboard.css", "js/core.js", "js/main.js", "data/manifest.json", ".nojekyll"):
         assert (out / rel).exists(), f"{rel} missing from the static build"
 
     # absolute /static/ paths break under a Pages project subpath

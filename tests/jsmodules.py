@@ -1,6 +1,7 @@
-"""Pull self-contained modules out of dashboard.js so Node can run them.
+"""Pull self-contained modules out of the dashboard scripts so Node can run them.
 
-The dashboard is one classic script. Its testable parts are written as
+The dashboard is a handful of classic scripts loaded in order (js/core.js to
+js/main.js) that share one global scope. Its testable parts are written as
 `const Name = (() => { ... })();` modules with no DOM access at definition
 time, so a test can evaluate one (plus the modules it depends on) under Node
 with a small stub for the page.
@@ -10,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from typing import Any
@@ -24,9 +26,22 @@ ESC = (
 )
 
 
+def dashboard_scripts() -> list[str]:
+    """The dashboard's script files, in the order index.html loads them."""
+    with open(os.path.join(STATIC, "index.html"), encoding="utf-8") as fh:
+        html = fh.read()
+    names = re.findall(r'<script src="/static/js/([\w.-]+)" defer></script>', html)
+    assert names and names[0] == "core.js" and names[-1] == "main.js", names
+    return names
+
+
 def dashboard_js() -> str:
-    with open(os.path.join(STATIC, "js", "dashboard.js"), encoding="utf-8") as fh:
-        return fh.read()
+    """Every dashboard script concatenated in load order: what the page runs."""
+    parts = []
+    for name in dashboard_scripts():
+        with open(os.path.join(STATIC, "js", name), encoding="utf-8") as fh:
+            parts.append(fh.read())
+    return "\n".join(parts)
 
 
 def module(name: str, js: str | None = None) -> str:

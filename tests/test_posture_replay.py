@@ -24,7 +24,7 @@ import pytest
 
 from cipherguard.api.server import STATIC_DIR
 from cipherguard.intel.baseline import VERDICTS, BaselineStore
-from tests.jsmodules import module
+from tests.jsmodules import dashboard_js, module
 from tests.test_unattended import STRONG, WEAK, _assessment, _session
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -296,7 +296,7 @@ def _read(*parts: str) -> str:
 
 
 def _module() -> str:
-    js = _read("js", "dashboard.js")
+    js = dashboard_js()
     start = js.index("const PostureReplay = (() => {")
     return js[start : js.index("})();", start) + len("})();")]
 

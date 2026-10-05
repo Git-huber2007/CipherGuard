@@ -34,8 +34,8 @@ jobs:
           ruff check .
           ruff format --check .
 
-      - name: Dashboard script parses
-        run: node --check cipherguard/api/static/js/dashboard.js
+      - name: Dashboard scripts parse
+        run: for f in cipherguard/api/static/js/*.js; do node --check "$f"; done
 
   test:
     runs-on: ubuntu-latest

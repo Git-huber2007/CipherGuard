@@ -1,10 +1,10 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:00e9571c-4d52-44f6-a9fb-da7184128c93",
+  "serialNumber": "urn:uuid:8c762adb-37ad-4482-a90c-20f14837d525",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-10-02T06:45:10+00:00",
+    "timestamp": "2026-10-05T16:55:21+00:00",
     "tools": {
       "components": [
         {
@@ -257,7 +257,7 @@
         },
         {
           "name": "cipherguard:confidence",
-          "value": "0.579"
+          "value": "0.520"
         },
         {
           "name": "cipherguard:candidates",

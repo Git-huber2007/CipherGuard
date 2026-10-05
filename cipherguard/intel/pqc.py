@@ -91,7 +91,7 @@ def mosca_gap(secrecy_years: float, migration_years: float, crqc_years: float = 
     so migration is already overdue. Negative is the margin remaining.
 
     The dashboard's harvest clock recomputes this in the browser when the data
-    classification is changed (`HarvestClock.moscaGap` in dashboard.js), with
+    classification is changed (`HarvestClock.moscaGap` in js/postquantum.js), with
     the same operands in the same order so both produce the same double. A test
     runs both over a table of inputs; change them together.
     """

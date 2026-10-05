@@ -110,7 +110,7 @@
       "severity": "info",
       "rule_id": "WIFI-011",
       "title": "2.4 GHz Band In Use (Crowded Spectrum)",
-      "subject": "Band: 2.4 GHz · Channel 10",
+      "subject": "Band: 2.4 GHz \u00b7 Channel 10",
       "detail": "The 2.4 GHz spectrum has only 3 non-overlapping channels (1, 6, 11) and suffers significant co-channel interference from Bluetooth and microwave emitters.",
       "remediation": "Migrate clients to 5 GHz or 6 GHz (Wi-Fi 6/6E) for higher bandwidth and isolated DFS channels.",
       "reference": "IEEE 802.11ax / 802.11be",
