@@ -2,7 +2,7 @@
 
 ## Setup
 
-You need Python 3.11 or later.
+You need Python 3.10 or later.
 
 ```bash
 git clone https://github.com/Git-huber2007/CipherGuard.git

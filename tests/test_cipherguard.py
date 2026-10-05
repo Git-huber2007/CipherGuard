@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import random
 import struct
+import sys
 import tempfile
 
 import numpy as np
@@ -1300,7 +1301,10 @@ def test_markup_carries_no_inline_style_or_script():
 def test_static_assets_are_packaged():
     """Missing package-data entries only surface after an install, where the
     dashboard is served from a wheel that never contained the css or js."""
-    import tomllib
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:
+        import tomli as tomllib
 
     with open("pyproject.toml", "rb") as fh:
         data = tomllib.load(fh)
