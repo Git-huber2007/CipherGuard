@@ -7,12 +7,10 @@
 <meta name="description" content="Passive assessment of IPsec VPN and Wi-Fi cryptography from packet captures: what each link negotiated, what it gets wrong, and how to fix it. Nothing is decrypted.">
 <meta name="keywords" content="IPsec, IKE, ESP, Wi-Fi, cryptographic assessment, post-quantum, NIST SP 800-77, SIH26160">
 <meta name="author" content="CipherGuard Contributors">
-<link rel="canonical" href="/">
 
 <!-- Open Graph / Social Media Cards -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="CipherGuard">
-<meta property="og:url" content="/">
 <meta property="og:title" content="CipherGuard — IPsec and Wi-Fi cryptographic assessment">
 <meta property="og:description" content="Passive assessment of IPsec VPN and Wi-Fi cryptography from packet captures: what each link negotiated, what it gets wrong, and how to fix it. Nothing is decrypted.">
 <meta property="og:image" content="/static/img/og-image.png">
@@ -40,7 +38,7 @@
 <body>
 
 <!-- Global Indeterminate Loading Progress Bar -->
-<div id="global-progress-bar" class="global-progress-bar" role="progressbar" aria-label="Loading telemetry" aria-valuemin="0" aria-valuemax="100"></div>
+<div id="global-progress-bar" class="global-progress-bar" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100"></div>
 
 <!-- Toast Notifications Container -->
 <div id="toast-container" class="toast-container" aria-live="polite"></div>
@@ -51,15 +49,15 @@
       <img src="/static/img/favicon.svg" alt="" width="28" height="28" style="vertical-align:middle">
       <h1>CipherGuard</h1>
       <span class="ps">SIH26160 &middot; NTRO</span>
-      <button type="button" id="backend-status-pill" class="backend-status-pill online" title="Real-time backend & telemetry status · Click to configure bridge" aria-haspopup="dialog">
+      <button type="button" id="backend-status-pill" class="backend-status-pill" title="Server connection. Select for details." aria-haspopup="dialog">
         <span class="pulse-dot"></span>
-        <span id="backend-status-label">Live Telemetry</span>
+        <span id="backend-status-label">Checking server&hellip;</span>
       </button>
-      <button type="button" id="btn-shortcuts-help" class="shortcuts-trigger-btn" onclick="openShortcutsModal()" title="Keyboard shortcuts (? or H)" aria-haspopup="dialog">
-<span>Hotkeys <kbd>?</kbd> / <kbd>H</kbd></span>
+      <button type="button" id="btn-shortcuts-help" class="shortcuts-trigger-btn" title="Keyboard shortcuts (Alt + H)" aria-haspopup="dialog">
+        <span>Shortcuts <kbd>Alt</kbd> + <kbd>H</kbd></span>
       </button>
-      <button type="button" id="btn-cbom-toggle" class="shortcuts-trigger-btn cbom-trigger-btn" onclick="openCbomModal()" title="Cryptographic bill of materials (CBOM)" aria-haspopup="dialog">
-<span>CBOM</span>
+      <button type="button" id="btn-cbom-toggle" class="shortcuts-trigger-btn cbom-trigger-btn" title="Cryptographic bill of materials for the capture on screen (Alt + C)" aria-haspopup="dialog">
+        <span>CBOM</span>
       </button>
       <button type="button" id="btn-present" class="shortcuts-trigger-btn" aria-pressed="false"
               title="Presentation mode: step through the assessment with the arrow keys (or add ?present to the URL)">
@@ -77,10 +75,10 @@
     <div class="controls" id="header-controls">
       <!-- Dynamic controls according to active tab -->
       <div id="ipsec-controls" class="tab-controls-group">
-        <div class="mode-toggle-group" role="group" aria-label="IPsec Analysis Mode">
-          <button type="button" id="btn-ipsec-single" class="mode-toggle-btn active">Single Assessment</button>
-          <button type="button" id="btn-ipsec-live" class="mode-toggle-btn">Live Sniffer</button>
-          <button type="button" id="btn-ipsec-diff" class="mode-toggle-btn">Compare / Diff Captures</button>
+        <div class="mode-toggle-group" role="group" aria-label="IPsec view">
+          <button type="button" id="btn-ipsec-single" class="mode-toggle-btn active">Assess</button>
+          <button type="button" id="btn-ipsec-live" class="mode-toggle-btn">Live capture</button>
+          <button type="button" id="btn-ipsec-diff" class="mode-toggle-btn">Compare</button>
         </div>
         <div id="ipsec-single-controls" class="controls-subgroup">
           <label for="capture" class="visually-hidden">Capture file</label>
@@ -97,8 +95,8 @@ Assess capture <span class="cta-badge">Alt + A</span>
           </span>
           <span class="diff-vs-arrow">&rarr;</span>
           <span class="diff-select-group">
-            <label for="diff-capture-b" class="diff-label">Hardened (B):</label>
-            <select id="diff-capture-b" class="diff-select" aria-label="Remediated capture B"></select>
+            <label for="diff-capture-b" class="diff-label">Compared (B):</label>
+            <select id="diff-capture-b" class="diff-select" aria-label="Capture B"></select>
           </span>
           <button id="run-diff" class="primary-btn">Compare</button>
         </div>
@@ -113,12 +111,12 @@ Rescan <span class="cta-badge">Alt + S</span>
   </div>
 </header>
 
-<div class="wrap">
+<main class="wrap">
 
   <div class="banner" id="banner" role="status" hidden></div>
 
   <!-- Main View Navigation Tabs -->
-  <nav class="nav-tabs" role="tablist">
+  <nav class="nav-tabs" role="tablist" aria-label="Assessment type">
     <button class="tab-btn active" id="tab-ipsec" role="tab" aria-selected="true" aria-controls="view-ipsec">
       IPsec VPN
     </button>
@@ -127,8 +125,7 @@ Rescan <span class="cta-badge">Alt + S</span>
     </button>
   </nav>
 
-  <!-- ==================== VIEW 1: LIVE WI-FI POSTURE ==================== -->
-  <main id="view-wifi" class="tab-content">
+  <div id="view-wifi" class="tab-content" role="tabpanel" aria-labelledby="tab-wifi">
 
 
     <!-- Evil Twin / Rogue AP Alert Banner -->
@@ -255,12 +252,12 @@ Rescan <span class="cta-badge">Alt + S</span>
     <section class="panel vpn-overlay-panel" style="margin-bottom:18px">
       <div class="vpn-panel-header">
         <div>
-          <h2>VPN and egress <span class="domain-tag obs" id="vpn-badge">Direct ISP</span></h2>
+          <h2>VPN and egress <span class="domain-tag obs" id="vpn-badge">&mdash;</span></h2>
           <div class="sub">Whether traffic leaves through a VPN, the public address it leaves from, and where DNS queries go.</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <div id="vpn-status-indicator" class="vpn-status-badge vpn-status-inactive">
-            <span class="vpn-dot"></span> <span id="vpn-status-text">No VPN</span>
+            <span class="vpn-dot"></span> <span id="vpn-status-text">Not checked yet</span>
           </div>
         </div>
       </div>
@@ -268,8 +265,8 @@ Rescan <span class="cta-badge">Alt + S</span>
       <div class="vpn-detail-grid">
         <div class="vpn-metric-box">
           <div class="vpn-metric-title">Tunnel</div>
-          <div class="vpn-metric-value" id="vpn-proto-val">Direct (None)</div>
-          <div class="vpn-metric-sub" id="vpn-adapter-val">Physical Wi-Fi link</div>
+          <div class="vpn-metric-value" id="vpn-proto-val">&mdash;</div>
+          <div class="vpn-metric-sub" id="vpn-adapter-val">&mdash;</div>
         </div>
         <div class="vpn-metric-box">
           <div class="vpn-metric-title">Public address</div>
@@ -278,8 +275,8 @@ Rescan <span class="cta-badge">Alt + S</span>
         </div>
         <div class="vpn-metric-box">
           <div class="vpn-metric-title">Default route</div>
-          <div class="vpn-metric-value" id="vpn-route-val">Wi-Fi Gateway</div>
-          <div class="vpn-metric-sub" id="vpn-route-sub">0.0.0.0/0 on physical NIC</div>
+          <div class="vpn-metric-value" id="vpn-route-val">&mdash;</div>
+          <div class="vpn-metric-sub" id="vpn-route-sub">&mdash;</div>
         </div>
         <div class="vpn-metric-box">
           <div class="vpn-metric-title">DNS leak</div>
@@ -318,16 +315,16 @@ Rescan <span class="cta-badge">Alt + S</span>
         <table class="data-table" id="wifi-networks-table">
           <thead>
             <tr id="wifi-networks-thead-row">
-              <th scope="col">SSID / Network</th>
-              <th scope="col">Access Points (BSSID)</th>
-              <th scope="col">Security / Auth</th>
-              <th scope="col">Band &amp; Channels</th>
+              <th scope="col">Network (SSID)</th>
+              <th scope="col">Access points (BSSID)</th>
+              <th scope="col">Security</th>
+              <th scope="col">Band and channels</th>
               <th scope="col">Signal</th>
-              <th scope="col">Security Grade</th>
+              <th scope="col">Grade</th>
             </tr>
           </thead>
           <tbody id="wifi-networks-tbody">
-            <tr><td colspan="6" class="empty">Scanning for visible networks...</td></tr>
+            <tr><td colspan="6" class="empty">Waiting for the first scan&hellip;</td></tr>
           </tbody>
         </table>
       </div>
@@ -366,10 +363,9 @@ Rescan <span class="cta-badge">Alt + S</span>
         </div>
       </div>
     </section>
-  </main>
+  </div>
 
-  <!-- ==================== VIEW 2: IPSEC VPN PROTOCOL ANALYZER ==================== -->
-  <main id="view-ipsec" class="tab-content active">
+  <div id="view-ipsec" class="tab-content active" role="tabpanel" aria-labelledby="tab-ipsec">
 
     <!-- IPsec Single Capture Analysis Mode -->
     <div id="ipsec-single-view">
@@ -394,7 +390,7 @@ Rescan <span class="cta-badge">Alt + S</span>
         <div class="upload-text">
           <h2 id="upload-title" class="upload-title">Assess your own capture</h2>
           <p class="upload-hint">Drop a .pcap, .pcapng or .cap file anywhere on this page, or choose one.
-            Up to <span id="upload-limit">512 MB</span>.</p>
+            Up to <span id="upload-limit">500 MB</span>.</p>
         </div>
         <button type="button" class="btn btn-secondary" id="upload-pick">Choose capture file&hellip;</button>
         <input type="file" id="upload-input" accept=".pcap,.pcapng,.cap" class="visually-hidden" tabindex="-1" aria-hidden="true">
@@ -513,7 +509,7 @@ Rescan <span class="cta-badge">Alt + S</span>
       <section class="panel remediation-panel" id="remediation-panel">
         <div class="remediation-header">
           <div>
-            <h2>Hardening plan <span class="domain-tag obs" id="remediation-count-tag">4 vendors</span></h2>
+            <h2>Hardening plan <span class="domain-tag obs" id="remediation-count-tag" hidden></span></h2>
             <div class="sub">Configuration that fixes these findings on each detected gateway platform, with a matching rollback. Review it before applying it; nothing is sent to a gateway from this page.</div>
           </div>
         </div>
@@ -787,14 +783,14 @@ Assess what was captured
       </section>
     </div>
 
-  </main>
+  </div>
 
 
 
-</div> <!-- Closes .wrap cleanly with footer aligned inside -->
+</main>
 
 <!-- Sticky Mobile Quick Action Dock (Visible only on mobile screens <= 768px) -->
-<aside class="mobile-sticky-cta" id="mobile-sticky-cta" aria-label="Mobile Quick Actions">
+<aside class="mobile-sticky-cta" id="mobile-sticky-cta" aria-label="Quick actions">
   <div class="mobile-sticky-cta-inner">
     <button type="button" id="mobile-primary-cta" class="mobile-cta-main">
 <span id="mobile-cta-label">Assess capture</span>
@@ -805,176 +801,128 @@ Assess what was captured
   </div>
 </aside>
 
-<!-- Backend Engine Bridge & Live Telemetry Modal -->
+<!-- Server connection dialog -->
 <div id="backend-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="backend-modal-title">
   <div class="backend-modal-card" role="document">
     <div class="backend-modal-header">
       <div class="backend-modal-title-group">
-
         <div>
-          <h2 id="backend-modal-title">Local server</h2>
-          <div class="backend-modal-subtitle">Direct Kernel Telemetry &amp; REST API Connection</div>
+          <h2 id="backend-modal-title">Server</h2>
+          <div class="backend-modal-subtitle">Where this page gets its analyses</div>
         </div>
       </div>
       <button type="button" id="backend-modal-close" class="modal-close-btn" aria-label="Close dialog">&times;</button>
     </div>
 
     <div class="backend-modal-body">
-      <!-- Live Status Banner -->
-      <div id="modal-status-card" class="modal-status-card online">
+      <div id="modal-status-card" class="modal-status-card offline">
         <div class="modal-status-indicator">
           <span class="modal-status-dot"></span>
-          <span id="modal-status-badge" class="modal-status-badge">Connected · Live Telemetry</span>
+          <span id="modal-status-badge" class="modal-status-badge">Checking&hellip;</span>
         </div>
-        <div id="modal-status-details" class="modal-status-details">
-          Connected to local engine on <code>http://127.0.0.1:8000</code>. Kernel Wi-Fi &amp; VPN sensors active.
-        </div>
+        <div id="modal-status-details" class="modal-status-details"></div>
       </div>
 
-      <!-- Quick Metrics Grid -->
       <div class="modal-metrics-grid">
         <div class="modal-metric-box">
-          <div class="modal-metric-label">ENDPOINT</div>
-          <div id="modal-metric-endpoint" class="modal-metric-val">http://127.0.0.1:8000</div>
+          <div class="modal-metric-label">Server address</div>
+          <div id="modal-metric-endpoint" class="modal-metric-val">&mdash;</div>
         </div>
         <div class="modal-metric-box">
-          <div class="modal-metric-label">ROUND-TRIP LATENCY</div>
-          <div id="modal-metric-latency" class="modal-metric-val">4 ms</div>
+          <div class="modal-metric-label">Response time</div>
+          <div id="modal-metric-latency" class="modal-metric-val">&mdash;</div>
         </div>
         <div class="modal-metric-box">
-          <div class="modal-metric-label">HARDWARE ADAPTER</div>
-          <div id="modal-metric-adapter" class="modal-metric-val">MediaTek MT7921 (Wi-Fi 6)</div>
+          <div class="modal-metric-label">Wi-Fi adapter</div>
+          <div id="modal-metric-adapter" class="modal-metric-val">&mdash;</div>
         </div>
         <div class="modal-metric-box">
-          <div class="modal-metric-label">PHYSICAL SSID</div>
-          <div id="modal-metric-ssid" class="modal-metric-val">CipherGuard-HQ-Secure (Ch 52)</div>
+          <div class="modal-metric-label">Connected network</div>
+          <div id="modal-metric-ssid" class="modal-metric-val">&mdash;</div>
         </div>
       </div>
 
-      <!-- Action 1: Launch Direct Local Dashboard -->
-      <div class="backend-action-card highlight">
-        <div class="backend-action-header">
-
-          <div class="action-meta">
-            <strong>Launch Local Live Server Dashboard</strong>
-            <p>Access the dashboard directly from your local Python server on <code>http://127.0.0.1:8000/</code> with unrestricted kernel access and real-time physical Wi-Fi scanning.</p>
-          </div>
-        </div>
-        <div class="action-buttons">
-          <a href="http://127.0.0.1:8000/" target="_blank" rel="noopener noreferrer" class="btn btn-primary" id="btn-open-local-dash" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;padding:8px 14px;border-radius:4px;font-weight:600;font-size:0.85rem;">
-            Open Local Live Dashboard &rarr;
-          </a>
-        </div>
-      </div>
-
-      <!-- Action 2: Custom API Endpoint -->
       <div class="backend-action-card">
         <div class="backend-action-header">
-
           <div class="action-meta">
-            <strong>Configure Backend API URL</strong>
-            <p>If hosting the backend on another port, cloud server, or HTTPS tunnel (e.g. Cloudflare Tunnel, ngrok):</p>
-          </div>
-        </div>
-        <div class="backend-input-group">
-          <input type="url" id="backend-url-input" class="backend-input" placeholder="http://127.0.0.1:8000" spellcheck="false">
-          <button type="button" id="btn-save-backend-url" class="btn">Test &amp; Connect</button>
-          <button type="button" id="btn-reset-backend-url" class="btn btn-subtle" title="Reset to default (http://127.0.0.1:8000)">Reset</button>
-        </div>
-        <div id="backend-url-feedback" class="backend-feedback" hidden></div>
-      </div>
-
-      <!-- Action 3: Start Command Helper -->
-      <div class="backend-action-card">
-        <div class="backend-action-header">
-
-          <div class="action-meta">
-            <strong>Start Backend Engine from Terminal</strong>
-            <p>Run this command on your machine to start the live FastAPI telemetry server. It listens on this machine only. A page served from somewhere else can reach it only if that page's origin is named with <code>--cors-origin</code>.</p>
+            <strong>Start a server</strong>
+            <p>Run this where the captures are. It listens on that machine only, and serves this same dashboard at its own address. A page served from somewhere else can use it only if that page's origin is named with <code>--cors-origin</code>.</p>
           </div>
         </div>
         <div class="code-snippet-box">
           <code id="backend-start-cmd">python -m cipherguard.cli serve</code>
-          <button type="button" id="btn-copy-backend-cmd" class="btn-copy-cmd" title="Copy command to clipboard">Copy</button>
+          <button type="button" id="btn-copy-backend-cmd" class="btn-copy-cmd" title="Copy the command">Copy</button>
         </div>
+      </div>
+
+      <div class="backend-action-card">
+        <div class="backend-action-header">
+          <div class="action-meta">
+            <strong><label for="backend-url-input">Connect this page to a server</label></strong>
+            <p>Only needed when this page was not served by the server itself. Enter the server's address; the address is remembered in this browser.</p>
+          </div>
+        </div>
+        <div class="backend-input-group">
+          <input type="url" id="backend-url-input" class="backend-input" placeholder="http://127.0.0.1:8000" spellcheck="false" autocomplete="off">
+          <button type="button" id="btn-save-backend-url" class="btn">Test and connect</button>
+          <button type="button" id="btn-reset-backend-url" class="btn btn-subtle" title="Forget the saved address">Forget</button>
+        </div>
+        <div id="backend-url-feedback" class="backend-feedback" role="status" hidden></div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Analyst Keyboard Shortcuts Cheat Sheet Modal -->
+<!-- Keyboard shortcuts dialog -->
 <div id="shortcuts-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="shortcuts-modal-title">
   <div class="shortcuts-modal-card" role="document">
     <div class="backend-modal-header">
       <div class="backend-modal-title-group">
-
         <div>
           <h2 id="shortcuts-modal-title">Keyboard shortcuts</h2>
-          <div class="backend-modal-subtitle">Fast keyboard control for security audits</div>
+          <div class="backend-modal-subtitle">Each one is Alt plus a letter, so typing never triggers one by accident.</div>
         </div>
       </div>
-      <button type="button" id="shortcuts-modal-close" class="modal-close-btn" onclick="closeShortcutsModal()" aria-label="Close dialog">&times;</button>
+      <button type="button" id="shortcuts-modal-close" class="modal-close-btn" aria-label="Close dialog">&times;</button>
     </div>
     <div class="shortcuts-modal-body">
       <div class="shortcuts-grid">
         <div class="shortcut-item">
-          <div class="shortcut-keys"><kbd>?</kbd> or <kbd>H</kbd></div>
-          <div class="shortcut-desc">
-            <strong>Keyboard Shortcuts</strong>
-            <span>Open this analyst quick-reference guide</span>
-          </div>
+          <div class="shortcut-keys"><kbd>Alt</kbd> + <kbd>A</kbd></div>
+          <div class="shortcut-desc"><strong>Assess capture</strong><span>Open the IPsec view and assess the selected capture</span></div>
         </div>
         <div class="shortcut-item">
-          <div class="shortcut-keys"><kbd>1</kbd> or <kbd>W</kbd></div>
-          <div class="shortcut-desc">
-            <strong>Scan Live Wi-Fi</strong>
-            <span>Switch to Wi-Fi view and trigger active 802.11 RF sweep</span>
-          </div>
+          <div class="shortcut-keys"><kbd>Alt</kbd> + <kbd>D</kbd></div>
+          <div class="shortcut-desc"><strong>Compare</strong><span>Compare two captures side by side</span></div>
         </div>
         <div class="shortcut-item">
-          <div class="shortcut-keys"><kbd>2</kbd> or <kbd>I</kbd> or <kbd>A</kbd></div>
-          <div class="shortcut-desc">
-            <strong>Assess IPsec Capture</strong>
-            <span>Switch to IPsec view and run deep cryptographic dissection</span>
-          </div>
+          <div class="shortcut-keys"><kbd>Alt</kbd> + <kbd>S</kbd></div>
+          <div class="shortcut-desc"><strong>Scan Wi-Fi</strong><span>Open the Wi-Fi view and scan again</span></div>
         </div>
         <div class="shortcut-item">
-          <div class="shortcut-keys"><kbd>3</kbd> or <kbd>D</kbd></div>
-          <div class="shortcut-desc">
-            <strong>Toggle Diff Comparison</strong>
-            <span>Switch to Before vs. After Capture A/B comparative auditor</span>
-          </div>
+          <div class="shortcut-keys"><kbd>Alt</kbd> + <kbd>E</kbd></div>
+          <div class="shortcut-desc"><strong>Export report</strong><span>Open a printable report in a new window</span></div>
         </div>
         <div class="shortcut-item">
-          <div class="shortcut-keys"><kbd>E</kbd> or <kbd>P</kbd></div>
-          <div class="shortcut-desc">
-            <strong>Export report</strong>
-            <span>Generate and print executive compliance audit dossier</span>
-          </div>
+          <div class="shortcut-keys"><kbd>Alt</kbd> + <kbd>C</kbd></div>
+          <div class="shortcut-desc"><strong>CBOM</strong><span>Show the cryptographic bill of materials for the capture on screen</span></div>
         </div>
         <div class="shortcut-item">
-          <div class="shortcut-keys"><kbd>C</kbd></div>
-          <div class="shortcut-desc">
-            <strong>CycloneDX CBOM Viewer</strong>
-            <span>Inspect and export cryptographic bill of materials</span>
-          </div>
+          <div class="shortcut-keys"><kbd>Alt</kbd> + <kbd>H</kbd></div>
+          <div class="shortcut-desc"><strong>Shortcuts</strong><span>Open this list</span></div>
         </div>
         <div class="shortcut-item">
           <div class="shortcut-keys"><kbd>Esc</kbd></div>
-          <div class="shortcut-desc">
-            <strong>Close Dialogs & Banners</strong>
-            <span>Dismiss active modal or threat notification banner</span>
-          </div>
+          <div class="shortcut-desc"><strong>Close</strong><span>Close the open dialog or notice</span></div>
         </div>
-      </div>
-      <div class="shortcuts-footer-note">
-        <em>Pro-tip for Evaluators: Press <kbd>1</kbd> or <kbd>A</kbd> for IPsec analysis, <kbd>2</kbd> or <kbd>W</kbd> to sweep Wi-Fi, <kbd>3</kbd> or <kbd>D</kbd> for Diff mode, or <kbd>?</kbd> / <kbd>H</kbd> to open this guide anytime. Modifier combos (<kbd>Alt+A</kbd>, <kbd>Alt+S</kbd>, <kbd>Alt+D</kbd>, <kbd>Alt+E</kbd>) are also fully supported.</em>
+        <div class="shortcut-item">
+          <div class="shortcut-keys"><kbd>&larr;</kbd> <kbd>&rarr;</kbd></div>
+          <div class="shortcut-desc"><strong>Presentation steps</strong><span>Previous and next step, in presentation mode only</span></div>
+        </div>
       </div>
     </div>
   </div>
 </div>
-
-
 
 <!-- CycloneDX 1.6 CBOM viewer modal -->
 <div id="cbom-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="cbom-modal-title">
@@ -983,25 +931,26 @@ Assess what was captured
       <div class="backend-modal-title-group">
 
         <div>
-          <h2 id="cbom-modal-title">Cryptographic Bill of Materials (CBOM)</h2>
-          <div class="backend-modal-subtitle">CycloneDX v1.6 &bull; NIST SP 800-161 Supply Chain Inventory</div>
+          <h2 id="cbom-modal-title">Cryptographic bill of materials</h2>
+          <div class="backend-modal-subtitle">CycloneDX 1.6, built from the capture on screen</div>
         </div>
       </div>
-      <button type="button" id="cbom-modal-close" class="modal-close-btn" onclick="closeCbomModal()" aria-label="Close dialog">&times;</button>
+      <button type="button" id="cbom-modal-close" class="modal-close-btn" aria-label="Close dialog">&times;</button>
     </div>
     <div class="cbom-modal-body">
       <div class="cbom-toolbar">
         <div class="cbom-search-wrap">
-          <input type="text" id="cbom-search-input" class="cbom-search-input" placeholder="Filter algorithms, ciphers, key sizes...">
+          <label for="cbom-search-input" class="visually-hidden">Filter assets</label>
+          <input type="search" id="cbom-search-input" class="cbom-search-input" placeholder="Filter by algorithm, protocol or key size">
         </div>
         <div class="cbom-btn-group">
           <button type="button" id="btn-copy-cbom" class="btn-cbom-action">Copy JSON</button>
-          <button type="button" id="btn-download-cbom" class="btn-cbom-action btn-cbom-primary">Download CycloneDX 1.6</button>
+          <button type="button" id="btn-download-cbom" class="btn-cbom-action btn-cbom-primary">Download</button>
         </div>
       </div>
       <div class="cbom-content-wrap">
         <div class="cbom-summary-strip" id="cbom-summary-strip"></div>
-        <pre class="cbom-json-view"><code id="cbom-json-code">Loading Cryptographic Bill of Materials...</code></pre>
+        <pre class="cbom-json-view"><code id="cbom-json-code"></code></pre>
       </div>
     </div>
   </div>

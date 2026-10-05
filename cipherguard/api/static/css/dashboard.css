@@ -4374,3 +4374,22 @@ button.fhead .fsub{display:block}
   html[data-theme="dark"] .rp-grid{stroke:#243440}
   html[data-theme="dark"] .rp-cursor .rp-band{fill:#22323e}
   html[data-theme="dark"] .rp-tip{background:var(--ink);color:var(--paper)}
+
+/* ---------- in-page dialog (Dialogs.ask) ---------- */
+.cg-dialog{
+  border:1px solid var(--rule);border-radius:var(--radius-lg);
+  background:var(--surface);color:var(--ink);
+  padding:0;width:min(440px, calc(100vw - 32px));
+  box-shadow:0 12px 40px rgba(20,33,43,.28);
+}
+.cg-dialog::backdrop{background:rgba(20,33,43,.55)}
+.cg-dialog-form{display:flex;flex-direction:column;gap:10px;padding:20px 22px}
+.cg-dialog-title{font-size:var(--text-md)}
+.cg-dialog-text{margin:0;color:var(--muted);font-size:var(--text-sm)}
+.cg-dialog-label{font-size:var(--text-sm);font-weight:600}
+.cg-dialog-input{
+  font-family:var(--mono);font-size:var(--text-base);
+  padding:8px 11px;border:1px solid var(--rule);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--ink);width:100%;
+}
+.cg-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}

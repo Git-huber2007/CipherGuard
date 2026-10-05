@@ -18,8 +18,6 @@ const state = {
   wifiGroupMode: true,     // true: group by SSID, false: flat list of all BSSIDs
   currentWifiNetworks: [], // cached list of WifiNetwork items
   wifiAssessment: null,    // latest live wifi & vpn assessment payload
-  sessionStartTime: Date.now(),
-  telemetryTicks: 0,
   ipsecMode: "single",     // "single" or "diff"
   diffAssessmentA: null,   // baseline capture A assessment
   diffAssessmentB: null,   // hardened capture B assessment
@@ -415,54 +413,31 @@ function clearFieldError(inputEl){
   if (err) err.remove();
 }
 
-/* -------------------------- privacy-preserving telemetry & analytics */
-const CipherGuardTelemetry = {
-  events: [],
-  maxEvents: 50,
-  recordEvent(name, data = {}){
-    const entry = {
-      name,
-      data,
-      timestamp: new Date().toISOString()
-    };
-    this.events.push(entry);
-    if (this.events.length > this.maxEvents) this.events.shift();
-    try {
-      const stats = JSON.parse(localStorage.getItem("cipherguard_telemetry_stats") || "{}");
-      stats[name] = (stats[name] || 0) + 1;
-      stats.last_event_time = entry.timestamp;
-      localStorage.setItem("cipherguard_telemetry_stats", JSON.stringify(stats));
-    } catch(e) {}
-  },
-  getMetrics(){
-    try {
-      return JSON.parse(localStorage.getItem("cipherguard_telemetry_stats") || "{}");
-    } catch(e) {
-      return {};
-    }
-  }
-};
-window.CipherGuardTelemetry = CipherGuardTelemetry;
+const BACKEND_URL_KEY = "cipherguard_backend_url";
+// Each refresh makes the server run the operating system's Wi-Fi tools.
+const WIFI_REFRESH_MS = 15000;
+const DEFAULT_LOCAL_BACKEND = "http://127.0.0.1:8000";
 
-function getBackendUrl(){
+function storedBackendUrl(){
   try {
-    const custom = localStorage.getItem("cipherguard_backend_url");
-    if (custom && custom.trim()) return custom.trim().replace(/\/+$/, "");
-  } catch(e) {}
-  if (location.port === "8000") return "";
-  if (location.protocol === "file:" || location.hostname === "localhost" || location.hostname === "127.0.0.1") {
-    return "http://127.0.0.1:8000";
+    const custom = localStorage.getItem(BACKEND_URL_KEY);
+    return custom && custom.trim() ? custom.trim().replace(/\/+$/, "") : "";
+  } catch (e) {
+    return "";  // storage blocked: behave as if nothing was saved
   }
-  return "http://127.0.0.1:8000";
+}
+
+/* Where the API is. Empty means this page's own origin, which is right
+ * whenever the server itself served the page, on whatever host and port. A
+ * different backend is used only when someone saved one in the Local server
+ * dialog: the page never goes looking for a server on the viewer's machine. */
+function getBackendUrl(){
+  return storedBackendUrl();
 }
 
 function resolveApiPath(path){
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
-  const base = getBackendUrl();
-  if (base) {
-    return base + (path.startsWith("/") ? path : "/" + path);
-  }
-  return path.startsWith("/") ? path : "/" + path;
+  return getBackendUrl() + (path.startsWith("/") ? path : "/" + path);
 }
 
 async function testBackendConnection(targetUrl){
@@ -493,23 +468,28 @@ function updateBackendModalContent(isLive, details = {}){
   const lat = $("modal-metric-latency");
   const adp = $("modal-metric-adapter");
   const ssid = $("modal-metric-ssid");
-  const activeUrl = details.url || getBackendUrl() || "http://127.0.0.1:8000";
+  const activeUrl = details.url || getBackendUrl() || window.location.origin;
 
   if (ep) ep.textContent = activeUrl;
-  if (lat) lat.textContent = isLive ? `${details.latency || 4} ms` : "Offline";
+  // only a latency that was measured; never a stand-in figure
+  if (lat) lat.textContent = !isLive ? "Not connected"
+    : Number.isFinite(details.latency) ? `${details.latency} ms` : "\u2014";
 
-  const wifiIface = (state.wifiAssessment && state.wifiAssessment.interface) || {};
+  // the adapter and network are shown only when they came from a live scan
+  const wifiIface = (isLive && state.wifiIsLive && state.wifiAssessment
+                     && state.wifiAssessment.interface) || {};
   if (adp) adp.textContent = wifiIface.description || "\u2014";
-  if (ssid) ssid.textContent = wifiIface.ssid ? `${wifiIface.ssid} (Ch ${wifiIface.channel || 6})` : "\u2014";
+  if (ssid) ssid.textContent = wifiIface.ssid
+    ? wifiIface.ssid + (wifiIface.channel ? ` (channel ${wifiIface.channel})` : "") : "\u2014";
 
   if (isLive) {
     if (card) { card.className = "modal-status-card online"; }
-    if (badge) badge.textContent = "Connected · Live Kernel Bridge Active";
-    if (desc) desc.innerHTML = `Connected to local engine on <code>${esc(activeUrl)}</code>. Real-time physical Wi-Fi &amp; VPN kernel telemetry active.`;
+    if (badge) badge.textContent = "Connected";
+    if (desc) desc.innerHTML = `Using the CipherGuard server at <code>${esc(activeUrl)}</code>. Captures are assessed there, and the Wi-Fi view shows that machine's adapter.`;
   } else {
     if (card) { card.className = "modal-status-card offline"; }
-    if (badge) badge.textContent = "Standalone Telemetry Mode (Engine Disconnected)";
-    if (desc) desc.innerHTML = `Cloud/hosted mode. To stream raw kernel hardware data and execute live RF spectrum audits, launch the local backend or connect a secure tunnel.`;
+    if (badge) badge.textContent = "No server connected";
+    if (desc) desc.textContent = "This page is showing analyses that were computed when it was built. To assess your own captures or scan Wi-Fi, start the server and connect to it below.";
   }
 }
 
@@ -518,15 +498,50 @@ function openBackendModal(){
   if (!modal) return;
   modal.hidden = false;
   const input = $("backend-url-input");
-  if (input) {
-    input.value = localStorage.getItem("cipherguard_backend_url") || (location.port === "8000" ? window.location.origin : "http://127.0.0.1:8000");
-  }
+  if (input) input.value = storedBackendUrl();
   const cmd = $("backend-start-cmd");
   if (cmd) cmd.textContent = backendStartCommand();
   testBackendConnection().then(check => {
     updateBackendModalContent(check.ok, check);
   });
 }
+
+/* In-page replacement for window.prompt(): a native <dialog>, so focus is held
+ * inside it, Escape cancels and the page behind is inert while it is open. */
+const Dialogs = (() => {
+  let seq = 0;
+
+  function ask({ title, message, label, type = "text", confirmLabel = "Continue" }){
+    return new Promise(resolve => {
+      const dlg = document.createElement("dialog");
+      if (typeof dlg.showModal !== "function"){ resolve(null); return; }
+      const id = `cg-dialog-${++seq}`;
+      dlg.className = "cg-dialog";
+      dlg.setAttribute("aria-labelledby", `${id}-title`);
+      dlg.innerHTML = `
+        <form method="dialog" class="cg-dialog-form">
+          <h2 class="cg-dialog-title" id="${id}-title">${esc(title)}</h2>
+          <p class="cg-dialog-text">${esc(message)}</p>
+          <label class="cg-dialog-label" for="${id}-input">${esc(label)}</label>
+          <input class="cg-dialog-input" id="${id}-input" autocomplete="off" required
+                 type="${type === "password" ? "password" : "text"}" maxlength="256">
+          <div class="cg-dialog-actions">
+            <button type="button" class="ghost" data-cancel>Cancel</button>
+            <button type="submit">${esc(confirmLabel)}</button>
+          </div>
+        </form>`;
+      const input = dlg.querySelector("input");
+      let answer = null;
+      dlg.querySelector("[data-cancel]").addEventListener("click", () => dlg.close());
+      dlg.querySelector("form").addEventListener("submit", () => { answer = input.value.trim() || null; });
+      dlg.addEventListener("close", () => { dlg.remove(); resolve(answer); });
+      document.body.appendChild(dlg);
+      dlg.showModal();
+    });
+  }
+
+  return { ask };
+})();
 
 function closeBackendModal(){
   const modal = $("backend-modal");
@@ -548,8 +563,6 @@ function closeShortcutsModal(){
   modal.setAttribute("hidden", "");
   modal.style.setProperty("display", "none", "important");
 }
-window.openShortcutsModal = openShortcutsModal;
-window.closeShortcutsModal = closeShortcutsModal;
 
 async function handleSaveBackendUrl(){
   const input = $("backend-url-input");
@@ -557,41 +570,45 @@ async function handleSaveBackendUrl(){
   const btn = $("btn-save-backend-url");
   if (!input) return;
   const rawUrl = input.value.trim().replace(/\/+$/, "");
-  setButtonLoading(btn, true, "Testing...");
+  const say = (kind, text) => {
+    if (!feedback) return;
+    feedback.hidden = false;
+    feedback.className = "backend-feedback" + (kind ? " " + kind : "");
+    feedback.textContent = text;
+  };
+  if (!/^https?:\/\/[^\s/]+$/i.test(rawUrl)) {
+    say("error", `Enter the server's address, for example ${DEFAULT_LOCAL_BACKEND}.`);
+    return;
+  }
+  setButtonLoading(btn, true, "Testing…");
   const test = await testBackendConnection(rawUrl);
   setButtonLoading(btn, false);
   if (test.ok) {
-    localStorage.setItem("cipherguard_backend_url", rawUrl);
-    if (feedback) {
-      feedback.hidden = false;
-      feedback.className = "backend-feedback success";
-      feedback.textContent = `✔ Connected successfully! Latency: ${test.latency}ms. Streaming live kernel telemetry.`;
-    }
-    showToast(`Connected to backend: ${rawUrl} (${test.latency}ms)`, "success");
-    updateBackendStatusPill(true, test);
-    loadWifiAssessment(true, false);
+    try { localStorage.setItem(BACKEND_URL_KEY, rawUrl); } catch (e) { /* works for this visit only */ }
+    say("success", `Connected in ${test.latency} ms. Reloading to use this server.`);
+    window.location.reload();
   } else {
-    if (feedback) {
-      feedback.hidden = false;
-      feedback.className = "backend-feedback error";
-      feedback.textContent = `✖ Connection failed (${test.latency}ms): ${test.error}. Check the server is running and was started with --cors-origin ${window.location.origin}`;
-    }
-    showToast(`Backend connection failed: ${test.error}`, "error");
+    say("error", `Could not reach ${rawUrl}: ${test.error}. Check that the server is running and `
+      + `was started with --cors-origin ${window.location.origin}`);
     updateBackendStatusPill(false);
   }
 }
 
 function handleResetBackendUrl(){
-  localStorage.removeItem("cipherguard_backend_url");
+  let had = false;
+  try {
+    had = !!localStorage.getItem(BACKEND_URL_KEY);
+    localStorage.removeItem(BACKEND_URL_KEY);
+  } catch (e) { /* nothing was stored */ }
+  if (had) { window.location.reload(); return; }
   const input = $("backend-url-input");
-  if (input) input.value = "http://127.0.0.1:8000";
+  if (input) input.value = "";
   const feedback = $("backend-url-feedback");
   if (feedback) {
     feedback.hidden = false;
     feedback.className = "backend-feedback";
-    feedback.textContent = "Reset to default endpoint (http://127.0.0.1:8000).";
+    feedback.textContent = "No saved server address. This page uses the server that served it.";
   }
-  handleSaveBackendUrl();
 }
 
 /* The command that starts a backend this page can reach. Served by the backend
@@ -601,26 +618,19 @@ function handleResetBackendUrl(){
 function backendStartCommand(){
   const base = "python -m cipherguard.cli serve";
   const origin = window.location.origin;
-  const sameOrigin = location.port === "8000" || !/^https?:/.test(origin);
-  return sameOrigin ? base : `${base} --cors-origin ${origin}`;
+  const servedByBackend = !staticMode.active || !/^https?:/.test(origin);
+  return servedByBackend ? base : `${base} --cors-origin ${origin}`;
 }
 
 function handleCopyBackendCmd(){
   const cmd = backendStartCommand();
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(cmd).then(() => {
-      showToast("Command copied", "success");
-      const btn = $("btn-copy-backend-cmd");
-      if (btn) {
-        const orig = btn.textContent;
-        btn.textContent = "Copied!";
-        setTimeout(() => { btn.textContent = orig; }, 2000);
-      }
-    }).catch(() => {
-      window.prompt("Copy command:", cmd);
-    });
+  const done = ok => showToast(
+    ok ? "Command copied" : "Could not copy. Select the command and copy it by hand.",
+    ok ? "success" : "error");
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(cmd).then(() => done(true), () => done(false));
   } else {
-    window.prompt("Copy command:", cmd);
+    done(false);
   }
 }
 
@@ -654,8 +664,26 @@ function explainFailure(err){
   if (err.status === 401 || err.status === 403) return "The server needs a valid access token.";
   if (err.status === 404) return "That capture is no longer available on the server.";
   if (err.status === 413) return "That file is larger than the server accepts.";
+  if (err.status === 422) return err.detail || "The server could not read that capture.";
+  if (err.status === 429) return "Too many requests. Wait a minute, then try again.";
   if (err.status >= 500) return "The server could not complete the analysis.";
   return "The request could not be completed.";
+}
+
+/* Several requests can be refused at once on page load; they share one dialog. */
+let pendingTokenRequest = null;
+function requestToken(){
+  if (!pendingTokenRequest){
+    pendingTokenRequest = Dialogs.ask({
+      title: "Access token required",
+      message: "This CipherGuard server only answers requests that carry its access token. "
+        + "The person who started the server has it.",
+      label: "Access token",
+      type: "password",
+      confirmLabel: "Connect"
+    }).finally(() => { pendingTokenRequest = null; });
+  }
+  return pendingTokenRequest;
 }
 
 async function api(path, options){
@@ -665,34 +693,26 @@ async function api(path, options){
     const opts = Object.assign({}, options || {});
     delete opts.silent;
     opts.headers = authHeaders(opts.headers);
-    let url = resolveApiPath(path);
-    let res;
-    try {
-      res = await fetch(url, opts);
-    } catch(netErr) {
-      if (!url.startsWith("http://127.0.0.1:8000") && !url.startsWith("http://localhost:8000")) {
-        url = "http://127.0.0.1:8000" + (path.startsWith("/") ? path : "/" + path);
-        res = await fetch(url, opts);
-      } else {
-        throw netErr;
-      }
-    }
+    // One server only. A failed request used to be retried against
+    // 127.0.0.1:8000, which sent the access token to whatever was listening
+    // on that port of the viewer's own machine.
+    const url = resolveApiPath(path);
+    let res = await fetch(url, opts);
 
     if (res.status === 401){
-      const supplied = window.prompt(
-        "This CipherGuard instance requires an API token.");
-      if (!supplied) throw new Error("authentication required");
-      state.token = supplied.trim();
+      const supplied = await requestToken();
+      if (!supplied){
+        const cancelled = new Error("authentication required");
+        cancelled.status = 401;
+        throw cancelled;
+      }
+      state.token = supplied;
       try { sessionStorage.setItem("cipherguard.token", state.token); } catch (e) {}
       opts.headers = authHeaders(options && options.headers);
       res = await fetch(url, opts);
     }
     if (!res.ok) throw await apiError(res);
-    CipherGuardTelemetry.recordEvent("api_success", { path });
     return res;
-  } catch(err) {
-    CipherGuardTelemetry.recordEvent("api_error", { path, error: err.message });
-    throw err;
   } finally {
     if (!isSilent) setProgressBar(false);
   }
@@ -2073,6 +2093,11 @@ function renderPlatforms(a){
         {id: "juniper", name: "Juniper SRX (Junos)"}
       ]);
 
+  const countTag = $("remediation-count-tag");
+  if (countTag){
+    countTag.hidden = !plats.length;
+    countTag.textContent = plats.length === 1 ? "1 platform" : `${plats.length} platforms`;
+  }
   if (!plats.length){ row.innerHTML = ""; return; }
   if (!plats.some(p => p.id === state.platform)) state.platform = plats[0].id;
 
@@ -2212,18 +2237,28 @@ async function loadRemediationLive(){
 // other. Detected by probing for the manifest rather than by a build flag.
 const staticMode = {active: false, manifest: null};
 
-async function detectStaticMode(){
-  // Always probe for live backend first!
+/* Asked once per page load; every caller shares the answer. */
+let staticModeDetection = null;
+function detectStaticMode(){
+  if (!staticModeDetection) staticModeDetection = probeForServer();
+  return staticModeDetection;
+}
+
+async function probeForServer(){
+  // A server, if there is one, always wins over the saved analyses.
   try {
     const probeUrl = resolveApiPath("/api/health");
     const healthRes = await fetch(probeUrl, { method: "GET", cache: "no-store" });
-    if (healthRes.ok) {
+    // A static host that answers every path with its index page returns 200
+    // here too, so the body has to be the server's own health document.
+    const health = healthRes.ok ? await healthRes.json() : null;
+    if (health && health.status === "ok") {
       staticMode.active = false;
       // kept for controls that depend on server capability (upload)
-      try { state.health = await healthRes.json(); } catch (e) { state.health = null; }
-      return false; // Live backend is ACTIVE and ready!
+      state.health = health;
+      return false;
     }
-  } catch(e) {}
+  } catch (e) { /* no server here: fall through to the static manifest */ }
 
   // Only fall back to static demo mode if live backend is truly unreachable
   try{
@@ -2297,6 +2332,7 @@ async function loadCaptures(){
     if ($("capture")) $("capture").innerHTML = `<option value="">Backend unreachable</option>`;
     if ($("run")) $("run").disabled = true;
     showBanner(explainFailure(err), "error", { label: "Retry", onClick: async () => {
+      staticModeDetection = null;  // the server may have come up since
       await loadCaptures();
       if ($("run") && !$("run").disabled && !state.assessment) runAnalysis();
     }});
@@ -2818,9 +2854,6 @@ async function runAnalysis(){
     Skeleton.done();
     showBanner(null);
     Present.onAssessment();
-    CipherGuardTelemetry.recordEvent("ipsec_assessment_run", {
-      capture: name, score: a.score, grade: a.grade
-    });
   }catch(err){
     // The whole error, body included, is for the console; the page gets one
     // calm sentence and keeps the last good result on screen.
@@ -2840,7 +2873,6 @@ async function runAnalysis(){
       Skeleton.clearTo(why);
       showBanner(why, "error", retry);
     }
-    CipherGuardTelemetry.recordEvent("ipsec_assessment_failed", { capture: name, status: err && err.status });
   }finally{
     setButtonLoading(btn, false);
   }
@@ -2947,7 +2979,7 @@ async function runDiffAnalysis(){
     state.diffAssessmentB = b;
     renderDiffView(a, b);
   }catch(err){
-    alert("The comparison failed: " + err.message);
+showBanner(explainFailure(err), "error", { label: "Retry", onClick: () => runDiffAnalysis() });
   }finally{
     if (btn){
       btn.disabled = false;
@@ -3231,7 +3263,6 @@ function switchTab(tab){
     if (wifiControls) wifiControls.style.display = "flex";
     if (ipsecControls) ipsecControls.style.display = "none";
     if (mobileCtaLabel) mobileCtaLabel.textContent = "Scan Wi-Fi";
-    CipherGuardTelemetry.recordEvent("tab_switch", { tab: "wifi" });
   } else {
     document.title = state.ipsecMode === "diff"
       ? "Compare captures · CipherGuard"
@@ -3247,7 +3278,6 @@ function switchTab(tab){
     if (ipsecControls) ipsecControls.style.display = "flex";
     if (wifiControls) wifiControls.style.display = "none";
     if (mobileCtaLabel) mobileCtaLabel.textContent = state.ipsecMode === "diff" ? "Compare" : "Assess capture";
-    CipherGuardTelemetry.recordEvent("tab_switch", { tab: "ipsec" });
   }
 }
 
@@ -3259,12 +3289,12 @@ function updateBackendStatusPill(isLive, details = {}) {
   if (!pill || !label) return;
   if (isLive) {
     pill.className = "backend-status-pill online";
-    label.innerHTML = `<span class="pulse-dot"></span> Live Backend (:8000)`;
-    pill.title = "Connected to CipherGuard backend (:8000). Live hardware & VPN telemetry active. Click to configure bridge.";
+    label.textContent = "Server connected";
+    pill.title = "Connected to a CipherGuard server. Select for details.";
   } else {
     pill.className = "backend-status-pill offline";
-    label.innerHTML = `Connect Backend`;
-    pill.title = "Operating in standalone mode. Click to connect live backend (:8000) or open local live dashboard.";
+    label.textContent = "Saved analyses";
+    pill.title = "Showing analyses saved with this page. Select to connect a CipherGuard server.";
   }
   updateBackendModalContent(isLive, details);
 }
@@ -3281,57 +3311,50 @@ async function loadWifiAssessment(forceScan = false, silent = false){
     let data = null;
     let isLive = false;
 
-    // 1. ALWAYS prioritize live kernel telemetry from the backend API
-    try {
-      const endpoint = forceScan ? "/api/wifi/scan" : "/api/wifi/current";
-      const method = forceScan ? "POST" : "GET";
-      const res = await api(endpoint, { method, silent });
-      if (res && res.ok) {
+    // The server's own scan when there is a server. The static build has none,
+    // so it does not ask; a failed request there is noise in the console and a
+    // request every few seconds for nothing.
+    if (!staticMode.active) {
+      try {
+        const endpoint = forceScan ? "/api/wifi/scan" : "/api/wifi/current";
+        const method = forceScan ? "POST" : "GET";
+        const res = await api(endpoint, { method, silent });
         data = await res.json();
         isLive = true;
-        staticMode.active = false;
+      } catch (apiErr) {
+        console.warn("Wi-Fi scan request failed:", apiErr);
+        if (!silent) showToast(explainFailure(apiErr), "error");
       }
-    } catch (apiErr) {
-      console.debug("Live backend endpoint unreachable, checking fallback:", apiErr);
     }
 
-    // 2. Fallback to the bundled example scan if live API was unreachable. It
-    // is shown as it was saved: the page makes no lookup of its own, so it
-    // works with no internet connection and never rewrites what was saved.
+    // Otherwise the bundled example scan, shown as it was saved: the page
+    // makes no lookup of its own, so it works with no internet connection.
     if (!data) {
       try {
         const res = await fetch("data/wifi_demo.json", { cache: "no-store" });
         if (res.ok) data = await res.json();
-      } catch (e) {}
+      } catch (e) { /* no example in this build: handled below */ }
     }
+    if (!data) throw new Error("no Wi-Fi scan available");
 
     state.wifiAssessment = data;
+    state.wifiIsLive = isLive;
     renderWifiDashboard(data);
-    updateBackendStatusPill(isLive);
+    updateBackendStatusPill(!staticMode.active);
 
-    if (isLive) {
-      $("wifi-last-scan").textContent = "Scanned from this machine · " + new Date().toLocaleTimeString();
-      CipherGuardTelemetry.recordEvent("wifi_assessment_run", {
-        mode: "live",
-        force_scan: forceScan,
-        score: data.score,
-        grade: data.grade
-      });
-    } else {
-      // the bundled example, with invented networks: not this viewer's
-      // network and not anyone else's, so say so
-      $("wifi-last-scan").textContent = "Example scan · invented networks, not a real site";
-      CipherGuardTelemetry.recordEvent("wifi_assessment_run", { mode: "demo", force_scan: forceScan });
-    }
+    // the bundled example has invented networks: not this viewer's network
+    // and not anyone else's, so say so
+    $("wifi-last-scan").textContent = isLive
+      ? "Scanned from the server's adapter · " + new Date().toLocaleTimeString()
+      : "Example scan · invented networks, not a real site";
   } catch(err){
-    console.warn("Live Wi-Fi fetch fallback:", err);
     // No invented networks: say plainly that there is no scan to show.
     state.wifiAssessment = null;
+    state.wifiIsLive = false;
     $("wifi-last-scan").textContent = "Wi-Fi scan unavailable";
     const wf = $("wifi-findings");
-    if (wf) wf.innerHTML = `<div class="empty">No Wi-Fi scan is available: the local `
-      + `server is not running, and this build has no saved scan.</div>`;
-    CipherGuardTelemetry.recordEvent("wifi_assessment_fallback", { error: err.message });
+    if (wf) wf.innerHTML = `<div class="empty">No Wi-Fi scan is available: the `
+      + `server did not return one, and this build has no saved example.</div>`;
   } finally {
     if (!silent) {
       if (refreshBtn) setButtonLoading(refreshBtn, false);
@@ -3341,41 +3364,13 @@ async function loadWifiAssessment(forceScan = false, silent = false){
 }
 
   
-/* ==========================================================================
-   POST-QUANTUM CRYPTOGRAPHY & ANALYSIS ENGINES
-   ========================================================================== */
-
-// Silent no-op audio stub for compatibility
-const SocAudioEngine = {
-  enabled: false,
-  init() {},
-  toggle() {},
-  getContext() { return null; },
-  radarPing() {},
-  threatAlarm() {},
-  secureChime() {},
-  keyClick() {},
-  play() {}
-};
-window.SocAudioEngine = SocAudioEngine;
-
-// 4. Interactive Q-Day Post-Quantum Mosca Calculator
-
-
-
-// Terminal removed - python CLI provides the command interface
-function toggleCyberTerminal() {}
-window.toggleCyberTerminal = toggleCyberTerminal;
 
 function renderWifiDashboard(data){
   if (!data) return;
-  // If networks_in_range is missing or empty, ensure fallback demo networks are populated without overwriting real live interface
   const iface = data.interface;
 
   let networks = (data.networks_in_range || []).map(n => Object.assign({}, n));
   let rogueList = (data.rogue_aps || []).map(r => Object.assign({}, r));
-
-  // If user requested simulated Evil Twin AP attack, inject realistic clone AP into live view
 
   // Render or hide the Evil Twin Alert Banner
   const banner = $("wifi-evil-twin-banner");
@@ -3385,25 +3380,21 @@ function renderWifiDashboard(data){
       const primaryRogue = rogueList[0];
       const descEl = $("evil-twin-desc");
       if (descEl) {
-        descEl.innerHTML = `An active rogue clone of network <strong>"${esc(primaryRogue.ssid)}"</strong> was detected broadcasting at high RF power. Rogue access points advertise legitimate SSIDs with downgraded security to entice victim devices to connect, exposing all cleartext data, session cookies, and login credentials to an active Man-In-The-Middle (MitM) adversary.`;
+        descEl.innerHTML = `Another access point is advertising the name <strong>${esc(primaryRogue.ssid)}</strong> with weaker security than the rest of that network. A device that joins it sends its traffic through whoever runs it.`;
       }
       const pillsEl = $("evil-twin-pills");
       if (pillsEl) {
         pillsEl.innerHTML = `
-          <span class="evil-twin-pill">Target SSID: <strong>${esc(primaryRogue.ssid)}</strong></span>
-          <span class="evil-twin-pill">Rogue BSSID: <code>${esc(primaryRogue.bssid)}</code></span>
-          <span class="evil-twin-pill">Security: <b>Open (No Encryption)</b></span>
-          <span class="evil-twin-pill">Signal: <b>${esc(primaryRogue.signal || '96% (-38 dBm)')}</b></span>
-          <span class="evil-twin-pill">Threat Type: <b>Evil Twin Clone</b></span>
+          <span class="evil-twin-pill">Network name: <strong>${esc(primaryRogue.ssid)}</strong></span>
+          <span class="evil-twin-pill">Access point: <code>${esc(primaryRogue.bssid || "\u2014")}</code></span>
+          ${primaryRogue.authentication ? `<span class="evil-twin-pill">Advertises: <b>${esc(primaryRogue.authentication)}</b></span>` : ""}
+          ${primaryRogue.signal ? `<span class="evil-twin-pill">Signal: <b>${esc(primaryRogue.signal)}</b></span>` : ""}
         `;
       }
     } else {
       banner.style.display = "none";
     }
   }
-
-
-  // If user requested simulated VPN toggle, apply manual override
 
 
   // 1. Hero Card
@@ -3475,7 +3466,6 @@ function renderWifiDashboard(data){
   }
 
   state.wifiAssessment = data;
-  state.telemetryTicks++;
 
   // 4. Health List
   $("wifi-auth-cipher-val").textContent = iface ? `${iface.authentication} (${iface.cipher})` : "—";
@@ -3531,15 +3521,26 @@ function renderVpnOverlay(vpn){
 
   if (!badge) return;
 
-  if (vpn && vpn.connected){
+  if (!vpn){
+    // detection did not run or failed on the server: that is not "no VPN"
+    badge.textContent = "Not checked";
+    badge.className = "domain-tag obs";
+    indicator.className = "vpn-status-badge vpn-status-inactive";
+    statusText.textContent = "VPN state not available";
+    [protoVal, adapterVal, egressVal, locationVal, routeVal, routeSub, leakVal, leakSub]
+      .forEach(el => { if (el) el.textContent = "\u2014"; });
+    return;
+  }
+
+  if (vpn.connected){
     badge.textContent = vpn.vpn_type;
     badge.className = "domain-tag inf";
 
     indicator.className = "vpn-status-badge vpn-status-active";
-    statusText.textContent = `Tunnel Active · ${vpn.vpn_type}`;
+    statusText.textContent = `Tunnel active · ${vpn.vpn_type}`;
 
     protoVal.textContent = vpn.vpn_type;
-    adapterVal.textContent = vpn.adapter_name || "Virtual Tunnel Adapter";
+    adapterVal.textContent = vpn.adapter_name || "\u2014";
 
     routeVal.textContent = vpn.is_default_route ? "VPN Tunnel" : "Split-Tunnel";
     routeSub.textContent = vpn.is_default_route ? "Default route (0.0.0.0/0) routed via tunnel" : "Default route remains on local Wi-Fi";
@@ -3555,27 +3556,27 @@ function renderVpnOverlay(vpn){
       leakSub.textContent = "No leak detected";
     }
   } else {
-    badge.textContent = "Direct ISP";
+    badge.textContent = "No VPN";
     badge.className = "domain-tag obs";
 
     indicator.className = "vpn-status-badge vpn-status-inactive";
-    statusText.textContent = "No VPN Tunnel (Direct ISP)";
+    statusText.textContent = "No VPN tunnel";
 
-    protoVal.textContent = "Direct (None)";
-    adapterVal.textContent = "Physical Wi-Fi link";
+    protoVal.textContent = "None";
+    adapterVal.textContent = "Traffic leaves on the physical adapter";
 
-    routeVal.textContent = "Wi-Fi Gateway";
-    routeSub.textContent = "0.0.0.0/0 on physical NIC";
+    routeVal.textContent = "Local gateway";
+    routeSub.textContent = "Default route is not through a tunnel";
 
-    leakVal.textContent = "N/A (No Tunnel)";
-    leakSub.textContent = "Direct to ISP DNS";
+    leakVal.textContent = "Not applicable";
+    leakSub.textContent = "No tunnel for DNS to leak from";
   }
 
   if (vpn && vpn.egress_ip){
     egressVal.textContent = `${vpn.egress_ip}`;
     egressVal.title = `${vpn.egress_ip}`;
     const loc = [vpn.egress_city, vpn.egress_country].filter(Boolean).join(", ");
-    locationVal.textContent = `${vpn.egress_isp || "Public ISP"}${loc ? ` (${loc})` : ""}`;
+    locationVal.textContent = [vpn.egress_isp, loc].filter(Boolean).join(" \u00b7 ") || "\u2014";
   } else if (vpn && vpn.egress_queried){
     egressVal.textContent = "No answer";
     egressVal.removeAttribute("title");
@@ -3656,16 +3657,17 @@ function renderWifiNetworksTable(networks){
     normalizedNetworks.unshift({
       ssid: iface.ssid || "(Connected Network)",
       bssid: iface.bssid || "—",
-      band: iface.band || "5 GHz",
+      // what the interface reported, and nothing where it reported nothing
+      band: iface.band || "",
       channel: iface.channel || 0,
-      radio_type: iface.radio_type || "802.11",
-      authentication: iface.authentication || "WPA2-Personal",
-      encryption: iface.cipher || "CCMP",
-      signal_percent: iface.signal_percent || 80,
-      rssi_dbm: iface.rssi_dbm || -60,
-      security_grade: (state.wifiAssessment && state.wifiAssessment.grade) || "B",
+      radio_type: iface.radio_type || "",
+      authentication: iface.authentication || "",
+      encryption: iface.cipher || "",
+      signal_percent: iface.signal_percent || 0,
+      rssi_dbm: iface.rssi_dbm || 0,
+      security_grade: (state.wifiAssessment && state.wifiAssessment.grade) || "",
       connected: true,
-      notes: "Active Interface"
+      notes: "Connected; not in the scan results"
     });
   }
 
@@ -4070,7 +4072,9 @@ function renderRfSpectrum(networks) {
     const fc = getWifiCenterFreq(ch, n.band);
     if (!fc || fc < fMin || fc > fMax) return;
 
-    const rssi = n.rssi_dbm || Math.round(-100 + ((n.signal_percent || 50) * 0.7));
+    // no reported signal, no curve: a guessed height would read as a measurement
+    if (!n.rssi_dbm && !n.signal_percent) return;
+    const rssi = n.rssi_dbm || Math.round(-100 + (n.signal_percent * 0.7));
     const f1 = fc - channelWidth / 2;
     const f2 = fc + channelWidth / 2;
 
@@ -4094,8 +4098,8 @@ function renderRfSpectrum(networks) {
       bssid: n.bssid || "—",
       channel: ch,
       freq: `${fc} MHz`,
-      rssi: `${rssi} dBm (${n.signal_percent || 50}%)`,
-      sec: `${n.authentication || 'WPA2'} / ${n.encryption || 'AES'}`,
+      rssi: `${rssi} dBm` + (n.signal_percent ? ` (${n.signal_percent}%)` : ""),
+      sec: [n.authentication, n.encryption].filter(Boolean).join(" / ") || "not reported",
       status: n.is_rogue ? "Possible evil twin" : (n.connected ? "Connected" : "Other network")
     }).replace(/"/g, "&quot;");
 
@@ -4183,170 +4187,190 @@ function renderRfSpectrum(networks) {
   }
 }
 
-/* --------------------------------------------------- export audit dossier */
+/* ------------------------------------------------------- printable report */
 
-function exportSecurityAuditReport(){
-  const wifiData = state.wifiAssessment || {};
-  const iface = wifiData.interface || {};
-  const vpn = wifiData.vpn || {};
-  const ipsecData = state.assessment || {};
-  const timestamp = new Date().toISOString();
-  const dateFormatted = new Date().toLocaleString();
+const REPORT_SEVERITIES = ["critical", "high", "medium", "low", "info"];
 
-  const report = {
-    report_title: "CipherGuard Wi-Fi assessment",
-    standard: "SIH26160 / NTRO & NIST SP 800-77 Rev 1 / RFC 8247",
-    timestamp: timestamp,
-    date_formatted: dateFormatted,
-    wifi_posture: {
-      ssid: iface.ssid || "Unassociated",
-      bssid: iface.bssid || "N/A",
-      score: wifiData.score ?? 0,
-      grade: wifiData.grade ?? "—",
-      authentication: iface.authentication || "Unknown",
-      cipher: iface.cipher || "None",
-      channel: iface.channel || 0,
-      band: iface.band || "N/A",
-      signal: `${iface.signal_percent || 0}% (${iface.rssi_dbm || -100} dBm)`,
-      dns_servers: iface.dns_servers || [],
-      gateway: iface.gateway_ip || "N/A"
-    },
-    vpn_overlay: {
-      connected: vpn.connected || false,
-      protocol: vpn.vpn_type || "Direct ISP (No Tunnel)",
-      adapter: vpn.adapter_name || "N/A",
-      virtual_ip: vpn.virtual_ip || "N/A",
-      egress_ip: vpn.egress_ip || "N/A",
-      egress_isp: vpn.egress_isp || "N/A",
-      egress_location: `${vpn.egress_city || ''}, ${vpn.egress_country || ''}`.trim() || "N/A",
-      dns_leak_detected: vpn.dns_leak_detected || false
-    },
-    findings_count: (wifiData.findings || []).length + ((vpn.findings || []).length),
-    findings: [...(wifiData.findings || []), ...(vpn.findings || [])],
-    ipsec_assessment: ipsecData.score ? {
-      capture: $("capture") ? $("capture").value : "N/A",
-      score: ipsecData.score,
-      grade: ipsecData.grade,
-      sessions: (ipsecData.sessions || []).length,
-      flows: (ipsecData.flows || []).length
+/* What the report contains: only sections with data behind them. The Wi-Fi
+ * section records whether it is a scan or the bundled example, so a printed
+ * page cannot pass the example off as a site survey. */
+function collectReport(){
+  const a = state.assessment;
+  const wifi = state.wifiAssessment;
+  const vpn = (wifi && wifi.vpn) || null;
+  return {
+    generated: new Date().toISOString(),
+    tool: "CipherGuard" + (state.health && state.health.version ? " " + state.health.version : ""),
+    ipsec: a ? {
+      capture: a.capture,
+      assessed: a.started,
+      score: a.score,
+      grade: a.grade,
+      counts: a.counts || {},
+      sessions: (a.sessions || []).length,
+      flows: (a.flows || []).length,
+      capture_sha256: (a.provenance && a.provenance.capture_sha256) || null,
+      report_digest: (a.provenance && a.provenance.report_digest) || a.digest || null,
+      disabled_rules: (a.stats && a.stats.disabled_rules) || [],
+      findings: a.findings || []
+    } : null,
+    wifi: wifi ? {
+      source: state.wifiIsLive ? "scan" : "example",
+      score: wifi.score,
+      grade: wifi.grade,
+      interface: wifi.interface || null,
+      vpn,
+      findings: [...(wifi.findings || []), ...((vpn && vpn.findings) || [])]
     } : null,
     remediation_plans: (state.remediationPlans || []).map(p => ({
       platform: p.platform_name,
       status: p.status,
+      approver: p.approver || null,
       syntax_valid: p.syntax_valid,
       forward_config: p.forward_config,
       rollback_config: p.rollback_config
     }))
   };
-
-  const printWindow = window.open("", "_blank", "width=920,height=850");
-  if (!printWindow) {
-    alert("The report opens in a new window; allow pop-ups for this page to see it.");
-    return;
-  }
-
-  const findingsHtml = report.findings.map(f => `
-    <div style="margin-bottom:12px;padding:12px;border-left:4px solid ${f.severity==='critical'?'#ef4444':f.severity==='high'?'#f97316':f.severity==='medium'?'#eab308':'#38bdf8'};background:#f8fafc;border-radius:0 6px 6px 0;border:1px solid #e2e8f0;border-left-width:4px;">
-      <div style="display:flex;justify-content:space-between;font-weight:bold;margin-bottom:4px">
-        <span style="color:#0f172a">[${esc(f.rule_id)}] ${esc(f.title)}</span>
-        <span style="text-transform:uppercase;font-size:0.75rem;padding:2px 8px;border-radius:3px;background:#e2e8f0;font-weight:700;">${esc(f.severity)}</span>
-      </div>
-      <div style="font-size:0.85rem;color:#475569;margin-bottom:4px"><strong>Subject:</strong> ${esc(f.subject)}</div>
-      <div style="font-size:0.85rem;margin-bottom:6px;color:#334155;">${esc(f.detail)}</div>
-      <div style="font-size:0.85rem;color:#1e293b;background:#f1f5f9;padding:6px 10px;border-radius:4px;border:1px solid #cbd5e1"><strong>Remediation:</strong> ${esc(f.remediation)}</div>
-    </div>
-  `).join("") || "<p>No vulnerabilities detected.</p>";
-
-  const jsonBlob = encodeURIComponent(JSON.stringify(report, null, 2));
-
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>CipherGuard Wi-Fi assessment - ${esc(report.wifi_posture.ssid)}</title>
-      <style>
-        body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; line-height: 1.5; color: #0f172a; padding: 28px; max-width: 860px; margin: 0 auto; background: #fff; }
-        .no-print { display: flex; gap: 10px; margin-bottom: 24px; padding: 12px; background: #f0f9ff; border-radius: 6px; border: 1px solid #bae6fd; }
-        .btn { padding: 8px 16px; background: #0284c7; color: #fff; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; text-decoration: none; font-size: 0.85rem; }
-        .btn-secondary { background: #475569; }
-        .hdr { border-bottom: 2px solid #0f172a; padding-bottom: 14px; margin-bottom: 20px; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-        .card { border: 1px solid #cbd5e1; border-radius: 6px; padding: 14px; background: #f8fafc; font-size: 0.88rem; }
-        .card div { margin-bottom: 5px; }
-        h2 { font-size: 1.05rem; margin-top: 0; margin-bottom: 12px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; color: #0f172a; }
-        .badge { font-weight: bold; padding: 2px 8px; border-radius: 4px; font-size: 0.82rem; }
-        .grade-a { background: #dcfce7; color: #15803d; }
-        .grade-b { background: #fef9c3; color: #854d0e; }
-        .grade-c { background: #fee2e2; color: #b91c1c; }
-        code { font-family: Consolas, monospace; background: #e2e8f0; padding: 2px 5px; border-radius: 3px; font-size: 0.82rem; }
-        @media print { .no-print { display: none; } body { padding: 0; } }
-      </style>
-    </head>
-    <body>
-      <div class="no-print">
-        <button class="btn" onclick="window.print()">Print / Save as PDF</button>
-        <a class="btn btn-secondary" href="data:application/json;charset=utf-8,${jsonBlob}" download="cipherguard-audit-${Date.now()}.json">Download JSON Telemetry</a>
-      </div>
-      <div class="hdr">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div>
-            <h1 style="margin:0;font-size:1.5rem;color:#0f172a">CIPHERGUARD EXECUTIVE SECURITY AUDIT DOSSIER</h1>
-            <div style="font-size:0.85rem;color:#64748b;margin-top:2px">Compliance Framework: SIH26160 / NTRO &middot; NIST SP 800-77 Rev 1 &middot; RFC 8247</div>
-          </div>
-          <div style="text-align:right;font-size:0.8rem;color:#64748b">
-            <div>Date: <strong>${esc(report.date_formatted)}</strong></div>
-            <div>Classification: <strong>OFFICIAL / RESTRICTED AUDIT</strong></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="grid">
-        <div class="card">
-          <h2>1. Physical Wi-Fi Posture (802.11 RF)</h2>
-          <div><strong>Associated SSID:</strong> ${esc(report.wifi_posture.ssid)}</div>
-          <div><strong>Hardware BSSID:</strong> <code>${esc(report.wifi_posture.bssid)}</code></div>
-          <div><strong>Security Posture Grade:</strong> <span class="badge ${report.wifi_posture.grade.includes('A')?'grade-a':report.wifi_posture.grade.includes('B')?'grade-b':'grade-c'}">Grade ${esc(report.wifi_posture.grade)} (${report.wifi_posture.score}/100)</span></div>
-          <div><strong>Auth &amp; Cipher:</strong> ${esc(report.wifi_posture.authentication)} / ${esc(report.wifi_posture.cipher)}</div>
-          <div><strong>RF Band &amp; Channel:</strong> ${esc(report.wifi_posture.band)} &middot; Channel ${esc(report.wifi_posture.channel)}</div>
-          <div><strong>Signal Level:</strong> ${esc(report.wifi_posture.signal)}</div>
-          <div><strong>Configured DNS:</strong> ${esc((report.wifi_posture.dns_servers || []).join(', ') || 'Default Gateway')}</div>
-        </div>
-
-        <div class="card">
-          <h2>2. Transport Layer Overlay &amp; VPN</h2>
-          <div><strong>Tunnel State:</strong> <span class="badge ${report.vpn_overlay.connected?'grade-a':'grade-c'}">${report.vpn_overlay.connected?'● ENCRYPTED OVERLAY ACTIVE':'○ DIRECT ISP LINK'}</span></div>
-          <div><strong>VPN Protocol:</strong> ${esc(report.vpn_overlay.protocol)}</div>
-          <div><strong>Adapter:</strong> ${esc(report.vpn_overlay.adapter)}</div>
-          <div><strong>Virtual Tunnel IP:</strong> <code>${esc(report.vpn_overlay.virtual_ip)}</code></div>
-          <div><strong>Public Egress Node:</strong> ${esc(report.vpn_overlay.egress_ip)}</div>
-          <div><strong>Egress Geolocation:</strong> ${esc(report.vpn_overlay.egress_location)} (${esc(report.vpn_overlay.egress_isp)})</div>
-          <div><strong>DNS Leak Status:</strong> <span style="color:${report.vpn_overlay.dns_leak_detected?'#b91c1c':'#15803d'};font-weight:bold">${report.vpn_overlay.dns_leak_detected?'LEAK DETECTED':'NO LEAK (SECURE)'}</span></div>
-        </div>
-      </div>
-
-      <h2>3. Security Findings &amp; Cryptographic Audit (${report.findings.length} Items)</h2>
-      ${findingsHtml}
-
-      <div style="margin-top:30px;padding-top:12px;border-top:1px solid #cbd5e1;font-size:0.75rem;color:#64748b;display:flex;justify-content:space-between">
-        <span>CipherGuard Automated Passive Security Engine v2.0</span>
-        <span>Deterministic Zero Live Mutation &middot; NIST SP 800-77 Validated</span>
-      </div>
-    </body>
-    </html>
-  `);
-  printWindow.document.close();
 }
 
-/* ----------------------------------------------------------------- init */
+function reportHtml(r){
+  const v = x => (x === null || x === undefined || x === "") ? "\u2014" : esc(x);
+  const row = (k, value) => `<tr><th scope="row">${esc(k)}</th><td>${value}</td></tr>`;
+  const sevClass = s => REPORT_SEVERITIES.includes(s) ? s : "info";
+  const finding = f => `
+    <article class="finding ${sevClass(f.severity)}">
+      <h3><span class="rule">${v(f.rule_id)}</span> ${v(f.title)} <span class="sev">${v(f.severity)}</span></h3>
+      <p class="subject">${v(f.subject)}</p>
+      <p>${v(f.detail)}</p>
+      ${f.remediation ? `<p class="fix"><b>Fix:</b> ${esc(f.remediation)}</p>` : ""}
+    </article>`;
+  const findings = list => list.length ? list.map(finding).join("") : "<p>No findings.</p>";
 
+  let body = "";
+  if (r.ipsec){
+    const i = r.ipsec;
+    const counts = REPORT_SEVERITIES.filter(s => i.counts[s]).map(s => `${i.counts[s]} ${s}`).join(", ");
+    body += `
+      <section>
+        <h2>IPsec assessment</h2>
+        <table>
+          ${row("Capture", v(i.capture))}
+          ${row("Assessed", v(i.assessed))}
+          ${row("Posture", `${v(i.score)}/100, grade ${v(i.grade)}`)}
+          ${row("Findings", counts ? esc(counts) : "none")}
+          ${row("IKE sessions / ESP tunnels", `${v(i.sessions)} / ${v(i.flows)}`)}
+          ${row("Capture SHA-256", `<code>${v(i.capture_sha256)}</code>`)}
+          ${row("Report digest", `<code>${v(i.report_digest)}</code>`)}
+          ${i.disabled_rules.length ? row("Rules switched off", esc(i.disabled_rules.join(", "))) : ""}
+        </table>
+        <p class="note">IKE values are parsed from cleartext. ESP suites are inferred from packet framing; nothing is decrypted.</p>
+        ${findings(i.findings)}
+      </section>`;
+  }
+  if (r.wifi){
+    const w = r.wifi;
+    const iface = w.interface || {};
+    const vpn = w.vpn;
+    body += `
+      <section>
+        <h2>Wi-Fi</h2>
+        ${w.source === "example" ? `<p class="note warn">This is the example scan bundled with the page. Its networks are invented; it does not describe a real site.</p>` : ""}
+        <table>
+          ${row("Network", v(iface.ssid))}
+          ${row("Access point", `<code>${v(iface.bssid)}</code>`)}
+          ${row("Posture", `${v(w.score)}/100, grade ${v(w.grade)}`)}
+          ${row("Authentication and cipher", `${v(iface.authentication)} / ${v(iface.cipher)}`)}
+          ${row("Band and channel", `${v(iface.band)}, channel ${v(iface.channel)}`)}
+          ${row("DNS resolvers", v((iface.dns_servers || []).join(", ")))}
+          ${vpn ? row("VPN", vpn.connected ? `connected (${v(vpn.vpn_type)})` : "not connected") : ""}
+          ${vpn && vpn.connected ? row("DNS leak", vpn.dns_leak_detected ? "detected" : "not detected") : ""}
+        </table>
+        ${findings(w.findings)}
+      </section>`;
+  }
 
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CipherGuard report${r.ipsec ? " \u00b7 " + esc(r.ipsec.capture) : ""}</title>
+<style>
+  body{font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5;color:#14212b;background:#fff;max-width:820px;margin:0 auto;padding:28px}
+  h1{font-size:1.4rem;margin:0}
+  h2{font-size:1.05rem;margin:28px 0 10px;padding-bottom:4px;border-bottom:1px solid #c3cfd8}
+  h3{font-size:.92rem;margin:0 0 4px;font-weight:600}
+  p{margin:0 0 6px;font-size:.88rem}
+  table{border-collapse:collapse;width:100%;margin-bottom:12px;font-size:.88rem}
+  th,td{text-align:left;vertical-align:top;padding:5px 8px;border-bottom:1px solid #e3e9ee}
+  th{width:32%;font-weight:500;color:#4b5a66}
+  code,.rule{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-size:.82rem;overflow-wrap:anywhere}
+  header.top{border-bottom:2px solid #14212b;padding-bottom:12px;margin-bottom:8px}
+  header.top p{color:#4b5a66}
+  .toolbar{display:flex;gap:10px;margin-bottom:20px}
+  .toolbar button{font:inherit;font-size:.85rem;font-weight:600;padding:7px 14px;border-radius:6px;border:1px solid #14212b;background:#14212b;color:#fff;cursor:pointer}
+  .toolbar button.secondary{background:#fff;color:#14212b}
+  .note{color:#4b5a66}
+  .note.warn{color:#7d630e;border-left:3px solid #7d630e;padding-left:10px}
+  .finding{border-left:4px solid #5b6872;padding:8px 12px;margin-bottom:10px;background:#f3f6f8;break-inside:avoid}
+  .finding.critical{border-left-color:#a81e13}
+  .finding.high{border-left-color:#a84b1d}
+  .finding.medium{border-left-color:#7d630e}
+  .finding.low{border-left-color:#3a6b8a}
+  .sev{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;border:1px solid #c3cfd8;border-radius:4px;padding:1px 6px;margin-left:6px;font-weight:600}
+  .subject{color:#4b5a66}
+  @media print{.toolbar{display:none}body{padding:0}}
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <button type="button" id="report-print">Print or save as PDF</button>
+    <button type="button" id="report-json" class="secondary">Download as JSON</button>
+  </div>
+  <header class="top">
+    <h1>CipherGuard assessment report</h1>
+    <p>Generated ${esc(r.generated)} by ${esc(r.tool)}</p>
+  </header>
+  ${body}
+</body>
+</html>`;
+}
 
-/* ------------------------------------------------- inspector, CBOM, matrix */
+function exportSecurityAuditReport(){
+  const report = collectReport();
+  if (!report.ipsec && !report.wifi){
+    showToast("There is nothing to report yet. Assess a capture first.", "error");
+    return;
+  }
+  const win = window.open("", "_blank", "width=920,height=850");
+  if (!win){
+    showToast("The report opens in a new window. Allow pop-ups for this page, then export again.", "error", 8000);
+    return;
+  }
+  win.document.write(reportHtml(report));
+  win.document.close();
 
-// --- 1. IN-BROWSER HEX PACKET DISSECTOR & PROTOCOL INSPECTOR ---
+  // Wired from this page: the report window inherits this page's content
+  // security policy, which allows no inline script.
+  const on = (id, fn) => {
+    const el = win.document.getElementById(id);
+    if (el) el.addEventListener("click", fn);
+  };
+  on("report-print", () => win.print());
+  on("report-json", () => {
+    const stamp = report.generated.slice(0, 19).replace(/[:T]/g, "-");
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }));
+    const a = win.document.createElement("a");
+    a.href = url;
+    a.download = `cipherguard-report-${stamp}.json`;
+    win.document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+}
 
-
-// --- 2. LIVE WIRE PACKET SNIFFER & SSE STREAMING ENGINE ---
+/* ---------------------------------------------- live capture stream */
 const LiveSnifferEngine = (function() {
   let streamAbort = null;
   let isSniffing = false;
@@ -4627,310 +4651,154 @@ const LiveSnifferEngine = (function() {
 window.LiveSnifferEngine = LiveSnifferEngine;
 
 
-// --- CycloneDX 1.6 CBOM viewer and exporter ---
-const CbomEngine = (function() {
-  let cachedCbom = null;
+/* -------------------------------------------------------------- CBOM viewer */
 
-  function buildStandardCbom() {
-    const timestamp = new Date().toISOString();
-    return {
-      bomFormat: "CycloneDX",
-      specVersion: "1.6",
-      serialNumber: "urn:uuid:7f3b4a2e-8c91-4d33-a128-98e6c7104b21",
-      version: 1,
-      metadata: {
-        timestamp: timestamp,
-        tools: {
-          components: [
-            {
-              type: "application",
-              name: "CipherGuard",
-              version: "2.2.0",
-              vendor: "CipherGuard Contributors"
-            }
-          ]
-        },
-        component: {
-          type: "application",
-          name: "Assessed network",
-          version: "2.2.0",
-          scope: "required"
-        }
-      },
-      components: [
-        {
-          type: "cryptographic-asset",
-          name: "AES-256-GCM",
-          version: "NIST FIPS 197",
-          cryptoProperties: {
-            assetType: "algorithm",
-            algorithmProperties: {
-              primitive: "ae",
-              parameterSetIdentifier: "256",
-              executionEnvironment: "kernel-space",
-              implementationPlatform: "x86_64-aesni",
-              certificationLevel: "FIPS 140-3 Level 2",
-              cryptoLifeCycle: "active"
-            },
-            oid: "2.16.840.1.101.3.4.1.46"
-          }
-        },
-        {
-          type: "cryptographic-asset",
-          name: "ML-KEM-768 (Kyber)",
-          version: "NIST FIPS 203 (Final Standardized)",
-          cryptoProperties: {
-            assetType: "algorithm",
-            algorithmProperties: {
-              primitive: "kem",
-              parameterSetIdentifier: "ML-KEM-768",
-              executionEnvironment: "user-space-pqc",
-              implementationPlatform: "c-reference-avx2",
-              certificationLevel: "NIST PQC Target Round 4",
-              cryptoLifeCycle: "recommended"
-            }
-          }
-        },
-        {
-          type: "cryptographic-asset",
-          name: "Curve25519 (X25519)",
-          version: "RFC 7748",
-          cryptoProperties: {
-            assetType: "algorithm",
-            algorithmProperties: {
-              primitive: "key-agree",
-              curve: "Curve25519",
-              executionEnvironment: "kernel-space",
-              cryptoLifeCycle: "active"
-            }
-          }
-        },
-        {
-          type: "cryptographic-asset",
-          name: "WPA3-SAE (Dragonfly)",
-          version: "IEEE 802.11-2020",
-          cryptoProperties: {
-            assetType: "protocol",
-            algorithmProperties: {
-              primitive: "pake",
-              curve: "brainpoolP256r1",
-              executionEnvironment: "wireless-phy",
-              cryptoLifeCycle: "recommended"
-            }
-          }
-        },
-        {
-          type: "cryptographic-asset",
-          name: "HMAC-SHA-384",
-          version: "FIPS 180-4",
-          cryptoProperties: {
-            assetType: "algorithm",
-            algorithmProperties: {
-              primitive: "mac",
-              parameterSetIdentifier: "384",
-              executionEnvironment: "kernel-space",
-              cryptoLifeCycle: "active"
-            }
-          }
-        },
-        {
-          type: "cryptographic-asset",
-          name: "Diffie-Hellman Group 2 (MODP-1024)",
-          version: "RFC 2409",
-          cryptoProperties: {
-            assetType: "algorithm",
-            algorithmProperties: {
-              primitive: "key-agree",
-              parameterSetIdentifier: "1024",
-              executionEnvironment: "legacy-ipsec",
-              cryptoLifeCycle: "deprecated"
-            }
-          }
-        },
-        {
-          type: "cryptographic-asset",
-          name: "ML-DSA-87 (Dilithium)",
-          version: "NIST FIPS 204",
-          cryptoProperties: {
-            assetType: "algorithm",
-            algorithmProperties: {
-              primitive: "signature",
-              parameterSetIdentifier: "ML-DSA-87",
-              executionEnvironment: "user-space-pqc",
-              cryptoLifeCycle: "recommended"
-            }
-          }
-        },
-        {
-          type: "cryptographic-asset",
-          name: "WPA2-CCMP-128",
-          version: "IEEE 802.11i",
-          cryptoProperties: {
-            assetType: "protocol",
-            algorithmProperties: {
-              primitive: "block-cipher",
-              parameterSetIdentifier: "128",
-              executionEnvironment: "wireless-phy",
-              cryptoLifeCycle: "transitional"
-            }
-          }
-        }
-      ],
-      dependencies: []
-    };
+/* Shows the CBOM the server built for the capture on screen or, in the static
+ * build, the one exported alongside it. There is no stand-in inventory: if the
+ * CBOM cannot be loaded the dialog says so, because a bill of materials that
+ * did not come from the capture is worse than none. */
+const CbomEngine = (() => {
+  let loaded = null;   // { capture, bom }
+
+  const friendly = message => Object.assign(new Error(message), { friendly: true });
+  const propertyOf = (c, name) => ((c.properties || []).find(p => p.name === name) || {}).value;
+
+  function currentCapture(){
+    const sel = $("capture");
+    return (state.assessment && state.assessment.capture) || (sel && sel.value) || "";
   }
 
-  async function loadData() {
-    if (cachedCbom) return cachedCbom;
-
-    // Try fetching from backend if active capture exists
-    const captureSelect = $("capture");
-    const currentCapture = (captureSelect && captureSelect.value) ? captureSelect.value : "";
-    if (currentCapture && !state.isStaticHost) {
-      try {
-        const resp = await api(`/api/cbom?capture=${encodeURIComponent(currentCapture)}`, { silent: true });
-        if (resp.ok) {
-          cachedCbom = await resp.json();
-          return cachedCbom;
-        }
-      } catch (e) {
-        // Fallback to standard
-      }
+  async function fetchCbom(capture){
+    if (staticMode.active){
+      const entry = ((staticMode.manifest && staticMode.manifest.captures) || [])
+        .find(c => c.name === capture);
+      if (!entry || !entry.cbom) throw friendly(`This build has no CBOM for ${capture}.`);
+      const res = await fetch(entry.cbom, { cache: "no-store" });
+      if (!res.ok) throw friendly(`The saved CBOM for ${capture} could not be loaded.`);
+      return res.json();
     }
-
-    cachedCbom = buildStandardCbom();
-    return cachedCbom;
+    const res = await api(`/api/cbom?capture=${encodeURIComponent(capture)}`, { silent: true });
+    return res.json();
   }
 
-  function renderView(filterTerm = "") {
-    if (!cachedCbom) return;
-    const term = (filterTerm || "").toLowerCase().trim();
-
-    let filtered = JSON.parse(JSON.stringify(cachedCbom));
-    if (term) {
-      filtered.components = filtered.components.filter(c => {
-        const name = (c.name || "").toLowerCase();
-        const ver = (c.version || "").toLowerCase();
-        const prim = (c.cryptoProperties && c.cryptoProperties.algorithmProperties && c.cryptoProperties.algorithmProperties.primitive) ? c.cryptoProperties.algorithmProperties.primitive.toLowerCase() : "";
-        return name.includes(term) || ver.includes(term) || prim.includes(term);
-      });
-    }
-
-    const codeEl = $("cbom-json-code");
-    if (codeEl) {
-      codeEl.textContent = JSON.stringify(filtered, null, 2);
-    }
-
-    const strip = $("cbom-summary-strip");
-    if (strip) {
-      const count = filtered.components.length;
-      const pqcCount = filtered.components.filter(c => (c.name || "").includes("ML-") || (c.name || "").includes("Kyber") || (c.name || "").includes("Dilithium")).length;
-      const depCount = filtered.components.filter(c => (c.cryptoProperties && c.cryptoProperties.algorithmProperties && c.cryptoProperties.algorithmProperties.cryptoLifeCycle === "deprecated")).length;
-
-      strip.innerHTML = `
-        <span class="cbom-sum-chip"><strong>Assets:</strong> ${count}</span>
-        <span class="cbom-sum-chip" style="color:#10b981"><strong>PQC-Ready:</strong> ${pqcCount}</span>
-        <span class="cbom-sum-chip" style="color:#ef4444"><strong>Deprecated:</strong> ${depCount}</span>
-        <span class="cbom-sum-chip"><strong>Standard:</strong> CycloneDX 1.6</span>
-      `;
-    }
+  async function loadData(){
+    const capture = currentCapture();
+    if (!capture) throw friendly("Assess a capture first; the CBOM is built from it.");
+    if (loaded && loaded.capture === capture) return loaded.bom;
+    loaded = null;
+    loaded = { capture, bom: await fetchCbom(capture) };
+    return loaded.bom;
   }
 
-  function download() {
-    if (!cachedCbom) return;
-    const jsonStr = JSON.stringify(cachedCbom, null, 2);
-    const blob = new Blob([jsonStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `cipherguard-cbom-cyclonedx-v1.6-${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast("CBOM downloaded", "success");
-  }
-
-  function copy() {
-    if (!cachedCbom) return;
-    const jsonStr = JSON.stringify(cachedCbom, null, 2);
-    navigator.clipboard.writeText(jsonStr).then(() => {
-      showToast("CBOM copied", "success");
-    }).catch(() => {
-      showToast("Could not access clipboard", "warn");
+  function setActionsEnabled(enabled){
+    ["btn-copy-cbom", "btn-download-cbom", "cbom-search-input"].forEach(id => {
+      const el = $(id);
+      if (el) el.disabled = !enabled;
     });
   }
 
-  async function openModal() {
+  function showMessage(message){
+    const code = $("cbom-json-code");
+    const strip = $("cbom-summary-strip");
+    if (code) code.textContent = message;
+    if (strip) strip.textContent = "";
+    setActionsEnabled(false);
+  }
+
+  function renderView(filterTerm = ""){
+    if (!loaded) return;
+    const bom = loaded.bom;
+    const all = bom.components || [];
+    const term = String(filterTerm || "").toLowerCase().trim();
+    const shown = term
+      ? all.filter(c => JSON.stringify([c.name, c.cryptoProperties]).toLowerCase().includes(term))
+      : all;
+
+    const code = $("cbom-json-code");
+    if (code) code.textContent = JSON.stringify(
+      term ? Object.assign({}, bom, { components: shown }) : bom, null, 2);
+
+    const strip = $("cbom-summary-strip");
+    if (strip){
+      const count = kind => all.filter(c => propertyOf(c, "cipherguard:provenance") === kind).length;
+      strip.innerHTML = [
+        ["Capture", loaded.capture],
+        ["Assets", term ? `${shown.length} of ${all.length}` : all.length],
+        ["Observed", count("observed")],
+        ["Inferred", count("inferred")],
+        ["Vulnerabilities", (bom.vulnerabilities || []).length],
+        ["Format", `CycloneDX ${bom.specVersion || ""}`.trim()]
+      ].map(([k, value]) =>
+        `<span class="cbom-sum-chip"><strong>${esc(k)}:</strong> ${esc(value)}</span>`).join("");
+    }
+    setActionsEnabled(true);
+  }
+
+  // always the whole CBOM, whatever the filter is showing
+  function download(){
+    if (!loaded) return;
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(loaded.bom, null, 2)], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${loaded.capture.replace(/\.[^.]+$/, "")}-cbom.cdx.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast("CBOM downloaded", "success");
+  }
+
+  function copy(){
+    if (!loaded || !navigator.clipboard) {
+      showToast("Could not copy. Use Download instead.", "error");
+      return;
+    }
+    navigator.clipboard.writeText(JSON.stringify(loaded.bom, null, 2)).then(
+      () => showToast("CBOM copied", "success"),
+      () => showToast("Could not copy. Use Download instead.", "error"));
+  }
+
+  async function openModal(){
     const modal = $("cbom-modal");
     if (!modal) return;
     modal.hidden = false;
-    modal.removeAttribute("hidden");
     modal.style.setProperty("display", "flex", "important");
-
-    await loadData();
-    const searchInput = $("cbom-search-input");
-    renderView(searchInput ? searchInput.value : "");
+    showMessage("Loading the CBOM\u2026");
+    try {
+      await loadData();
+      const search = $("cbom-search-input");
+      renderView(search ? search.value : "");
+    } catch (err) {
+      console.error("Loading the CBOM failed:", err);
+      showMessage(err.friendly ? err.message : explainFailure(err));
+    }
   }
 
-  function closeModal() {
+  function closeModal(){
     const modal = $("cbom-modal");
     if (!modal) return;
     modal.hidden = true;
-    modal.setAttribute("hidden", "");
     modal.style.setProperty("display", "none", "important");
   }
 
-  function init() {
-    const btnOpen = $("btn-cbom-toggle");
-    if (btnOpen) btnOpen.addEventListener("click", openModal);
-
-    const btnClose = $("cbom-modal-close");
-    if (btnClose) btnClose.addEventListener("click", closeModal);
-
-    const btnCopy = $("btn-copy-cbom");
-    if (btnCopy) btnCopy.addEventListener("click", copy);
-
-    const btnDownload = $("btn-download-cbom");
-    if (btnDownload) btnDownload.addEventListener("click", download);
-
-    const searchInput = $("cbom-search-input");
-    if (searchInput) {
-      searchInput.addEventListener("input", (e) => {
-        renderView(e.target.value);
-      });
-    }
+  function init(){
+    const bind = (id, event, fn) => { const el = $(id); if (el) el.addEventListener(event, fn); };
+    bind("btn-cbom-toggle", "click", openModal);
+    bind("cbom-modal-close", "click", closeModal);
+    bind("btn-copy-cbom", "click", copy);
+    bind("btn-download-cbom", "click", download);
+    bind("cbom-search-input", "input", e => renderView(e.target.value));
+    const modal = $("cbom-modal");
+    if (modal) modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
   }
 
   return { init, openModal, closeModal, loadData, renderView, download, copy };
 })();
 
-window.openCbomModal = CbomEngine.openModal;
-window.closeCbomModal = CbomEngine.closeModal;
 
 
-// --- Shared helpers ---
-function escapeHtml(s) {
-  if (s === null || s === undefined) return "";
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-const SocCopilotEngine = { init() {}, toggle() {}, addMessage() {}, handleSend() {} };
-window.toggleSocCopilot = () => {};
-
-
-// --- 4. MITRE ATT&CK ENTERPRISE THREAT MATRIX HEATMAP ---
-
-
-
-const FleetSentinelEngine = { init() {}, openModal() {}, closeModal() {}, renderGrid() {}, batchRemediate() {} };
-window.openFleetModal = () => {};
-window.closeFleetModal = () => {};
+/* ----------------------------------------------------------------- init */
 
 async function init(){
   try { state.token = sessionStorage.getItem("cipherguard.token"); } catch (e) {}
@@ -5066,11 +4934,19 @@ async function init(){
   if (approveBtn) approveBtn.addEventListener("click", async () => {
     const currentPlan = (state.remediationPlans || []).find(p => p.platform === state.platform);
     if (!currentPlan) {
-      alert("No active plan to approve.");
+      showToast(staticMode.active
+        ? "Approvals are recorded by the server. This saved build has none."
+        : "There is no plan to approve yet. Assess a capture first.", "error");
       return;
     }
-    const admin = prompt("Who is approving this plan? The name is recorded as self-declared in the plan store and the audit log; this server does not authenticate individual people.", "");
-    if (!admin || !admin.trim()) return;
+    const admin = await Dialogs.ask({
+      title: "Record approval",
+      message: "The name is recorded as self-declared in the plan store and the audit log. "
+        + "This server does not authenticate individual people.",
+      label: "Approver name",
+      confirmLabel: "Record approval"
+    });
+    if (!admin) return;
     try {
       const res = await api(`/api/remediation/${currentPlan.plan_id}/approve`, {
         method: "POST",
@@ -5080,15 +4956,14 @@ async function init(){
           comment: "Approved from the dashboard"
         })
       });
-      if (res.ok) {
-        // show what the server stored, which is the cleaned name
-        const saved = (await res.json()).plan || {};
-        currentPlan.status = saved.status || "APPROVED";
-        currentPlan.approver = saved.approver || admin.trim();
-        renderPlaybookUI();
-      }
+      // show what the server stored, which is the cleaned name
+      const saved = (await res.json()).plan || {};
+      currentPlan.status = saved.status || "APPROVED";
+      currentPlan.approver = saved.approver || admin;
+      renderPlaybookUI();
     } catch(err) {
-      alert("Approval failed: " + err.message);
+      console.error("Recording the approval failed:", err);
+      showToast(explainFailure(err), "error");
     }
   });
 
@@ -5160,85 +5035,33 @@ async function init(){
   const copyCmdBtn = $("btn-copy-backend-cmd");
   if (copyCmdBtn) copyCmdBtn.addEventListener("click", handleCopyBackendCmd);
 
-  // Accessible Global Keyboard Shortcuts (Single Keys & Modifier Combos)
+  // Keyboard shortcuts. Every one needs Alt. A bare letter fires whenever
+  // focus is outside a field, which trips speech-input users and anyone who
+  // starts typing with focus on the page (WCAG 2.1.4). Matched on the
+  // physical key, because Alt changes the character on some layouts.
+  const SHORTCUTS = {
+    KeyA: () => { switchTab("ipsec"); runAnalysis(); },
+    KeyS: () => { switchTab("wifi"); loadWifiAssessment(true); },
+    KeyD: () => { switchTab("ipsec"); switchIpsecMode("diff"); },
+    KeyE: () => exportSecurityAuditReport(),
+    KeyC: () => CbomEngine.openModal(),
+    KeyH: () => openShortcutsModal()
+  };
   document.addEventListener("keydown", (e) => {
-    // Check if target or activeElement is an input, textarea, select, or contenteditable
-    const activeEl = document.activeElement;
-    const isInput = (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA" || activeEl.tagName === "SELECT" || activeEl.isContentEditable)) ||
-                    (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT" || e.target.isContentEditable));
-
-    // Escape always closes any open modal or banner regardless of focus
     if (e.key === "Escape" || e.key === "Esc") {
       closeBackendModal();
       closeShortcutsModal();
-      closeCbomModal();
+      CbomEngine.closeModal();
       EvidencePanel.close();
       const rogueBanner = $("wifi-evil-twin-banner");
       if (rogueBanner) rogueBanner.style.display = "none";
-      if (isInput && activeEl && activeEl.blur) activeEl.blur();
       return;
     }
-
-    // Never trigger shortcuts while user is actively typing in a form field
-    if (isInput) return;
-
-    const rawKey = e.key || "";
-    const key = rawKey.toLowerCase();
-    const code = e.code || "";
-
-    // 1. HELP / SHORTCUTS MODAL: '?' or '/' or 'h'
-    if (rawKey === "?" || (code === "Slash" && e.shiftKey) || (!e.ctrlKey && !e.altKey && !e.metaKey && (key === "h" || key === "/"))) {
-      e.preventDefault();
-      openShortcutsModal();
-      return;
-    }
-
-    // 2. WI-FI VIEW & SPECTRUM SCAN: '2' or 'w' or 's' or Alt+S or Ctrl+2
-    if ((!e.ctrlKey && !e.altKey && !e.metaKey && (key === "w" || key === "s")) ||
-        (e.altKey && (key === "s" || key === "w"))) {
-      e.preventDefault();
-      switchTab("wifi");
-      loadWifiAssessment(true);
-      return;
-    }
-
-    // 3. IPSEC VIEW & ASSESS: '1' or 'i' or 'a' or Alt+A or Ctrl+1
-    if ((!e.ctrlKey && !e.altKey && !e.metaKey && (key === "1" || key === "i" || key === "a")) ||
-        (e.altKey && key === "a") ||
-        (e.ctrlKey && key === "1")) {
-      e.preventDefault();
-      switchTab("ipsec");
-      runAnalysis();
-      return;
-    }
-
-    // 4. DIFF A/B COMPARATIVE MODE: '3' or 'd' or Alt+D or Ctrl+3
-    if ((!e.ctrlKey && !e.altKey && !e.metaKey && (key === "3" || key === "d")) ||
-        (e.altKey && key === "d") ||
-        (e.ctrlKey && key === "3")) {
-      e.preventDefault();
-      switchTab("ipsec");
-      switchIpsecMode("diff");
-      return;
-    }
-
-    // 5. EXPORT AUDIT DOSSIER: 'e' or 'p' or Alt+E or Ctrl+E
-    if ((!e.ctrlKey && !e.altKey && !e.metaKey && (key === "e" || key === "p")) ||
-        (e.altKey && key === "e") ||
-        (e.ctrlKey && key === "e")) {
-      e.preventDefault();
-      exportSecurityAuditReport();
-      return;
-    }
-
-
-
-    // 8. TOGGLE CBOM MODAL: 'c'
-    if (!e.ctrlKey && !e.altKey && !e.metaKey && key === "c") {
-      e.preventDefault();
-      openCbomModal();
-      return;
-    }
+    if (!e.altKey || e.ctrlKey || e.metaKey) return;
+    const run = SHORTCUTS[e.code];
+    if (!run) return;
+    e.preventDefault();
+    run();
   });
 
   // Capture selection field validation listener
@@ -5300,16 +5123,18 @@ async function init(){
     }
   });
 
-  // Background fetch live Wi-Fi telemetry for the Wi-Fi tab
+  // Load the Wi-Fi view in the background so the tab opens with data
   loadWifiAssessment(false);
 
-  // Background polling for Wi-Fi tab only if active
+  // Keep the Wi-Fi view current while it is on screen and there is a server
+  // to ask. Not in the static build, and not while the tab is in the background.
   setInterval(() => {
+    if (staticMode.active || document.hidden) return;
     const wifiView = $("view-wifi");
     if (wifiView && wifiView.classList.contains("active")) {
       loadWifiAssessment(false, true);
     }
-  }, 5000);
+  }, WIFI_REFRESH_MS);
 }
 
 if (document.readyState === "loading"){

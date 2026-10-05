@@ -127,6 +127,18 @@ def export(
             with open(hpath, "w", encoding="utf-8") as fh:
                 fh.write(html)
 
+    # The web manifest names its icons and start page by absolute path too.
+    manifest_path = os.path.join(out_dir, "site.webmanifest")
+    if os.path.isfile(manifest_path):
+        with open(manifest_path, encoding="utf-8") as fh:
+            manifest = json.load(fh)
+        manifest["start_url"] = manifest["scope"] = "."
+        for icon in manifest.get("icons", []):
+            icon["src"] = icon["src"].replace("/static/", "")
+        with open(manifest_path, "w", encoding="utf-8") as fh:
+            json.dump(manifest, fh, indent=2, ensure_ascii=False)
+            fh.write("\n")
+
     captures = sorted(
         n for n in os.listdir(capture_dir)
         if n.endswith((".pcap", ".pcapng", ".cap"))
