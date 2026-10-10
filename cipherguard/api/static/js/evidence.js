@@ -50,7 +50,7 @@ const EvidencePanel = (() => {
       }
       body += `<rect class="ev-bar${marked ? " is-expected" : ""}" x="${x.toFixed(1)}" `
             + `y="${(BASE - h).toFixed(1)}" width="${(bw - gap).toFixed(1)}" height="${h.toFixed(1)}">`
-            + `<title>residue ${r}: ${c} of ${total} lengths (${pct(c, total)})</title></rect>`
+            + `<title>residue ${r}: ${esc(c)} of ${esc(total)} lengths (${pct(c, total)})</title></rect>`
             + `<text class="ev-axis" x="${cx.toFixed(1)}" y="${BASE + 15}" text-anchor="middle">${r}</text>`;
     });
     body += `<line class="ev-base" x1="0" y1="${BASE}" x2="${W}" y2="${BASE}"/>`;
@@ -80,16 +80,16 @@ const EvidencePanel = (() => {
 
   function measured(f, fa){
     const g = f.granularity_usable
-      ? `${f.length_granularity}&nbsp;B`
+      ? `${esc(f.length_granularity)}&nbsp;B`
       : `<span class="ev-warn-text">not measurable</span>`;
     const ent = f.mean_entropy == null
       ? `<span class="ev-warn-text">not measurable</span>`
       : `${f.mean_entropy.toFixed(2)} bits/byte`;
     return `<dl class="ev-facts">
-      <div><dt>Ciphertext lengths</dt><dd>${fa.lengths_observed}</dd></div>
-      <div><dt>Distinct lengths</dt><dd>${f.distinct_lengths}</dd></div>
+      <div><dt>Ciphertext lengths</dt><dd>${esc(fa.lengths_observed)}</dd></div>
+      <div><dt>Distinct lengths</dt><dd>${esc(f.distinct_lengths)}</dd></div>
       <div><dt>Length granularity</dt><dd>${g}</dd></div>
-      <div><dt>Mean payload entropy</dt><dd>${ent}<span class="ev-dim"> over ${fa.entropy_samples} samples</span></dd></div>
+      <div><dt>Mean payload entropy</dt><dd>${ent}<span class="ev-dim"> over ${esc(fa.entropy_samples)} samples</span></dd></div>
     </dl>`;
   }
 
@@ -111,7 +111,7 @@ const EvidencePanel = (() => {
         : out.length ? `<span class="ev-status">eliminated ${out.length}</span>`
         : `<span class="ev-status is-none">eliminated none</span>`;
       return `<li class="ev-step">
-        <div class="ev-step-head"><span class="ev-step-n">${c.step}</span>
+        <div class="ev-step-head"><span class="ev-step-n">${esc(c.step)}</span>
           <b>${esc(c.title)}</b> ${status}</div>
         <div class="ev-rule">${esc(c.rule)}</div>
         ${items ? `<ul class="ev-suites">${items}</ul>` : ""}
@@ -121,8 +121,8 @@ const EvidencePanel = (() => {
     const alive = fa.suites.filter(s => !s.eliminated_by);
     const survivors = alive.length
       ? alive.map(s => `<li><span class="ev-suite is-alive">${esc(s.suite)}</span>
-          <span class="ev-reason">IV ${s.iv}&nbsp;B, ICV ${s.icv}&nbsp;B, `
-          + `pads to ${s.boundary}&nbsp;B, requires residue ${s.expected_residue}</span></li>`).join("")
+          <span class="ev-reason">IV ${esc(s.iv)}&nbsp;B, ICV ${esc(s.icv)}&nbsp;B, `
+          + `pads to ${esc(s.boundary)}&nbsp;B, requires residue ${esc(s.expected_residue)}</span></li>`).join("")
       : `<li class="ev-warn-text">None. Every catalogued suite failed at least one constraint.</li>`;
 
     return `<ol class="ev-steps">${steps}</ol>
@@ -164,13 +164,13 @@ const EvidencePanel = (() => {
   function model(f){
     const ranked = (f.ranked || []).map(([name, p]) => `<li>
         <span>${esc(name)}</span>
-        <span class="ev-model-bar" aria-hidden="true"><i style="width:${Math.round(p * 100)}%"></i></span>
+        <span class="ev-model-bar" aria-hidden="true"><i data-w="${Math.round(p * 100)}"></i></span>
         <span class="ev-model-p">${Fmt.percent(p)}</span></li>`).join("");
     return `<section class="ev-model" aria-labelledby="ev-model-h">
-      <h3 id="ev-model-h">Learned models' ranking <span class="domain-tag inf">not arithmetic</span></h3>
+      <h3 id="ev-model-h">Learned models' ranking <span class="domain-tag inf">Not arithmetic</span></h3>
       <p class="ev-dim">Random Forest and 1D-CNN probabilities, after the mask above. They
         choose among the survivors and cannot be checked by hand; the arithmetic above can.</p>
-      ${ranked ? `<ol class="ev-model-list">${ranked}</ol>` : `<p class="ev-dim">No model was loaded for this analysis.</p>`}
+      ${ranked ? `<ol class="ev-model-list">${ranked}</ol>` : `<p class="ev-dim">No model was loaded for this assessment.</p>`}
     </section>`;
   }
 
@@ -178,7 +178,7 @@ const EvidencePanel = (() => {
     const fa = f.framing_arithmetic;
     if (!fa){
       return `<p class="ev-warn-text">This assessment was produced before the framing
-        arithmetic was recorded. Re-run the analysis to see the working.</p>` + model(f);
+        arithmetic was recorded. Assess the capture again to see the working.</p>` + model(f);
     }
     const caveats = (f.inference_notes || []).filter(n => n.kind !== "summary").length;
     const alert = caveats
@@ -270,31 +270,86 @@ window.EvidencePanel = EvidencePanel;
 function renderFindings(a){
   const el = $("findings");
   if (!a.findings.length){
-    el.innerHTML = `<div class="empty">No findings. `
-      + `Every observed association meets the baseline.</div>`;
+    el.innerHTML = UIState.box("This assessment raised no findings.", "Assess capture", "run-analysis");
     $("findsub").textContent = "Nothing to review.";
+    const fb = $("findings-filter-bar");
+    if (fb){ fb.hidden = true; fb.innerHTML = ""; }
     return;
   }
   const inferred = a.findings.filter(f => f.inferred).length;
-  const groups = a.finding_groups || [];
-  whyByRule = Object.fromEntries(groups.filter(g => g.why_it_matters)
+  const allGroups = a.finding_groups || [];
+  whyByRule = Object.fromEntries(allGroups.filter(g => g.why_it_matters)
     .map(g => [g.rule_id, g.why_it_matters]));
-  $("findsub").textContent =
-    `${a.findings.length} findings`
-    + (groups.length ? ` in ${groups.length} distinct problems` : "")
-    + ` · ${a.findings.length - inferred} from parsed bytes, `
-    + `${inferred} inferred from encrypted traffic.`;
+
+  const filteredLink = state.linkFilter && a.links
+    ? a.links.find(l => l.id === state.linkFilter)
+    : null;
+
+  const filterBar = $("findings-filter-bar");
+  if (filterBar){
+    if (filteredLink){
+      filterBar.hidden = false;
+      filterBar.innerHTML = `<span class="filter-label">Filtered to link <strong class="mono">${esc(linkLabel(filteredLink))}</strong> (${filteredLink.findings.length} finding${filteredLink.findings.length === 1 ? "" : "s"})</span>
+        <button type="button" class="btn-clear linkish" id="findings-clear-filter">Show all findings (${a.findings.length})</button>`;
+    } else {
+      filterBar.hidden = true;
+      filterBar.innerHTML = "";
+    }
+  }
+
+  if (filteredLink){
+    $("findsub").textContent =
+      `Filtered to ${linkLabel(filteredLink)}: ${filteredLink.findings.length} of ${a.findings.length} findings visible.`;
+  } else {
+    $("findsub").textContent =
+      `${a.findings.length} findings`
+      + (allGroups.length ? ` in ${allGroups.length} distinct problems` : "")
+      + ` · ${a.findings.length - inferred} from parsed bytes, `
+      + `${inferred} inferred from encrypted traffic.`;
+  }
 
   document.querySelectorAll("[data-fview]").forEach(b =>
     b.setAttribute("aria-pressed", b.dataset.fview === state.findingsView ? "true" : "false"));
 
-  el.innerHTML = state.findingsView === "link" && a.links
-    ? findingsByLinkHTML(a)
-    : groups.length
-      ? groups.map(g => groupHTML(g, a)).join("")
-      : a.findings.map((f, i) => findingHTML(f, i, "f")).join("");
+  if (state.findingsView === "link" && a.links){
+    el.innerHTML = findingsByLinkHTML(a);
+  } else {
+    let groupsToRender = allGroups;
+    let findingsToRender = a.findings;
 
+    if (filteredLink){
+      const allowed = new Set(filteredLink.findings);
+      if (allGroups.length){
+        groupsToRender = allGroups.map(g => {
+          const m = g.findings.filter(i => allowed.has(i));
+          return m.length ? { ...g, count: m.length, findings: m } : null;
+        }).filter(Boolean);
+      } else {
+        findingsToRender = a.findings.filter((_, i) => allowed.has(i));
+      }
+      if (filteredLink.findings.length === 0){
+        el.innerHTML = UIState.box("This link has no findings.", "Clear link filter", "clear-link-filter");
+        attachFindingsHandlers(el);
+        return;
+      }
+    }
+
+    el.innerHTML = groupsToRender.length
+      ? renderSeverityGroupedHTML(groupsToRender, a, true, "rule")
+      : renderSeverityGroupedHTML(findingsToRender.map((f, i) => ({f, i})), a, false, "rule");
+  }
+
+  attachFindingsHandlers(el);
+}
+
+function attachFindingsHandlers(el){
   el.onclick = (e) => {
+    const clearBtn = e.target.closest("#findings-clear-filter");
+    if (clearBtn){
+      state.linkFilter = null;
+      renderFindings(state.assessment);
+      return;
+    }
     const open = e.target.closest("[data-open-link]");
     if (open){
       selectLink(open.dataset.openLink);
@@ -304,14 +359,25 @@ function renderFindings(a){
     }
     toggleDisclosure(e);
   };
+
+  const filterBar = $("findings-filter-bar");
+  if (filterBar && !filterBar._hasListener){
+    filterBar.addEventListener("click", (e) => {
+      if (e.target.closest("#findings-clear-filter")){
+        state.linkFilter = null;
+        renderFindings(state.assessment);
+      }
+    });
+    filterBar._hasListener = true;
+  }
 }
 
 /* One disclosure pattern for every expandable row: a real <button> carrying
    aria-expanded and aria-controls, so Enter, Space and screen readers work
-   without per-row key handlers. */
+   without per-row key handlers. Supports both finding rows and severity group headers. */
 function toggleDisclosure(e){
   const btn = e.target.closest("button[aria-controls]");
-  if (!btn || !btn.classList.contains("fhead")) return;
+  if (!btn || (!btn.classList.contains("fhead") && !btn.classList.contains("sev-group-head"))) return;
   const open = btn.getAttribute("aria-expanded") !== "true";
   btn.setAttribute("aria-expanded", open ? "true" : "false");
   const panel = document.getElementById(btn.getAttribute("aria-controls"));
@@ -330,16 +396,17 @@ function whyHTML(ruleId){
   return why ? `<p class="fwhy"><b>Why this matters:</b> ${esc(why)}</p>` : "";
 }
 
-function findingHTML(f, i, prefix){
+function findingHTML(f, i, prefix, {hideBadge = false} = {}){
   const id = `${prefix}-${i}-${++disclosureSeq}`;
   // members of an expanded group don't repeat the sentence the group shows
   const why = prefix === "gm" ? "" : whyHTML(f.rule_id);
+  const badge = hideBadge ? "" : `<span class="sev-mark ${esc(f.severity)}">${esc(cap(f.severity))}</span>`;
   return `<div class="finding" data-i="${i}">
       <button type="button" class="fhead" aria-expanded="false" aria-controls="${id}">
-        <span class="sev-mark ${esc(f.severity)}">${esc(f.severity)}</span>
+        ${badge}
         <span class="fmain">
           <span class="ftitle">${esc(f.title)}</span>
-          ${f.inferred ? `<span class="domain-tag inf inline">inferred</span>` : ``}
+          ${f.inferred ? `<span class="domain-tag inf inline">Inferred</span>` : ``}
           <span class="fsub">${esc(f.rule_id)} · ${esc(f.subject)}</span>
         </span>
         <span class="chev" aria-hidden="true">&#9662;</span>
@@ -355,50 +422,122 @@ function findingHTML(f, i, prefix){
 
 /* A group is one rule firing on one or more subjects. A group of one is shown
    as the finding itself, so a single occurrence is one click from its fix. */
-function groupHTML(g, a){
-  if (g.count === 1) return findingHTML(a.findings[g.findings[0]], g.findings[0], "g");
+function groupHTML(g, a, {hideBadge = false} = {}){
+  if (g.count === 1) return findingHTML(a.findings[g.findings[0]], g.findings[0], "g", {hideBadge});
   const id = `grp-${++disclosureSeq}`;
-  const where = g.subjects.length === 1
+  const where = g.subjects && g.subjects.length === 1
     ? g.subjects[0]
-    : `${g.subjects.length} subjects`;
-  // Deliberately not class "finding": `.finding.open .fbody` is a descendant
-  // rule, so an open group would force every member's body open too.
+    : `${g.subjects ? g.subjects.length : g.findings.length} subjects`;
+  const badge = hideBadge ? "" : `<span class="sev-mark ${esc(g.severity)}">${esc(cap(g.severity))}</span>`;
   return `<div class="fgroup">
       <button type="button" class="fhead" aria-expanded="false" aria-controls="${id}">
-        <span class="sev-mark ${esc(g.severity)}">${esc(g.severity)}</span>
+        ${badge}
         <span class="fmain">
           <span class="ftitle">${esc(g.title)}</span>
-          ${g.inferred ? `<span class="domain-tag inf inline">inferred</span>` : ``}
+          ${g.inferred ? `<span class="domain-tag inf inline">Inferred</span>` : ``}
           <span class="fsub">${esc(g.rule_id)} · ${esc(where)}</span>
         </span>
-        <span class="gcount" aria-label="${g.count} occurrences">&times;${g.count}</span>
+        <span class="gcount" aria-label="${esc(g.count)} occurrences">&times;${esc(g.count)}</span>
         <span class="chev" aria-hidden="true">&#9662;</span>
       </button>
       <div class="gbody" id="${id}" hidden>
         ${whyHTML(g.rule_id)}
-        ${g.findings.map(i => findingHTML(a.findings[i], i, "gm")).join("")}
+        ${g.findings.map(i => findingHTML(a.findings[i], i, "gm", {hideBadge: true})).join("")}
       </div>
     </div>`;
 }
 
+const SEVERITY_LEVELS = ["critical", "high", "medium", "low", "info"];
+const SEV_LABELS = {
+  critical: "Critical",
+  high: "High",
+  medium: "Medium",
+  low: "Low",
+  info: "Info"
+};
+
+function renderSeverityGroupedHTML(items, a, isGroupList = true, prefix = "sev"){
+  if (!items || !items.length) return UIState.box("This assessment raised no findings.", "Assess capture", "run-analysis");
+
+  const bySev = {};
+  for (const lvl of SEVERITY_LEVELS) bySev[lvl] = [];
+  for (const item of items){
+    const s = (item.severity || (item.f && item.f.severity) || "low").toLowerCase();
+    if (!bySev[s]) bySev[s] = [];
+    bySev[s].push(item);
+  }
+
+  const activeSeverities = SEVERITY_LEVELS.filter(lvl => bySev[lvl].length > 0);
+  if (!activeSeverities.length) return UIState.box("This assessment raised no findings.", "Assess capture", "run-analysis");
+
+  const hasCritical = bySev.critical && bySev.critical.length > 0;
+
+  return activeSeverities.map(sev => {
+    const sevItems = bySev[sev];
+    const totalCount = isGroupList
+      ? sevItems.reduce((acc, g) => acc + (g.count || 1), 0)
+      : sevItems.length;
+
+    // Critical is open; rest collapsed. If no critical, open first active severity.
+    const isOpen = (sev === "critical") || (!hasCritical && sev === activeSeverities[0]);
+    const bodyId = `${prefix}-body-${sev}-${++disclosureSeq}`;
+
+    const rowsHTML = isGroupList
+      ? sevItems.map(g => groupHTML(g, a, {hideBadge: true})).join("")
+      : sevItems.map(item => {
+          const f = item.f || item;
+          const idx = item.i !== undefined ? item.i : a.findings.indexOf(f);
+          return findingHTML(f, idx >= 0 ? idx : 0, prefix, {hideBadge: true});
+        }).join("");
+
+    return `<div class="sev-group ${sev} ${isOpen ? "open" : ""}" data-severity="${sev}">
+      <button type="button" class="sev-group-head" aria-expanded="${isOpen ? "true" : "false"}"
+              aria-controls="${bodyId}">
+        <span class="sev-group-label">
+          <span class="sev-heading-name ${sev}">${SEV_LABELS[sev] || sev}</span>
+          <span class="sev-heading-count">${totalCount}</span>
+        </span>
+        <span class="chev" aria-hidden="true">&#9662;</span>
+      </button>
+      <div class="sev-group-body" id="${bodyId}" ${isOpen ? "" : "hidden"}>
+        ${rowsHTML}
+      </div>
+    </div>`;
+  }).join("");
+}
+
 function findingsByLinkHTML(a){
-  const sections = (a.links || []).filter(l => l.findings.length).map(l => `
+  let links = (a.links || []).filter(l => l.findings && l.findings.length);
+  if (state.linkFilter){
+    links = links.filter(l => l.id === state.linkFilter);
+  }
+  const sections = links.map(l => {
+    const linkFindings = l.findings.map(i => ({ f: a.findings[i], i }));
+    const groupedHTML = renderSeverityGroupedHTML(linkFindings, a, false, `link-${l.id}`);
+    return `
     <section class="flink" aria-label="Findings for ${esc(linkLabel(l))}">
       <div class="flink-head">
-        <span class="sev-mark ${esc(l.worst_severity)}">${esc(l.worst_severity)}</span>
+        <span class="sev-mark ${esc(l.worst_severity || "none")}">${esc(cap(l.worst_severity || "none"))}</span>
         <span class="flink-peers mono">${esc(linkLabel(l))}</span>
         <span class="flink-count">${l.findings.length} finding${l.findings.length === 1 ? "" : "s"}</span>
         <button type="button" class="linkish" data-open-link="${esc(l.id)}">Open link</button>
       </div>
-      ${l.findings.map(i => findingHTML(a.findings[i], i, "bl")).join("")}
-    </section>`);
+      ${groupedHTML}
+    </section>`;
+  });
   const loose = (a.unlinked_findings || []);
-  if (loose.length){
+  if (!state.linkFilter && loose.length){
+    const looseFindings = loose.map(i => ({ f: a.findings[i], i }));
+    const looseHTML = renderSeverityGroupedHTML(looseFindings, a, false, "unlinked");
     sections.push(`<section class="flink" aria-label="Findings not tied to a link">
-      <div class="flink-head"><span class="flink-peers">Not tied to a gateway pair</span>
-        <span class="flink-count">${loose.length}</span></div>
-      ${loose.map(i => findingHTML(a.findings[i], i, "bu")).join("")}
+      <div class="flink-head"><span class="flink-peers">Not tied to a link</span>
+        <span class="flink-count">${loose.length} finding${loose.length === 1 ? "" : "s"}</span></div>
+      ${looseHTML}
     </section>`);
   }
-  return sections.join("") || `<div class="empty">No findings.</div>`;
+  return sections.join("") || UIState.box(
+    state.linkFilter ? "This link has no findings." : "This assessment raised no findings.",
+    state.linkFilter ? "Clear link filter" : "Assess capture",
+    state.linkFilter ? "clear-link-filter" : "run-analysis"
+  );
 }

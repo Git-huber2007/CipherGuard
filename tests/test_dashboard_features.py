@@ -9,6 +9,7 @@ stub; the rest are checked in the markup and stylesheet they depend on.
 from __future__ import annotations
 
 import hashlib
+from html import unescape as _unescape
 import json
 import os
 import re
@@ -301,9 +302,9 @@ def test_failed_requests_never_put_a_raw_body_on_screen():
     )
     assert got["html"][0] == "HTTP 500" and "Traceback" not in got["html"][0]
     assert got["html"][2] is True  # kept for the console
-    assert got["html"][3] == "The server could not complete the analysis."
+    assert got["html"][3] == "The server could not complete the assessment."
     assert got["json"] == ["x.pcap already exists; rename it first"] * 2
-    assert got["net"] == "The analysis server is not responding."
+    assert got["net"] == "The server is not responding."
     assert got["missing"] == "That capture is no longer available on the server."
 
 
@@ -425,3 +426,152 @@ def test_saved_theme_is_applied_before_the_stylesheet_paints():
     assert '"cipherguard.theme"' in module("Theme", dashboard_js())
     options = re.findall(r'<option value="(\w+)">', html[html.index('id="theme-select"') :][:400])
     assert options == ["light", "dark", "system"]
+
+
+# ---------------------------------------------------------------------------
+# Capture contents are hostile: names from packets and uploads render as text
+# ---------------------------------------------------------------------------
+
+HOSTILE = "<img src=x onerror=alert(1)>"
+
+_SINK_PAGE = r"""
+function makeEl(id){ return { id, innerHTML: "", value: "", selectedIndex: 0, hidden: false,
+  classList: { add(){}, remove(){} }, setAttribute(){}, addEventListener(){},
+  querySelectorAll: () => [] }; }
+const els = {};
+const $ = id => els[id] || (els[id] = makeEl(id));
+const name = JSON.parse(require('fs').readFileSync(0, 'utf8')).name;
+const state = { wifiGroupMode: true, wifiAssessment: null, currentWifiNetworks: [] };
+const network = { ssid: name, bssid: name, authentication: name, encryption: name, band: name,
+                  channel: 6, signal_percent: 70, rssi_dbm: -50, security_grade: name };
+"""
+
+
+def _elements_and_text(html: str) -> tuple[set[str], str]:
+    from html.parser import HTMLParser
+
+    tags, text = set(), []
+
+    class Collect(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            tags.add(tag)
+
+        def handle_data(self, data):
+            text.append(data)
+
+    Collect().feed(html)
+    return tags, "".join(text)
+
+
+@pytest.mark.no_model
+@needs_node
+def test_hostile_network_and_capture_names_render_as_text():
+    """An SSID comes from a beacon and a capture name from an upload, so both
+    are attacker-chosen. Rendered through the page's own code, the markup must
+    come out as text: no <img> element, and the name readable as written."""
+    js = dashboard_js()
+    got = run_node(
+        function("esc", js)
+        + module("Fmt", js)
+        + module("UIState", js)
+        + _SINK_PAGE
+        + function("signalTone", js)
+        + function("renderWifiNetworksTable", js)
+        + function("populateCaptureSelects", js)
+        + r"""
+      const out = {};
+      renderWifiNetworksTable([network, Object.assign({}, network, { bssid: name + "2" })]);
+      out.grouped = $("wifi-networks-tbody").innerHTML;
+      state.wifiGroupMode = false;
+      renderWifiNetworksTable([network]);
+      out.flat = $("wifi-networks-tbody").innerHTML;
+      populateCaptureSelects([{ name, size_bytes: 1200 }]);
+      out.captures = $("capture").innerHTML;
+      process.stdout.write(JSON.stringify(out));
+    """,
+        {"name": HOSTILE},
+    )
+    for view, html in got.items():
+        tags, text = _elements_and_text(html)
+        assert "img" not in tags, view
+        assert HOSTILE in text, view
+        assert "<img" not in html, view
+
+
+# The renderers below reach into more of the page than the two above, so the
+# whole of each script is loaded against a stub document instead of picking
+# functions out one by one. Any element asked for by id exists and keeps what
+# is written to its innerHTML.
+_WHOLE_PAGE = r"""
+const made = {};
+const makeEl = id => new Proxy(
+  { id, innerHTML: "", textContent: "", hidden: false, dataset: {}, style: { setProperty(){} },
+    classList: { add(){}, remove(){}, toggle(){ return false; }, contains(){ return false; } } },
+  { get(t, k){ if (k in t) return t[k];
+               if (k === "querySelectorAll") return () => [];
+               if (k === "querySelector") return () => null;
+               return () => undefined; },
+    set(t, k, v){ t[k] = v; return true; } });
+const document = { currentScript: null, getElementById: id => made[id] || (made[id] = makeEl(id)),
+                   querySelector: () => null, querySelectorAll: () => [], addEventListener(){} };
+const window = {};
+const name = JSON.parse(require('fs').readFileSync(0, 'utf8')).name;
+"""
+
+
+@pytest.mark.no_model
+@needs_node
+def test_hostile_findings_vendor_ids_proposals_and_ssids_render_as_text(tmp_path):
+    """Finding text, IKE vendor IDs, SA proposal values and SSIDs are all read
+    out of packets. Each is rendered here by the page's own code, through every
+    panel that shows it, and must come out as text: no element is created."""
+    scripts = "".join(_read("js", f) for f in ("core.js", "ipsec-view.js", "evidence.js", "wifi.js", "spectrum.js"))
+    # five whole scripts are too long for a command line, so Node loads them from a file
+    page = tmp_path / "page.js"
+    page.write_text(
+        _WHOLE_PAGE
+        + scripts
+        + r"""
+      const html = id => document.getElementById(id).innerHTML;
+      const finding = { severity: "critical", rule_id: "IKE-004", title: name, subject: name, detail: name,
+                        remediation: name, reference: name, inferred: false };
+      const assessment = {
+        capture: name,
+        sessions: [{ version: "IKEv2", vendor_family: name, vendor_ids: [name], initiator_spi: name,
+                     peer_a: name, peer_b: name,
+                     messages: [{ is_response: true, proposals: [{ protocol: "IKE",
+                       transforms: [{ type_id: 1, type_name: "ENCR", value_id: 3, name, key_length: null }] }] }] }],
+        flows: [{ src: name, dst: name, spi: name, packets: 5, framing_class: name, framing_confidence: 1,
+                  ambiguous: true, framing_candidates: [name], encapsulated: false }],
+        findings: [finding],
+      };
+      const link = { id: "a~b", peers: [name, name], sessions: [0], flows: [0], worst_severity: "critical",
+                     strength: { classical_bits: 64, quantum_bits: 0, kex_family: name }, tunnels: 1, pooled: false };
+      assessment.links = [link];
+
+      const out = {};
+      out.finding = findingHTML(finding, 0, "g");
+      renderWifiFindings([finding]);
+      out.wifiFinding = html("wifi-findings");
+      renderRibbonTo("ribbon", assessment, link);
+      out.ribbon = html("ribbon");
+      renderLinkDetail(assessment, link);
+      out.linkDetail = html("link-detail");
+      state.spectrumBand = "2.4";
+      renderRfSpectrum([{ ssid: name, bssid: name, channel: 6, band: "2.4 GHz", rssi_dbm: -50, signal_percent: 70,
+                          authentication: name, encryption: name, connected: true }]);
+      out.spectrum = html("wifi-spectrum-svg");
+      process.stdout.write(JSON.stringify(out));
+    """,
+        encoding="utf-8",
+    )
+    got = run_node(f"require({json.dumps(str(page))})", {"name": HOSTILE})
+    for view, html in got.items():
+        tags, text = _elements_and_text(html)
+        assert not tags & {"img", "script"}, view
+        # the chart label is cut to 14 characters; everywhere else the name is whole
+        assert (HOSTILE[:14] if view == "spectrum" else HOSTILE) in text, view
+
+    # the chart's tooltip reads its text back out of an attribute: it must survive the round trip
+    spec = re.search(r'data-spec="([^"]*)"', got["spectrum"])
+    assert spec and json.loads(_unescape(spec.group(1)))["ssid"] == HOSTILE

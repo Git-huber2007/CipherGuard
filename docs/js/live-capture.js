@@ -42,7 +42,7 @@ const LiveSnifferEngine = (function() {
       updateUIState(false, "idle");
       showToast("Capture stopped", "info");
     } catch(err) {
-      showToast("Failed to stop sniffer: " + err.message, "error");
+      showToast("Could not stop the capture: " + err.message, "error");
     }
   }
 
@@ -104,9 +104,9 @@ const LiveSnifferEngine = (function() {
 
   function resetFeed() {
     const feed = $("sniffer-live-feed");
-    if (feed) feed.innerHTML = "";
+    if (feed) feed.innerHTML = UIState.box("Nothing captured yet. Start a capture on this machine.", "Start capture", "sniffer-start");
     const grid = $("sniffer-spis-grid");
-    if (grid) grid.innerHTML = `<div class="empty">None seen yet.</div>`;
+    if (grid) grid.innerHTML = UIState.box("No security associations in the live stream yet.", "Load sample sessions", "run-analysis");
     for (const k of Object.keys(knownSpis)) delete knownSpis[k];
   }
 
@@ -114,7 +114,7 @@ const LiveSnifferEngine = (function() {
     const feed = $("sniffer-live-feed");
     if (!feed) return;
 
-    if (feed.querySelector(".feed-placeholder")) {
+    if (feed.querySelector(".feed-placeholder, .panel-state, .empty")) {
       feed.innerHTML = "";
     }
 
@@ -128,7 +128,7 @@ const LiveSnifferEngine = (function() {
       <span class="feed-badge ${badgeCls}">${esc(pkt.protocol)}</span>
       <span class="feed-endpoints">${esc(pkt.src)} &rarr; ${esc(pkt.dst)}</span>
       <span class="feed-spi">${pkt.spi ? esc(pkt.spi) : "—"}</span>
-      <span class="feed-len">${pkt.length}B</span>
+      <span class="feed-len">${esc(pkt.length)}B</span>
     `;
 
     feed.prepend(row);
@@ -136,8 +136,8 @@ const LiveSnifferEngine = (function() {
       feed.removeChild(feed.lastChild);
     }
 
-    if ($("sniffer-rate-pps") && pkt.rate_pps !== undefined) $("sniffer-rate-pps").innerHTML = `${pkt.rate_pps} <small>pps</small>`;
-    if ($("sniffer-rate-kbps") && pkt.rate_kbps !== undefined) $("sniffer-rate-kbps").innerHTML = `${pkt.rate_kbps} <small>kbps</small>`;
+    if ($("sniffer-rate-pps") && pkt.rate_pps !== undefined) $("sniffer-rate-pps").innerHTML = `${esc(pkt.rate_pps)} <small>pps</small>`;
+    if ($("sniffer-rate-kbps") && pkt.rate_kbps !== undefined) $("sniffer-rate-kbps").innerHTML = `${esc(pkt.rate_kbps)} <small>kbps</small>`;
     if ($("sniffer-total-pkts") && pkt.frame !== undefined) $("sniffer-total-pkts").textContent = String(pkt.frame);
     if ($("sniffer-active-spis") && pkt.active_spis_count !== undefined) $("sniffer-active-spis").textContent = String(pkt.active_spis_count);
 
@@ -149,7 +149,7 @@ const LiveSnifferEngine = (function() {
   function updateActiveSaCard(pkt) {
     const grid = $("sniffer-spis-grid");
     if (!grid) return;
-    if (grid.querySelector(".empty")) {
+    if (grid.querySelector(".empty, .panel-state")) {
       grid.innerHTML = "";
     }
 
@@ -176,8 +176,8 @@ const LiveSnifferEngine = (function() {
   }
 
   function updateCounters(st) {
-    if ($("sniffer-rate-pps")) $("sniffer-rate-pps").innerHTML = `${st.rate_pps || 0} <small>pps</small>`;
-    if ($("sniffer-rate-kbps")) $("sniffer-rate-kbps").innerHTML = `${st.rate_kbps || 0} <small>kbps</small>`;
+    if ($("sniffer-rate-pps")) $("sniffer-rate-pps").innerHTML = `${esc(st.rate_pps || 0)} <small>pps</small>`;
+    if ($("sniffer-rate-kbps")) $("sniffer-rate-kbps").innerHTML = `${esc(st.rate_kbps || 0)} <small>kbps</small>`;
     if ($("sniffer-total-pkts")) $("sniffer-total-pkts").textContent = String(st.packets_captured || 0);
     if ($("sniffer-active-spis")) $("sniffer-active-spis").textContent = String((st.active_spis || []).length);
     // The label follows what the server says is running, so a capture that
@@ -195,7 +195,7 @@ const LiveSnifferEngine = (function() {
   function statusLabel(active, mode) {
     if (!active) {
       return mode === "failed"
-        ? '<span class="hud-dot idle"></span> COULD NOT START'
+        ? '<span class="hud-dot idle"></span> Could not start'
         : '<span class="hud-dot idle"></span> IDLE';
     }
     return mode === "replay"
@@ -242,7 +242,7 @@ const LiveSnifferEngine = (function() {
     const btnAnalyze = $("btn-sniffer-analyze");
     if (btnAnalyze) {
       btnAnalyze.disabled = true;
-      btnAnalyze.textContent = "Analyzing...";
+      btnAnalyze.textContent = "Assessing…";
     }
 
     try {
@@ -256,11 +256,11 @@ const LiveSnifferEngine = (function() {
       if (fromReplay) showBanner(
         "This assessment is of replayed sample captures, not of live traffic from this machine.");
     } catch(err) {
-      showToast("Snapshot analysis failed: " + err.message, "error");
+      showToast("Could not assess the snapshot: " + err.message, "error");
     } finally {
       if (btnAnalyze) {
         btnAnalyze.disabled = false;
-        btnAnalyze.innerHTML = "Analyze Live Snapshot";
+        btnAnalyze.textContent = "Assess what was captured";
       }
     }
   }

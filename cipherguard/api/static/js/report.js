@@ -49,7 +49,7 @@ const Skeleton = (() => {
     for (const id of Object.keys(FILL)){
       const el = $(id);
       if (el) el.innerHTML = id === "findings" || id === "link-list"
-        ? `<div class="empty">${esc(message)}</div>` : "";
+        ? UIState.box(message, "Assess capture", "run-analysis", true) : "";
     }
     restoreRemediation();
   }
@@ -72,8 +72,7 @@ const Report = (() => {
     const ta = document.createElement("textarea");
     ta.value = text;
     ta.setAttribute("readonly", "");
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
+    ta.className = "clipboard-proxy";
     document.body.appendChild(ta);
     ta.select();
     let ok = false;
@@ -156,7 +155,7 @@ const Report = (() => {
     };
     set("prov-capture", p.capture_sha256, "not recorded for this report");
     set("prov-model", p.model && p.model.manifest_sha256,
-        "no model was loaded for this analysis");
+        "no model was loaded for this assessment");
     set("prov-digest", p.report_digest || a.digest, "not recorded");
     const date = $("prov-model-date");
     if (date) date.textContent = p.model && p.model.trained_at
@@ -266,6 +265,11 @@ const Upload = (() => {
     const zone = $("upload-zone");
     if (!zone) return;
     zone.hidden = !available();
+    const trigger = $("upload-picker-trigger");
+    if (trigger) {
+      trigger.hidden = !available();
+      trigger.addEventListener("click", () => $("upload-input").click());
+    }
     if (zone.hidden || bound) return;
     bound = true;
     const limit = state.health.max_upload_bytes;

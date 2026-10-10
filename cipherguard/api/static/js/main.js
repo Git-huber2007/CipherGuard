@@ -4,15 +4,24 @@
 /* ----------------------------------------------------------------- init */
 
 async function init(){
+  DataVars.init();
   try { state.token = sessionStorage.getItem("cipherguard.token"); } catch (e) {}
 
   // Tab listeners
   $("tab-wifi").addEventListener("click", () => switchTab("wifi"));
   $("tab-ipsec").addEventListener("click", () => switchTab("ipsec"));
+  // role="tablist" promises arrow keys: they move focus and select at once
+  const tabs = [$("tab-ipsec"), $("tab-wifi")];
+  tabs[0].parentElement.addEventListener("keydown", (e) => {
+    const i = tabs.indexOf(e.target), n = tabs.length;
+    const to = { ArrowRight: (i + 1) % n, ArrowLeft: (i + n - 1) % n, Home: 0, End: n - 1 }[e.key];
+    if (i < 0 || to === undefined || e.altKey || e.ctrlKey || e.metaKey) return;
+    e.preventDefault();
+    tabs[to].click();
+    tabs[to].focus();
+  });
 
   // Wi-Fi action buttons
-  const refreshBtn = $("wifi-refresh-btn");
-  if (refreshBtn) refreshBtn.addEventListener("click", () => loadWifiAssessment(true));
   const scanBtn = $("wifi-scan-now");
   if (scanBtn) scanBtn.addEventListener("click", () => loadWifiAssessment(true));
 
@@ -28,17 +37,13 @@ async function init(){
   if (btnGroup && btnAll) {
     btnGroup.addEventListener("click", () => {
       state.wifiGroupMode = true;
-      btnGroup.classList.add("active");
       btnGroup.setAttribute("aria-pressed", "true");
-      btnAll.classList.remove("active");
       btnAll.setAttribute("aria-pressed", "false");
       renderWifiNetworksTable();
     });
     btnAll.addEventListener("click", () => {
       state.wifiGroupMode = false;
-      btnAll.classList.add("active");
       btnAll.setAttribute("aria-pressed", "true");
-      btnGroup.classList.remove("active");
       btnGroup.setAttribute("aria-pressed", "false");
       renderWifiNetworksTable();
     });
@@ -85,7 +90,7 @@ async function init(){
   if (btnDismissRogue) {
     btnDismissRogue.addEventListener("click", () => {
       const b = $("wifi-evil-twin-banner");
-      if (b) b.style.display = "none";
+      if (b) b.hidden = true;
     });
   }
 
@@ -96,17 +101,13 @@ async function init(){
   if (btnSpec24 && btnSpec5) {
     btnSpec24.addEventListener("click", () => {
       state.spectrumBand = "2.4";
-      btnSpec24.classList.add("active");
       btnSpec24.setAttribute("aria-pressed", "true");
-      btnSpec5.classList.remove("active");
       btnSpec5.setAttribute("aria-pressed", "false");
       renderRfSpectrum(state.currentWifiNetworks);
     });
     btnSpec5.addEventListener("click", () => {
       state.spectrumBand = "5";
-      btnSpec5.classList.add("active");
       btnSpec5.setAttribute("aria-pressed", "true");
-      btnSpec24.classList.remove("active");
       btnSpec24.setAttribute("aria-pressed", "false");
       renderRfSpectrum(state.currentWifiNetworks);
     });
@@ -257,13 +258,15 @@ async function init(){
       CbomEngine.closeModal();
       EvidencePanel.close();
       const rogueBanner = $("wifi-evil-twin-banner");
-      if (rogueBanner) rogueBanner.style.display = "none";
+      if (rogueBanner) rogueBanner.hidden = true;
       return;
     }
     if (!e.altKey || e.ctrlKey || e.metaKey) return;
     const run = SHORTCUTS[e.code];
     if (!run) return;
     e.preventDefault();
+    // a dialog is open: the page behind is inert, and so are its shortcuts
+    if (document.querySelector("[role=dialog]:not([hidden]), dialog[open]")) return;
     run();
   });
 

@@ -13,7 +13,7 @@ Research Organisation (NTRO)
 [Method and validation](METHOD.md) · [Operations](OPERATIONS.md) ·
 [Architecture](ARCHITECTURE.md)
 
-![The dashboard assessing the backbone lab capture: one link's cleartext and encrypted fields side by side, and its posture grade](.github/assets/dashboard.png)
+![The dashboard assessing the backbone lab capture: one link's fields either side of the key boundary, parsed on the left and inferred on the right, above its posture grade and severity counts](.github/assets/dashboard.png)
 
 ## The problem
 
@@ -41,7 +41,7 @@ inferred value always carries a confidence and its candidate set.
 | Cryptographic bill of materials | CycloneDX 1.6, built from observed traffic, with provenance on every asset | `cipherguard cbom samples/backbone.pcap -o bom.json` |
 | Hardening plans | Configuration and a matching rollback for Cisco IOS / IOS-XE, strongSwan, FortiOS and Junos. Generated for review; nothing is sent to a gateway | `cipherguard remediate samples/backbone.pcap -o out/` |
 | Wi-Fi audit | Reads the operating system's own scan (`netsh` on Windows, `nmcli` on Linux); flags weak security and a cloned network name | Wi-Fi tab of the dashboard |
-| Dashboard | One page, no framework and no build step; runs against the server or as a static export | `cipherguard serve` |
+| Dashboard | One page, no framework and no build step; runs against the server or as a static export. Light and dark themes, keyboard shortcuts (Alt + H lists them), a presentation mode and a printable report | `cipherguard serve` |
 
 Whether each of these is something SIH26160 asks for is for the problem
 statement to say; this table lists only what the code does.
@@ -53,7 +53,10 @@ model, so there is nothing to generate first. There is no account or password:
 a local run needs no credentials.
 
 **Windows:** double-click `launch_dashboard.bat`. On first run it creates
-`.venv`, installs the dependencies there and opens the dashboard.
+`.venv`, installs dependencies from `requirements.lock` (falling back to
+`requirements.txt`), polls until the server answers, and opens the dashboard.
+If `.venv` already exists it is used as it is. Supported flags from cmd:
+`--port N`, `--lan` (network access behind a token), `--no-browser`, and `--help`.
 
 **Any platform:**
 
@@ -64,7 +67,9 @@ pip install -r requirements.lock
 python -m cipherguard serve          # http://127.0.0.1:8000
 ```
 
-Pick a capture and select **Assess capture**. To put the `cipherguard` command
+Pick a capture and select **Assess capture**. The page opens on the IPsec view;
+the Wi-Fi view, live capture and a two-capture comparison are one click away.
+To put the `cipherguard` command
 on your path, run `pip install -e .`; every example below also works as
 `python -m cipherguard ...`.
 
@@ -136,6 +141,11 @@ the block size, IV length and ICV length. That residue rules suites out with
 certainty. The learned models only rank what is left, and a model output that
 contradicts the arithmetic is discarded. [METHOD.md](METHOD.md) has the
 derivation.
+
+Explorable diagrams, each node linked to the source it was drawn from:
+[components](docs/diagrams/cipherguard-components.html) ·
+[from a capture to a report](docs/diagrams/capture-to-report.html) ·
+[one assess request](docs/diagrams/assess-capture.html).
 
 ## Measured results
 
@@ -209,7 +219,9 @@ know, so the server is closed by default.
   state-changing requests that come from another web site.
 - Cross-origin access is off unless specific origins are named.
 - Every response carries a content security policy that allows scripts from
-  the server's own files only. The page uses no inline script.
+  the server's own files only. The page uses no inline script and no inline
+  event handlers, and text taken from a capture (network names, vendor IDs,
+  file names) is escaped before it is shown.
 - Repeated wrong tokens lock the client out for a minute. Request bodies and
   uploads are size-limited before they are read.
 - No outbound network calls, no analytics, no CDN.
@@ -241,6 +253,7 @@ report a vulnerability, see [SECURITY.md](SECURITY.md).
 ## Tests
 
 ```bash
+pip install -r requirements.lock     # the pinned versions the model was trained with
 pip install -e ".[dev]"
 ruff check . && ruff format --check .
 python -m pytest tests/              # about 4 minutes
@@ -250,7 +263,9 @@ python -m pytest tests/ -m "not soak"
 The suite covers the dissector against independently built packets, 14,000
 fuzzed inputs, the framing invariants, scoring, the baseline store, the API's
 request-level protections, and the dashboard's formatting and arithmetic under
-Node. Fourteen tests need the public Wireshark captures and skip until they are
+Node. It also holds the front end to its own rules: colours come from tokens,
+no stylesheet rule is unused or defined twice, and `docs/` matches the live
+files. The live-capture tests skip without packet-capture privileges. Fourteen tests need the public Wireshark captures and skip until they are
 fetched with `scripts/fetch-real-captures.sh` (or `.ps1` on Windows).
 
 ## Repository layout
@@ -265,6 +280,8 @@ tests/              pytest suite
 scripts/            Soak test, capture fetch, release helpers
 deploy/             systemd unit for the sensor
 docker/             strongSwan interoperability lab
+PRODUCT.md          Who the dashboard is for and what each screen is for
+DESIGN.md           The dashboard's design rules: colour, type, spacing, components
 ```
 
 [ARCHITECTURE.md](ARCHITECTURE.md) describes every module and the design rules

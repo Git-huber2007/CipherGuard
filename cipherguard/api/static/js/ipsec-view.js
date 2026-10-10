@@ -26,6 +26,16 @@ function linkLabel(l){ return `${l.peers[0]} ↔ ${l.peers[1]}`; }
 /* The ribbon describes ONE link: the selected one, or the worst in the
    capture. Payloads from before links existed fall back to the first
    session and flow. Nothing is truncated: SPIs and vendor IDs wrap. */
+function formatRibbonHex(str){
+  if (!str) return "";
+  return String(str).replace(/\b(?:0x[0-9a-fA-F]{9,}|[0-9a-fA-F]{9,})\b/g, m => {
+    if (m.startsWith("0x") || m.startsWith("0X")) {
+      return m.slice(0, 2) + m.slice(2).replace(/(.{8})(?=.)/g, "$1<wbr>");
+    }
+    return m.replace(/(.{8})(?=.)/g, "$1<wbr>");
+  });
+}
+
 function renderRibbonTo(targetId, a, link){
   const el = $(targetId);
   if (!el) return;
@@ -59,8 +69,8 @@ function renderRibbonTo(targetId, a, link){
       ? `<div class="seam" role="separator" aria-label="Key boundary: fields after this are encrypted">`
         + `<span class="seam-label">key boundary</span></div>`
       : `<div class="field ${f.d}">`
-      + `<div class="fname">${Glossary.mark(esc(f.n))}</div>`
-      + `<div class="fval">${esc(f.v)}</div></div>`
+      + `<div class="fname">${Glossary.mark(formatRibbonHex(esc(f.n)))}</div>`
+      + `<div class="fval">${formatRibbonHex(esc(f.v))}</div></div>`
   ).join("");
 }
 
@@ -70,10 +80,10 @@ function renderRibbon(a){
   const label = $("ribbon-link");
   if (!label) return;
   if (!a){ label.textContent = "No capture assessed yet."; return; }
-  if (!link){ label.textContent = "No gateway pair observed in this capture."; return; }
+  if (!link){ label.textContent = "No link observed in this capture."; return; }
   const sev = link.worst_severity;
   label.innerHTML = `Showing <span class="mono">${esc(linkLabel(link))}</span>`
-    + (sev ? ` <span class="sev-mark ${esc(sev)}">${esc(sev)}</span>` : ` <span class="ribbon-quiet">no findings</span>`)
+    + (sev ? ` <span class="sev-mark ${esc(sev)}">${esc(cap(sev))}</span>` : ` <span class="ribbon-quiet">no findings</span>`)
     + (link === worstLink(a) && (a.links || []).length > 1
         ? ` <span class="ribbon-quiet">worst of ${a.links.length} links</span>` : "")
     + ((a.links || []).length > 1
@@ -123,11 +133,11 @@ function renderLinks(a){
   const links = a.links || [];
   if (!links.length){
     list.innerHTML = "";
-    detail.innerHTML = `<div class="empty">No gateway pair observed in this capture.</div>`;
+    detail.innerHTML = UIState.box("This capture has no links. Choose another capture.", "Choose another capture", "focus-capture");
     return;
   }
-  $("links-sub").textContent = `${links.length} gateway pair${links.length === 1 ? "" : "s"}, `
-    + "worst first. Select one to see its handshake, tunnel and findings together.";
+  $("links-sub").textContent = `${links.length} link${links.length === 1 ? "" : "s"}, `
+    + "worst first; select one to see its handshake and tunnel and to filter Findings.";
   list.innerHTML = links.map(l => `<li>
       <button type="button" class="link-item" data-link="${esc(l.id)}"
               aria-current="${l.id === state.selectedLink ? "true" : "false"}">
@@ -177,10 +187,10 @@ function renderLinkDetail(a, link){
       <h3 class="ld-title mono">${esc(linkLabel(link))}</h3>
       <div class="ld-chips">
         ${link.worst_severity
-          ? `<span class="sev-mark ${esc(link.worst_severity)}">${esc(link.worst_severity)}</span>`
+          ? `<span class="sev-mark ${esc(link.worst_severity)}">${esc(cap(link.worst_severity))}</span>`
           : `<span class="ribbon-quiet">no findings</span>`}
-        ${st ? `<span class="ld-strength">${st.classical_bits}-bit classical · `
-             + `${st.quantum_bits}-bit post-quantum · ${esc(st.kex_family.toUpperCase())}</span>` : ""}
+        ${st ? `<span class="ld-strength">${esc(st.classical_bits)}-bit classical · `
+             + `${esc(st.quantum_bits)}-bit post-quantum · ${esc(st.kex_family.toUpperCase())}</span>` : ""}
       </div>
     </div>`;
 
@@ -196,7 +206,7 @@ function renderLinkDetail(a, link){
           <div class="algs">${algs}</div>
         </div>`;
       }).join("")
-    : `<p class="ld-none">No IKE negotiation observed for this pair. The tunnel below is
+    : `<p class="ld-none">No IKE negotiation observed for this link. The tunnel below is
         inferred with no handshake to corroborate it.</p>`;
 
   const tunnel = flows.length
@@ -212,39 +222,33 @@ function renderLinkDetail(a, link){
           <button type="button" class="linkish ld-evidence" data-evidence="${i}" aria-haspopup="dialog">Show the framing arithmetic</button>
         </div>`;
       }).join("")
-    : `<p class="ld-none">No ESP traffic observed for this pair.</p>`;
-
-  const findings = link.findings.length
-    ? link.findings.map(i => findingHTML(a.findings[i], i, "ld")).join("")
-    : `<p class="ld-none">No findings on this link.</p>`;
+    : `<p class="ld-none">No ESP traffic observed for this link.</p>`;
 
   el.innerHTML = `${head}
     <div class="ld-cols">
       <section class="ld-block obs" aria-label="Handshake">
-        <h4>Handshake <span class="domain-tag obs">observed</span></h4>${handshake}
+        <h4>Handshake <span class="domain-tag obs">Observed</span></h4>${handshake}
       </section>
       <section class="ld-block inf" aria-label="Tunnel">
-        <h4>Tunnel <span class="domain-tag inf">inferred</span></h4>${tunnel}
+        <h4>Tunnel <span class="domain-tag inf">Inferred</span></h4>${tunnel}
       </section>
     </div>
     <p class="ld-note">ESP is matched to IKE by address pair: the child SA's SPI is negotiated
       inside encrypted IKE_AUTH, so it cannot be linked cryptographically.${link.pooled
-        ? ` This pair carries ${link.tunnels} tunnels, pooled here.` : ""}</p>
-    <section class="ld-findings" aria-label="Findings on this link">
-      <h4>Findings on this link <span class="ld-count">${link.findings.length}</span></h4>
-      ${findings}
-    </section>`;
+        ? ` This link carries ${esc(link.tunnels)} tunnels, pooled here.` : ""}</p>`;
 }
 
-function selectLink(id, {updateHash = true, focusDetail = false} = {}){
+function selectLink(id, {updateHash = true, focusDetail = false, filterFindings = true} = {}){
   const a = state.assessment;
   const link = linkById(a, id) || worstLink(a);
   if (!link) return;
   state.selectedLink = link.id;
+  state.linkFilter = link.id;
   document.querySelectorAll("#link-list .link-item").forEach(b =>
     b.setAttribute("aria-current", b.dataset.link === link.id ? "true" : "false"));
   renderLinkDetail(a, link);
   renderRibbon(a);
+  if (filterFindings && typeof renderFindings === "function") renderFindings(a);
   if (updateHash) writeHash(a.capture, link.id);
   if (focusDetail) $("link-detail").focus();
 }
@@ -255,12 +259,19 @@ function renderScore(a){
   const score = a.score, circ = 2 * Math.PI * 49;
   const colour = score >= 75 ? "var(--ok)" : score >= 50 ? "var(--med)" : "var(--crit)";
   const arc = $("arc");
-  arc.setAttribute("stroke", colour);
-  arc.setAttribute("stroke-dasharray",
-    `${(score / 100 * circ).toFixed(1)} ${circ.toFixed(1)}`);
-  $("dialnum").textContent = score;
+  if (arc){
+    arc.setAttribute("stroke", colour);
+    arc.setAttribute("stroke-dasharray",
+      `${(score / 100 * circ).toFixed(1)} ${circ.toFixed(1)}`);
+  }
+  if ($("dialnum")) $("dialnum").textContent = score;
 
-  $("grade").textContent = `Grade ${a.grade}`;
+  const gradeEl = $("grade");
+  if (gradeEl) {
+    gradeEl.textContent = a.grade || "—";
+    gradeEl.dataset.grade = a.grade || "";
+    gradeEl.className = "score-num " + (a.grade || "");
+  }
   const crit = a.counts.critical, high = a.counts.high;
   $("gradesub").textContent =
     crit ? `${crit} critical ${crit === 1 ? "issue needs" : "issues need"} `
@@ -269,10 +280,7 @@ function renderScore(a){
            + `${high === 1 ? "item" : "items"} to schedule.`
     : "No critical or high-severity issues on the observed associations.";
 
-  $("sevrow").innerHTML = ["critical", "high", "medium", "low", "info"]
-    .filter(k => a.counts[k])
-    .map(k => `<span class="sev-chip ${k}">${a.counts[k]} ${esc(k)}</span>`)
-    .join("") || `<span class="sev-chip info">clean</span>`;
+  $("sevrow").innerHTML = renderSeverityBar(a.counts);
 
   const s = a.stats;
   // The server decides whether a rate is meaningful (pipeline.throughput_
@@ -302,14 +310,16 @@ function renderScore(a){
       || "Capture too small to measure throughput. Run `cipherguard bench` for a reproducible figure.");
   }
 
+  const timeFormatted = Fmt.timestamp ? Fmt.timestamp(a.started) : a.started;
+  const repDigest = a.digest ? ` · report ${a.digest}` : "";
   $("capmeta").textContent =
-    `${a.capture} · assessed ${a.started} · report ${a.digest}`;
+    `${a.capture} · ${timeFormatted}${repDigest}`;
 }
 
 function renderSessions(a){
   const el = $("sessions");
   if (!a.sessions.length){
-    el.innerHTML = `<div class="empty">No IKE negotiation observed in this capture.</div>`;
+    el.innerHTML = UIState.box("This capture has no IKE handshake. Choose another capture.", "Choose another capture", "focus-capture");
     return;
   }
   el.innerHTML = a.sessions.map(s => {
@@ -332,7 +342,7 @@ function renderSessions(a){
 function renderFlows(a){
   const el = $("flows");
   if (!a.flows.length){
-    el.innerHTML = `<div class="empty">No ESP traffic observed in this capture.</div>`;
+    el.innerHTML = UIState.box("This capture has no ESP traffic. Choose another capture.", "Choose another capture", "focus-capture");
     return;
   }
   // Delegated rather than inline, so a flow is looked up by index and no
@@ -362,12 +372,15 @@ function renderFlows(a){
     return `<div class="rec">
       <button type="button" class="flow-open" data-flow="${i}" aria-haspopup="dialog">
         <span class="peers">${esc(f.src)} &rarr; ${esc(f.dst)}</span>
-        <span class="meta">SPI ${esc(f.spi)} · ${f.packets} packets · mean ${f.mean_payload}B${f.encapsulated ? " · NAT-T" : ""}</span>
+        <span class="meta">SPI ${esc(f.spi)} · ${esc(f.packets)} packets · mean ${esc(f.mean_payload)}B${f.encapsulated ? " · NAT-T" : ""}</span>
         <span class="algs"><span class="alg ${suiteClass(label)}">${esc(label)}</span></span>
         <span class="flow-open-hint">Show the framing arithmetic${warn}</span>
       </button>
-      <div class="confbar"><i style="width:${pct}%"></i></div>
-      <div class="cand">${Fmt.percent(ratio)} confidence in the ${Glossary.term("framing-class", "framing class")}</div>
+      <div class="meter conf-meter">
+        <span class="meter-label">Confidence in ${Glossary.term("framing-class", "framing class")}</span>
+        <div class="meter-track"><div class="meter-fill" data-w="${pct}"></div></div>
+        <span class="meter-val">${Fmt.percent(ratio)}</span>
+      </div>
       ${candidates}
     </div>`;
   }).join("");

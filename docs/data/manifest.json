@@ -1,5 +1,6 @@
 {
   "mode": "static",
+  "version": "1.0.0",
   "generated_from": "real pipeline output, not mock data",
   "captures": [
     {

@@ -5,9 +5,11 @@ which fails WCAG AA for body text and disappears entirely on a projector. Every
 text token is now checked against every surface and tint token it can sit on,
 in both themes, at 4.5:1.
 
-The dark scheme also re-points the stylesheet's hard-coded colours through
-generated --dk-* variables. Their text colours are checked against the lightest
-tint the same block generates, which is the worst background they can meet.
+Status tints, their borders and the text set on them are tokens too (--ok-bg,
+--warn-border, --danger-text and so on), defined once in :root and once in the
+dark block. The dark text tokens are checked against the lightest dark tint,
+which is the worst background they can meet, and no colour literal may appear
+outside those two blocks.
 """
 
 from __future__ import annotations
@@ -85,8 +87,7 @@ def _light_tokens(css: str) -> dict[str, str]:
 
 
 def _dark_block(css: str) -> str:
-    """The dark theme's variable blocks (the tokens, then the generated --dk-*
-    counterparts), joined. Dark is opt-in: it applies only under
+    """The dark theme's variable block. Dark is opt-in: it applies only under
     html[data-theme="dark"], which the theme switch sets."""
     blocks = []
     start = css.find(DARK)
@@ -104,7 +105,7 @@ def test_dark_is_opt_in_not_forced_by_the_os():
     and that is resolved in script, so the stylesheet must not follow it."""
     css = _css()
     assert "prefers-color-scheme" not in css
-    assert css.count(DARK) == 2
+    assert css.count(DARK) == 1
 
 
 def _dark_tokens(css: str) -> dict[str, str]:
@@ -145,12 +146,15 @@ def test_faint_is_readable_on_the_page_paper():
     assert contrast(tokens["faint"], tokens["surface"]) >= AA
 
 
-def test_generated_dark_counterparts_clear_aa():
+TINT_TEXT = r"--[a-z]+(?:-[a-z]+)*-text(?:-[a-z]+)?"
+TINT_BG = r"--(?:surface-[a-z]+|[a-z]+(?:-[a-z]+)*-bg(?:-[a-z]+)?)"
+
+
+def test_dark_tint_text_clears_aa():
     css = _css()
     block = _dark_block(css)
-    gen = dict(re.findall(r"(--dk-[\w-]+)\s*:\s*(#[0-9a-fA-F]{6})\b", block))
-    fg = {k: v for k, v in gen.items() if k.startswith("--dk-fg-")}
-    bg = [v for k, v in gen.items() if k.startswith("--dk-bg-")]
+    fg = dict(re.findall(rf"({TINT_TEXT})\s*:\s*(#[0-9a-fA-F]{{6}})\b", block))
+    bg = [v for _, v in re.findall(rf"({TINT_BG})\s*:\s*(#[0-9a-fA-F]{{6}})\b", block)]
     assert fg and bg
     worst_bg = max(bg + [_dark_tokens(css)["sunk"]], key=_luminance)
     failures = [
@@ -158,17 +162,7 @@ def test_generated_dark_counterparts_clear_aa():
     ]
     assert not failures, "\n".join(failures)
 
-    # every generated variable the stylesheet references is defined
-    referenced = set(re.findall(r"var\((--dk-[\w-]+),", css))
-    defined = set(re.findall(r"(--dk-[\w-]+)\s*:", block))
-    assert referenced <= defined, sorted(referenced - defined)
-
-
-def test_light_rendering_is_unchanged_by_the_dark_variables():
-    """Each --dk-* reference carries the original colour as its fallback, and
-    no --dk-* variable is defined outside the dark block."""
-    css = _css()
-    outside = re.sub(re.escape(DARK) + r"[^}]*\}", "", css)
-    assert not re.search(r"(?m)^\s*--dk-[\w-]+\s*:", outside)
-    for ref in re.findall(r"var\(--dk-[\w-]+,\s*([^)]*\)?)\)", css):
-        assert re.match(r"(#[0-9a-fA-F]{3,6}|rgba\()", ref.strip()), ref
+    # every token the dark block re-steps exists in the light set
+    light = set(re.findall(r"(--[\w-]+)\s*:", re.search(r"(?m)^:root\s*\{(.*?)\}", css, re.S).group(1)))
+    dark = set(re.findall(r"(--[\w-]+)\s*:", block))
+    assert dark <= light, sorted(dark - light)

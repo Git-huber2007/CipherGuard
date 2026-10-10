@@ -85,8 +85,8 @@ function renderPlaybookUI(){
   // Update Forward/Rollback tabs
   const fwdBtn = $("btn-playbook-forward");
   const rlbBtn = $("btn-playbook-rollback");
-  if (fwdBtn) fwdBtn.classList.toggle("active", state.playbookMode === "forward");
-  if (rlbBtn) rlbBtn.classList.toggle("active", state.playbookMode === "rollback");
+  if (fwdBtn) fwdBtn.setAttribute("aria-pressed", String(state.playbookMode === "forward"));
+  if (rlbBtn) rlbBtn.setAttribute("aria-pressed", String(state.playbookMode === "rollback"));
 
   // Render code
   const pre = $("remediation");
@@ -117,7 +117,7 @@ async function loadRemediation(){
 async function loadRemediationLive(){
   if (!state.assessment) return;
   const pre = $("remediation");
-  pre.textContent = "Synthesizing multi-vendor hardening & rollback playbooks…";
+  pre.textContent = "Building the hardening plan…";
   try{
     const res = await api(`/api/remediation/${encodeURIComponent(state.assessment.capture)}`);
     if (res.ok) {

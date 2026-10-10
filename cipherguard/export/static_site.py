@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 
+from .. import __version__
 from ..api.server import STATIC_DIR
 from ..pipeline import analyze
 from ..remediation.synth import synthesize
@@ -101,16 +102,9 @@ def _bake_fleet_demo(capture_dir: str, data_dir: str, model_dir: str) -> dict:
     return payload
 
 
-def export(
-    capture_dir: str = "samples",
-    out_dir: str = DEFAULT_OUT,
-    model_dir: str = "models",
-    verbose: bool = True,
-) -> dict:
-    """Render the dashboard plus pre-computed analyses into a static directory."""
-    data_dir = os.path.join(out_dir, "data")
-    os.makedirs(data_dir, exist_ok=True)
-
+def copy_assets(out_dir: str) -> None:
+    """Copy the dashboard's front-end files into out_dir, with paths made relative."""
+    os.makedirs(out_dir, exist_ok=True)
     # Front-end assets, copied verbatim so the hosted page and the served page
     # are the same files rather than two copies that can drift apart.
     for root, dirs, files in os.walk(STATIC_DIR):
@@ -143,6 +137,19 @@ def export(
         with open(manifest_path, "w", encoding="utf-8") as fh:
             json.dump(manifest, fh, indent=2, ensure_ascii=False)
             fh.write("\n")
+
+
+def export(
+    capture_dir: str = "samples",
+    out_dir: str = DEFAULT_OUT,
+    model_dir: str = "models",
+    verbose: bool = True,
+) -> dict:
+    """Render the dashboard plus pre-computed analyses into a static directory."""
+    data_dir = os.path.join(out_dir, "data")
+    os.makedirs(data_dir, exist_ok=True)
+
+    copy_assets(out_dir)
 
     captures = sorted(n for n in os.listdir(capture_dir) if n.endswith((".pcap", ".pcapng", ".cap")))
     if not captures:
@@ -205,6 +212,7 @@ def export(
 
     manifest = {
         "mode": "static",
+        "version": __version__,
         "generated_from": "real pipeline output, not mock data",
         "captures": entries,
     }

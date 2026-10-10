@@ -163,6 +163,7 @@ const Present = (() => {
 window.Present = Present;
 
 async function renderAssessment(a, opts = {}){
+  document.body.classList.add("has-assessment");
   renderScore(a);
   renderSessions(a);
   renderFlows(a);
@@ -180,7 +181,7 @@ async function runAnalysis(){
   const name = sel ? sel.value : "";
   const btn = $("run");
   if (!name){
-    if (sel) showFieldError(sel, "Please select a valid capture file (.pcap, .pcapng)");
+    if (sel) showFieldError(sel, "That is not a capture file. Choose a .pcap, .pcapng or .cap file.");
     showToast("Choose a capture first.", "error");
     return;
   }
@@ -238,16 +239,16 @@ function switchIpsecMode(mode){
   const liveView = $("ipsec-live-view");
   const diffView = $("ipsec-diff-view");
 
-  if (singleBtn) singleBtn.classList.toggle("active", mode === "single");
-  if (liveBtn) liveBtn.classList.toggle("active", mode === "live");
-  if (diffBtn) diffBtn.classList.toggle("active", mode === "diff");
+  if (singleBtn) singleBtn.setAttribute("aria-pressed", String(mode === "single"));
+  if (liveBtn) liveBtn.setAttribute("aria-pressed", String(mode === "live"));
+  if (diffBtn) diffBtn.setAttribute("aria-pressed", String(mode === "diff"));
 
-  if (singleControls) singleControls.style.display = (mode === "single") ? "flex" : "none";
-  if (diffControls) diffControls.style.display = (mode === "diff") ? "flex" : "none";
+  if (singleControls) singleControls.hidden = mode !== "single";
+  if (diffControls) diffControls.hidden = mode !== "diff";
 
-  if (singleView) singleView.style.display = (mode === "single") ? "block" : "none";
-  if (liveView) liveView.style.display = (mode === "live") ? "block" : "none";
-  if (diffView) diffView.style.display = (mode === "diff") ? "block" : "none";
+  if (singleView) singleView.hidden = mode !== "single";
+  if (liveView) liveView.hidden = mode !== "live";
+  if (diffView) diffView.hidden = mode !== "diff";
 
   if (mode === "diff"){
     if (!state.diffAssessmentA || !state.diffAssessmentB){
@@ -260,7 +261,7 @@ function extractSuiteInfo(assessment){
   if (!assessment) return {};
   const s = (assessment.sessions && assessment.sessions[0]) || null;
   let ikeVersion = "None observed";
-  let ikeCipher = "None / Cleartext";
+  let ikeCipher = "None (cleartext)";
   let ikePrf = "None";
   let dhGroup = "None";
   let dhVal = 0;
@@ -335,4 +336,133 @@ showBanner(explainFailure(err), "error", { label: "Retry", onClick: () => runDif
       btn.textContent = "Compare";
     }
   }
+}
+
+/* Section links scroll in script instead of using fragment links: the fragment
+ * already carries the selected link (#link=...), and a plain #id would replace it. */
+document.addEventListener("click", e => {
+  const btn = e.target.closest("[data-jump]");
+  const el = btn && document.getElementById(btn.dataset.jump);
+  if (!el) return;
+  const nav = btn.closest(".section-nav");
+  if (nav) {
+    nav.querySelectorAll("[data-jump]").forEach(b => {
+      b.classList.remove("active");
+      b.removeAttribute("aria-current");
+    });
+    btn.classList.add("active");
+    btn.setAttribute("aria-current", "true");
+  }
+  const reduced = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+  if (!el.hasAttribute("tabindex")) el.setAttribute("tabindex", "-1");
+  el.focus({ preventScroll: true });
+});
+
+/* Buttons that scripts or the page generate carry data-action="name". This one
+ * listener runs the matching function, so no markup carries a handler and the
+ * script policy needs no 'unsafe-inline'. */
+const ACTIONS = {
+  "run-analysis": () => runAnalysis(),
+  "diff-run": () => runDiffAnalysis(),
+  "wifi-scan": () => loadWifiAssessment(true),
+  "replay-init": () => PostureReplay.init(),
+  "export-report": () => exportSecurityAuditReport(),
+  "sniffer-start": () => $("btn-sniffer-start").click(),
+  "focus-capture": () => $("capture").focus(),
+  "focus-capture-b": () => $("diff-capture-b").focus(),
+  "focus-replay-link": () => $("replay-link").focus(),
+  "clear-link-filter": () => { state.linkFilter = null; renderFindings(state.assessment); },
+  "jump-remediation": () =>
+    $("remediation").scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth" }),
+};
+document.addEventListener("click", e => {
+  const btn = e.target.closest("[data-action]");
+  if (btn && Object.hasOwn(ACTIONS, btn.dataset.action)) ACTIONS[btn.dataset.action]();
+});
+
+function initSectionObserver() {
+  const nav = document.querySelector(".section-nav");
+  if (!nav) return;
+  const buttons = Array.from(nav.querySelectorAll("[data-jump]"));
+  const sectionIds = buttons.map(b => b.dataset.jump);
+  const sections = sectionIds.map(id => document.getElementById(id)).filter(Boolean);
+
+  function setActive(activeId) {
+    buttons.forEach(btn => {
+      const isActive = btn.dataset.jump === activeId;
+      btn.classList.toggle("active", isActive);
+      if (isActive) {
+        btn.setAttribute("aria-current", "true");
+      } else {
+        btn.removeAttribute("aria-current");
+      }
+    });
+  }
+
+  function updateActive() {
+    if (!sections.length) return;
+
+    // Start on Wire at the top of the document
+    if (window.scrollY < 80) {
+      setActive(sectionIds[0]);
+      return;
+    }
+
+    // Activate the last section if scrolled to page bottom
+    const scrollBottom = window.innerHeight + window.scrollY;
+    const docHeight = document.documentElement.scrollHeight;
+    if (scrollBottom >= docHeight - 50) {
+      setActive(sectionIds[sectionIds.length - 1]);
+      return;
+    }
+
+    // Reading line just below the sticky header / section-nav
+    const navRect = nav.getBoundingClientRect();
+    const refLine = navRect.bottom > 0 ? navRect.bottom + 16 : 140;
+
+    let bestSection = null;
+    let minDistance = Infinity;
+
+    for (const s of sections) {
+      const rect = s.getBoundingClientRect();
+      if (rect.top <= refLine && rect.bottom >= refLine) {
+        bestSection = s;
+        break;
+      }
+      const dist = Math.abs(rect.top - refLine);
+      if (dist < minDistance) {
+        minDistance = dist;
+        bestSection = s;
+      }
+    }
+
+    if (bestSection) {
+      setActive(bestSection.id);
+    }
+  }
+
+  let ticking = false;
+  function onScroll() {
+    if (!ticking) {
+      requestAnimationFrame(() => {
+        updateActive();
+        ticking = false;
+      });
+      ticking = true;
+    }
+  }
+
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", onScroll, { passive: true });
+
+  // Initial call ensures highlight starts on Wire
+  updateActive();
+  window.updateSectionNav = updateActive;
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initSectionObserver);
+} else {
+  initSectionObserver();
 }

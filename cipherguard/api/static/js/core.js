@@ -23,6 +23,7 @@ const state = {
   diffAssessmentB: null,   // hardened capture B assessment
   spectrumBand: "2.4",     // "2.4" or "5"
   selectedLink: null,      // link id ("a~b") shown in the ribbon and link panel
+  linkFilter: null,        // link id currently filtering findings, or null for all
   findingsView: "rule"     // "rule" (grouped) or "link"
 };
 
@@ -32,6 +33,13 @@ function esc(s){
   return String(s == null ? "" : s).replace(/[&<>"']/g,
     c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
+
+function cap(s){
+  if (!s) return "";
+  const str = String(s);
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
+window.cap = cap;
 
 /* Every number a person reads goes through here, so a figure means the same
  * thing in every panel. (SVG coordinates are geometry, not figures, and are
@@ -88,7 +96,20 @@ const Fmt = (() => {
   // megabits per second, as the Python side reports link rates
   function mbps(n){ return ok(n) ? `${n.toFixed(1)} Mb/s` : NONE; }
 
-  return { count, bytes, bits, signed, percent, duration, mbps };
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function timestamp(iso){
+    if (!iso) return NONE;
+    const d = typeof iso === "number" ? new Date(iso * 1000) : new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    const day = d.getUTCDate();
+    const mon = MONTHS[d.getUTCMonth()];
+    const year = d.getUTCFullYear();
+    const hh = String(d.getUTCHours()).padStart(2, "0");
+    const mm = String(d.getUTCMinutes()).padStart(2, "0");
+    return `${day} ${mon} ${year}, ${hh}:${mm} UTC`;
+  }
+
+  return { count, bytes, bits, signed, percent, duration, mbps, timestamp };
 })();
 window.Fmt = Fmt;
 
@@ -163,8 +184,8 @@ const Glossary = (() => {
     const r = el.getBoundingClientRect();
     const width = t.offsetWidth, vw = document.documentElement.clientWidth;
     const left = Math.min(Math.max(r.left, 16), Math.max(vw - width - 16, 16));
-    t.style.left = `${left + window.scrollX}px`;
-    t.style.top = `${r.bottom + window.scrollY + 6}px`;
+    t.style.setProperty("--x", `${left + window.scrollX}px`);
+    t.style.setProperty("--y", `${r.bottom + window.scrollY + 6}px`);
   }
 
   function hide(){
@@ -235,6 +256,62 @@ const Glossary = (() => {
   return { TERMS, term, mark, enhance, init, get url(){ return url; } };
 })();
 if (typeof window !== "undefined") window.Glossary = Glossary;
+
+/* Focus handling for the div-based dialogs (Server, Shortcuts, CBOM). They
+ * declare aria-modal="true", so the page has to behave that way: focus moves
+ * into the dialog, Tab stays in it, the page behind is inert, and closing
+ * returns focus to whatever opened it. The evidence modal does the same for
+ * itself. One dialog at a time: main.js ignores the Alt shortcuts while a
+ * dialog is open and the triggers sit in the inert page, so there is no stack. */
+const ModalFocus = (() => {
+  // not the toast container: an inert live region goes silent
+  const PAGE = "body > header, body > main, body > aside, body > nav";
+  let open = null;   // { modal, trigger }
+
+  function setInert(on){
+    document.querySelectorAll(PAGE).forEach(el => { el.inert = on; });
+  }
+
+  function tabbables(){
+    return [...open.modal.querySelectorAll(
+      'button, [href], [tabindex]:not([tabindex="-1"]), input, select, textarea')]
+      .filter(el => !el.disabled && el.offsetParent !== null);
+  }
+
+  function onTab(e){
+    if (!open || e.key !== "Tab") return;
+    const els = tabbables();
+    if (!els.length) return;
+    const first = els[0], last = els[els.length - 1], at = document.activeElement;
+    // let Tab move normally unless it would leave the dialog
+    if (at !== (e.shiftKey ? first : last) && open.modal.contains(at)) return;
+    e.preventDefault();
+    (e.shiftKey ? last : first).focus();
+  }
+
+  // call once the dialog is shown: a hidden button cannot take focus
+  function trap(modal){
+    if (open) return;
+    open = { modal, trigger: document.activeElement };
+    setInert(true);
+    document.addEventListener("keydown", onTab);
+    // the close button, not a field, so the title is announced first
+    const close = modal.querySelector(".modal-close-btn");
+    if (close) close.focus();
+  }
+
+  // a no-op unless this dialog is the open one, so every close path may call it
+  function release(modal){
+    if (!open || open.modal !== modal) return;
+    const { trigger } = open;
+    open = null;
+    document.removeEventListener("keydown", onTab);
+    setInert(false);   // before focus(): an inert element cannot take it
+    if (trigger && document.contains(trigger)) trigger.focus();
+  }
+
+  return { trap, release };
+})();
 
 
 function pickIkeProposal(s){
@@ -312,3 +389,75 @@ function suiteClass(name){
   if (/CBC/.test(name)) return "warn";
   return "good";
 }
+
+function renderSeverityBar(counts = {}){
+  const crit = Number(counts.critical) || 0;
+  const high = Number(counts.high) || 0;
+  const med = Number(counts.medium) || 0;
+  const low = Number(counts.low) || 0;
+  const total = crit + high + med + low;
+  if (!total){
+    return `<div class="sev-bar-wrap">`
+      + `<div class="sev-bar-track" role="progressbar" aria-label="Severity distribution" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">`
+      + `<div class="sev-bar-seg ok" data-w="100" title="Clean"></div>`
+      + `</div>`
+      + `<div class="sev-bar-counts">`
+      + `<span class="sev-count-item ok"><i class="sev-dot ok"></i> <b>0</b> findings &middot; compliant</span>`
+      + `</div>`
+      + `</div>`;
+  }
+  const cp = ((crit / total) * 100).toFixed(1);
+  const hp = ((high / total) * 100).toFixed(1);
+  const mp = ((med / total) * 100).toFixed(1);
+  const lp = ((low / total) * 100).toFixed(1);
+  return `<div class="sev-bar-wrap">`
+    + `<div class="sev-bar-track" role="progressbar" aria-label="Severity distribution" aria-valuenow="${total}">`
+    + (crit ? `<div class="sev-bar-seg critical" data-w="${cp}" title="${crit} critical"></div>` : "")
+    + (high ? `<div class="sev-bar-seg high" data-w="${hp}" title="${high} high"></div>` : "")
+    + (med ? `<div class="sev-bar-seg medium" data-w="${mp}" title="${med} medium"></div>` : "")
+    + (low ? `<div class="sev-bar-seg low" data-w="${lp}" title="${low} low"></div>` : "")
+    + `</div>`
+    + `<div class="sev-bar-counts">`
+    + `<span class="sev-count-item critical ${crit ? "" : "is-zero"}"><i class="sev-dot critical"></i> <b>${crit}</b> critical</span>`
+    + `<span class="sev-count-item high ${high ? "" : "is-zero"}"><i class="sev-dot high"></i> <b>${high}</b> high</span>`
+    + `<span class="sev-count-item medium ${med ? "" : "is-zero"}"><i class="sev-dot medium"></i> <b>${med}</b> medium</span>`
+    + `<span class="sev-count-item low ${low ? "" : "is-zero"}"><i class="sev-dot low"></i> <b>${low}</b> low</span>`
+    + `</div>`
+    + `</div>`;
+}
+
+/* ---------- Panel State Pattern (Empty / Loading / Error) ----------
+ * Consistent pattern across all panels:
+ * one plain sentence saying what is missing/needed/failed, and one action. */
+const UIState = (() => {
+  // action is a name from ACTIONS in shell.js; markup never carries a handler
+  function box(message, actionLabel = "", action = "", isError = false){
+    const actionHtml = actionLabel
+      ? `<div class="panel-state-action"><button type="button" class="btn btn-secondary panel-state-btn" data-action="${esc(action)}">${esc(actionLabel)}</button></div>`
+      : "";
+    return `<div class="panel-state ${isError ? "error" : "empty"}" role="status">`
+      + `<p class="panel-state-msg">${esc(message)}</p>`
+      + actionHtml
+      + `</div>`;
+  }
+  return { box };
+})();
+window.UIState = UIState;
+
+/* A size that is computed data reaches the stylesheet as a custom property: markup
+   carries data-w (a percentage) and the stylesheet reads width:var(--w). It is set
+   here, once the node is in the page, so templates need no style attribute. */
+const DataVars = (() => {
+  const apply = el => el.style.setProperty("--w", `${el.dataset.w}%`);
+  function scan(node){
+    if (node.nodeType !== 1) return;
+    if (node.dataset.w !== undefined) apply(node);
+    node.querySelectorAll("[data-w]").forEach(apply);
+  }
+  function init(){
+    scan(document.documentElement);
+    new MutationObserver(records => records.forEach(r => r.addedNodes.forEach(scan)))
+      .observe(document.documentElement, { childList: true, subtree: true });
+  }
+  return { init };
+})();

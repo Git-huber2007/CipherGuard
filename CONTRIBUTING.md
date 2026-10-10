@@ -12,6 +12,9 @@ pip install -e ".[dev]"
 pre-commit install          # optional: lint on every commit
 ```
 
+To match CI and the shipped model exactly, build a virtual environment from the lockfile instead: `python -m venv .venv`, then
+`.venv/Scripts/python -m pip install -r requirements.lock "ruff>=0.16" "pytest>=7.4" "httpx>=0.26" "psutil>=5.9"` (`.venv/bin/python` on Linux and macOS); `launch_dashboard.bat` uses `.venv` when it exists.
+
 Generate the sample captures and train the model once. The dashboard and
 `analyze` need both.
 

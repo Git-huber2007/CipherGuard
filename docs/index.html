@@ -33,6 +33,10 @@
 <meta name="theme-color" content="#1b6e8c">
 <script src="js/theme-init.js"></script>
 
+  <!-- Preload above-the-fold IBM Plex Sans weights (Regular 400 & SemiBold 600) to eliminate text reflow -->
+  <link rel="preload" href="fonts/IBMPlexSans-Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/IBMPlexSans-SemiBold.woff2" as="font" type="font/woff2" crossorigin>
+
   <link rel="stylesheet" href="css/dashboard.css">
 </head>
 <body>
@@ -45,16 +49,25 @@
 
 <header class="masthead">
   <div class="masthead-in">
-    <div class="brand">
-      <img src="img/favicon.svg" alt="" width="28" height="28" style="vertical-align:middle">
-      <h1>CipherGuard</h1>
-      <span class="ps">SIH26160 &middot; NTRO</span>
+    <div class="masthead-left">
+      <div class="brand">
+        <img src="img/favicon.svg" alt="" width="28" height="28">
+        <h1>CipherGuard</h1>
+        <span class="ps">SIH26160 &middot; NTRO</span>
+      </div>
+      <nav class="nav-tabs" role="tablist" aria-label="Assessment type">
+        <button class="tab-btn active" id="tab-ipsec" role="tab" aria-selected="true" tabindex="0" aria-controls="view-ipsec">
+          IPsec VPN
+        </button>
+        <button class="tab-btn" id="tab-wifi" role="tab" aria-selected="false" tabindex="-1" aria-controls="view-wifi">
+          Wi-Fi
+        </button>
+      </nav>
+    </div>
+    <div class="masthead-actions">
       <button type="button" id="backend-status-pill" class="backend-status-pill" title="Server connection. Select for details." aria-haspopup="dialog">
         <span class="pulse-dot"></span>
         <span id="backend-status-label">Checking server&hellip;</span>
-      </button>
-      <button type="button" id="btn-shortcuts-help" class="shortcuts-trigger-btn" title="Keyboard shortcuts (Alt + H)" aria-haspopup="dialog">
-        <span>Shortcuts <kbd>Alt</kbd> + <kbd>H</kbd></span>
       </button>
       <button type="button" id="btn-cbom-toggle" class="shortcuts-trigger-btn cbom-trigger-btn" title="Cryptographic bill of materials for the capture on screen (Alt + C)" aria-haspopup="dialog">
         <span>CBOM</span>
@@ -62,6 +75,9 @@
       <button type="button" id="btn-present" class="shortcuts-trigger-btn" aria-pressed="false"
               title="Presentation mode: step through the assessment with the arrow keys (or add ?present to the URL)">
         Present
+      </button>
+      <button type="button" id="btn-shortcuts-help" class="shortcuts-trigger-btn" title="Keyboard shortcuts (Alt + H)" aria-haspopup="dialog">
+        <span>Shortcuts</span>
       </button>
       <label class="theme-pick" for="theme-select">
         <span>Theme</span>
@@ -72,40 +88,37 @@
         </select>
       </label>
     </div>
-    <div class="controls" id="header-controls">
-      <!-- Dynamic controls according to active tab -->
+  </div>
+  <div class="masthead-toolbar" id="header-controls">
+    <div class="toolbar-in">
       <div id="ipsec-controls" class="tab-controls-group">
-        <div class="mode-toggle-group" role="group" aria-label="IPsec view">
-          <button type="button" id="btn-ipsec-single" class="mode-toggle-btn active">Assess</button>
-          <button type="button" id="btn-ipsec-live" class="mode-toggle-btn">Live capture</button>
-          <button type="button" id="btn-ipsec-diff" class="mode-toggle-btn">Compare</button>
+        <div class="seg" role="group" aria-label="IPsec view">
+          <button type="button" id="btn-ipsec-single" class="seg-btn" aria-pressed="true">Assess</button>
+          <button type="button" id="btn-ipsec-live" class="seg-btn" aria-pressed="false">Live capture</button>
+          <button type="button" id="btn-ipsec-diff" class="seg-btn" aria-pressed="false">Compare</button>
         </div>
         <div id="ipsec-single-controls" class="controls-subgroup">
           <label for="capture" class="visually-hidden">Capture file</label>
-          <select id="capture" aria-label="Select PCAP capture file"></select>
+          <select id="capture" aria-label="Capture"></select>
+          <button type="button" class="btn btn-secondary upload-picker-trigger" id="upload-picker-trigger" title="Upload a capture">Upload&hellip;</button>
           <!-- Prominent CTA Above the Fold for IPsec -->
-          <button id="run" class="hero-cta-btn">
-Assess capture <span class="cta-badge">Alt + A</span>
+          <button id="run" class="btn btn-primary hero-cta-btn" title="Assess capture (Alt + A)">
+            Assess capture
           </button>
         </div>
-        <div id="ipsec-diff-controls" class="controls-subgroup" style="display:none;">
+        <div id="ipsec-diff-controls" class="controls-subgroup" hidden>
           <span class="diff-select-group">
-            <label for="diff-capture-a" class="diff-label">Baseline (A):</label>
-            <select id="diff-capture-a" class="diff-select" aria-label="Baseline capture A"></select>
+            <label for="diff-capture-a" class="diff-label">Capture A</label>
+            <select id="diff-capture-a" class="diff-select" aria-label="Capture A"></select>
           </span>
           <span class="diff-vs-arrow">&rarr;</span>
           <span class="diff-select-group">
-            <label for="diff-capture-b" class="diff-label">Compared (B):</label>
+            <label for="diff-capture-b" class="diff-label">Capture B</label>
             <select id="diff-capture-b" class="diff-select" aria-label="Capture B"></select>
           </span>
-          <button id="run-diff" class="primary-btn">Compare</button>
+          <button id="run-diff" class="btn btn-primary">Compare</button>
         </div>
         <button id="ipsec-export-report" class="btn btn-secondary" aria-label="Export the IPsec report">Export report</button>
-      </div>
-      <div id="wifi-controls" class="tab-controls-group" style="display:none;">
-        <button id="wifi-refresh-btn" class="btn btn-ghost" title="Scan again (Alt + S)">
-Rescan <span class="cta-badge">Alt + S</span>
-        </button>
       </div>
     </div>
   </div>
@@ -115,21 +128,11 @@ Rescan <span class="cta-badge">Alt + S</span>
 
   <div class="banner" id="banner" role="status" hidden></div>
 
-  <!-- Main View Navigation Tabs -->
-  <nav class="nav-tabs" role="tablist" aria-label="Assessment type">
-    <button class="tab-btn active" id="tab-ipsec" role="tab" aria-selected="true" aria-controls="view-ipsec">
-      IPsec VPN
-    </button>
-    <button class="tab-btn" id="tab-wifi" role="tab" aria-selected="false" aria-controls="view-wifi">
-      Wi-Fi
-    </button>
-  </nav>
-
   <div id="view-wifi" class="tab-content" role="tabpanel" aria-labelledby="tab-wifi">
 
 
     <!-- Evil Twin / Rogue AP Alert Banner -->
-    <div id="wifi-evil-twin-banner" class="evil-twin-alert-banner" style="display:none;" role="alert">
+    <div id="wifi-evil-twin-banner" class="evil-twin-alert-banner" hidden role="alert">
       <div class="evil-twin-banner-main">
         <div class="evil-twin-icon-box">
           <span class="evil-twin-pulse-ring"></span>
@@ -176,7 +179,7 @@ Rescan <span class="cta-badge">Alt + S</span>
       </div>
       <div class="wifi-hero-actions">
         <div class="wifi-hero-btns">
-          <button id="wifi-scan-now" class="btn btn-primary" title="Scan nearby networks now">Scan now</button>
+          <button id="wifi-scan-now" class="btn btn-primary" title="Scan nearby networks now (Alt + S)">Scan now</button>
           <button id="wifi-export-report" class="btn btn-secondary" title="Export the Wi-Fi report">Export report</button>
         </div>
         <div class="wifi-time-sub" id="wifi-last-scan">&nbsp;</div>
@@ -184,31 +187,39 @@ Rescan <span class="cta-badge">Alt + S</span>
     </section>
 
     <!-- Wi-Fi Posture & Signal Grid -->
-    <div class="grid cols-2" style="margin-bottom:18px">
+    <div class="grid cols-2 stack">
       <!-- Score Panel -->
-      <section class="panel">
+      <section class="panel" id="wifi-score-panel">
         <h2>Wi-Fi posture</h2>
-        <div class="sub" id="wifi-score-sub">Encryption and key management on the connected network.</div>
-        <div class="scoreline">
-          <div class="dial">
-            <svg width="118" height="118" viewBox="0 0 118 118" role="img" aria-label="Wi-Fi posture score">
-              <title>Wi-Fi posture score</title>
-              <circle class="dial-track" cx="59" cy="59" r="49" fill="none" stroke="#dfe7ec" stroke-width="11"/>
-              <circle id="wifi-arc" cx="59" cy="59" r="49" fill="none" stroke="var(--ok)"
-                      stroke-width="11" stroke-linecap="butt"
-                      stroke-dasharray="0 999" transform="rotate(-90 59 59)"/>
-              <text id="wifi-dialnum" x="59" y="65" text-anchor="middle"
-                    font-family="IBM Plex Mono, monospace" font-size="26"
-                    font-weight="600" fill="#14212b" class="dial-num">&mdash;</text>
-            </svg>
+        <div class="score-hero">
+          <div class="score-grade-wrap">
+            <span class="score-num" id="wifi-grade" aria-label="Wi-Fi posture grade">&mdash;</span>
           </div>
-          <div class="score-meta">
-            <div class="score-num" id="wifi-grade">Grade &mdash;</div>
+          <div class="score-summary-block">
             <div class="score-sub" id="wifi-gradesub">Reading the connection&hellip;</div>
-            <div class="sev-row" id="wifi-sevrow"></div>
           </div>
         </div>
-        <div class="statgrid" id="wifi-stats" style="margin-top:18px"></div>
+        <div class="sev-row" id="wifi-sevrow">
+          <div class="sev-bar-wrap">
+            <div class="sev-bar-track" role="progressbar" aria-label="Severity distribution" aria-valuenow="0">
+              <div class="sev-bar-seg" data-w="0"></div>
+            </div>
+            <div class="sev-bar-counts">
+              <span class="sev-count-item is-zero"><i class="sev-dot critical"></i> <b>&mdash;</b> critical</span>
+              <span class="sev-count-item is-zero"><i class="sev-dot high"></i> <b>&mdash;</b> high</span>
+              <span class="sev-count-item is-zero"><i class="sev-dot medium"></i> <b>&mdash;</b> medium</span>
+              <span class="sev-count-item is-zero"><i class="sev-dot low"></i> <b>&mdash;</b> low</span>
+            </div>
+          </div>
+        </div>
+        <div class="dial" hidden aria-hidden="true">
+          <svg width="0" height="0">
+            <title>Wi-Fi posture score</title>
+            <circle id="wifi-arc"></circle>
+            <text id="wifi-dialnum"></text>
+          </svg>
+        </div>
+        <div class="statgrid stack-top" id="wifi-stats"></div>
       </section>
 
       <!-- Network Quality & Security Badges -->
@@ -216,46 +227,48 @@ Rescan <span class="cta-badge">Alt + S</span>
         <h2>Connection</h2>
         <div class="sub">Radio, addressing and DNS for the current connection.</div>
         
-        <div class="wifi-health-list">
+        <dl class="wifi-health-list">
           <div class="health-item">
-            <div class="health-label">Authentication and cipher</div>
-            <div class="health-val" id="wifi-auth-cipher-val">&mdash;</div>
+            <dt class="health-label">Authentication and cipher</dt>
+            <dd class="health-val" id="wifi-auth-cipher-val">&mdash;</dd>
           </div>
           <div class="health-item">
-            <div class="health-label">Signal</div>
-            <div class="health-val" id="wifi-signal-val">
-              <span id="wifi-signal-pct">&mdash;</span>
-              <div class="signal-bar-track"><div id="wifi-signal-bar" class="signal-bar-fill"></div></div>
-            </div>
+            <dt class="health-label">Signal</dt>
+            <dd class="health-val" id="wifi-signal-val">
+              <div class="meter signal-meter">
+                <div class="meter-track"><div id="wifi-signal-bar" class="meter-fill" data-w="0"></div></div>
+                <span class="meter-val" id="wifi-signal-pct">&mdash;</span>
+              </div>
+            </dd>
           </div>
           <div class="health-item">
-            <div class="health-label">Link rate</div>
-            <div class="health-val" id="wifi-rates-val">&mdash;</div>
+            <dt class="health-label">Link rate</dt>
+            <dd class="health-val" id="wifi-rates-val">&mdash;</dd>
           </div>
           <div class="health-item">
-            <div class="health-label">DNS resolvers</div>
-            <div class="health-val" id="wifi-dns-val">&mdash;</div>
+            <dt class="health-label">DNS resolvers</dt>
+            <dd class="health-val" id="wifi-dns-val">&mdash;</dd>
           </div>
           <div class="health-item">
-            <div class="health-label">Default gateway</div>
-            <div class="health-val" id="wifi-gateway-val">&mdash;</div>
+            <dt class="health-label">Default gateway</dt>
+            <dd class="health-val" id="wifi-gateway-val">&mdash;</dd>
           </div>
           <div class="health-item">
-            <div class="health-label">Egress</div>
-            <div class="health-val" id="wifi-uptime-val">&mdash;</div>
+            <dt class="health-label">Egress</dt>
+            <dd class="health-val" id="wifi-uptime-val">&mdash;</dd>
           </div>
-        </div>
+        </dl>
       </section>
     </div>
 
     <!-- VPN Overlay & Tunnel Protection Card -->
-    <section class="panel vpn-overlay-panel" style="margin-bottom:18px">
+    <section class="panel vpn-overlay-panel stack">
       <div class="vpn-panel-header">
         <div>
           <h2>VPN and egress <span class="domain-tag obs" id="vpn-badge">&mdash;</span></h2>
           <div class="sub">Whether traffic leaves through a VPN, the public address it leaves from, and where DNS queries go.</div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="vpn-status-wrap">
           <div id="vpn-status-indicator" class="vpn-status-badge vpn-status-inactive">
             <span class="vpn-dot"></span> <span id="vpn-status-text">Not checked yet</span>
           </div>
@@ -263,24 +276,24 @@ Rescan <span class="cta-badge">Alt + S</span>
       </div>
       
       <div class="vpn-detail-grid">
-        <div class="vpn-metric-box">
-          <div class="vpn-metric-title">Tunnel</div>
-          <div class="vpn-metric-value" id="vpn-proto-val">&mdash;</div>
+        <div class="vpn-metric-box stat">
+          <div class="vpn-metric-value k" id="vpn-proto-val">&mdash;</div>
+          <div class="vpn-metric-title l">Tunnel</div>
           <div class="vpn-metric-sub" id="vpn-adapter-val">&mdash;</div>
         </div>
-        <div class="vpn-metric-box">
-          <div class="vpn-metric-title">Public address</div>
-          <div class="vpn-metric-value" id="vpn-egress-val">&mdash;</div>
+        <div class="vpn-metric-box stat">
+          <div class="vpn-metric-value k" id="vpn-egress-val">&mdash;</div>
+          <div class="vpn-metric-title l">Public address</div>
           <div class="vpn-metric-sub" id="vpn-location-val">&mdash;</div>
         </div>
-        <div class="vpn-metric-box">
-          <div class="vpn-metric-title">Default route</div>
-          <div class="vpn-metric-value" id="vpn-route-val">&mdash;</div>
+        <div class="vpn-metric-box stat">
+          <div class="vpn-metric-value k" id="vpn-route-val">&mdash;</div>
+          <div class="vpn-metric-title l">Default route</div>
           <div class="vpn-metric-sub" id="vpn-route-sub">&mdash;</div>
         </div>
-        <div class="vpn-metric-box">
-          <div class="vpn-metric-title">DNS leak</div>
-          <div class="vpn-metric-value" id="vpn-leak-val">&mdash;</div>
+        <div class="vpn-metric-box stat">
+          <div class="vpn-metric-value k" id="vpn-leak-val">&mdash;</div>
+          <div class="vpn-metric-title l">DNS leak</div>
           <div class="vpn-metric-sub" id="vpn-leak-sub">&mdash;</div>
         </div>
       </div>
@@ -289,24 +302,24 @@ Rescan <span class="cta-badge">Alt + S</span>
 
 
     <!-- Wi-Fi Findings -->
-    <section class="panel" style="margin-bottom:18px">
+    <section class="panel stack">
       <h2>Wi-Fi findings</h2>
       <div class="sub" id="wifi-findsub">Weaknesses in the current connection and in networks nearby.</div>
-      <div id="wifi-findings"><div class="empty">Waiting for the first scan&hellip;</div></div>
+      <div id="wifi-findings"><div class="panel-state empty" role="status"><p class="panel-state-msg">No scan yet. Scan to check the networks in range.</p><div class="panel-state-action"><button type="button" class="btn btn-secondary panel-state-btn" data-action="wifi-scan">Scan now</button></div></div></div>
     </section>
 
     <!-- In-Range Access Points Table -->
-    <section class="panel" style="margin-bottom:18px">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:10px">
+    <section class="panel stack">
+      <div class="panel-head">
         <div>
-          <h2 style="margin-bottom:2px">Networks in range <span class="domain-tag obs" data-gl="observed">observed</span></h2>
+          <h2>Networks in range <span class="domain-tag obs" data-gl="observed">Observed</span></h2>
           <div class="sub" id="wifi-networks-subtitle">Access points this machine can hear.</div>
         </div>
-        <div class="wifi-view-toggle-group">
-          <button type="button" class="btn-toggle active" id="btn-wifi-group" aria-pressed="true" title="Group multiple access points of the same network together">
+        <div class="seg" role="group" aria-label="Group access points">
+          <button type="button" class="seg-btn" id="btn-wifi-group" aria-pressed="true" title="Group multiple access points of the same network together">
             By network
           </button>
-          <button type="button" class="btn-toggle" id="btn-wifi-all" aria-pressed="false" title="Show every physical access point BSSID individually">
+          <button type="button" class="seg-btn" id="btn-wifi-all" aria-pressed="false" title="Show every physical access point BSSID individually">
             Every access point
           </button>
         </div>
@@ -324,22 +337,22 @@ Rescan <span class="cta-badge">Alt + S</span>
             </tr>
           </thead>
           <tbody id="wifi-networks-tbody">
-            <tr><td colspan="6" class="empty">Waiting for the first scan&hellip;</td></tr>
+            <tr><td colspan="6"><div class="panel-state empty" role="status"><p class="panel-state-msg">No networks in range. Scan again to recheck.</p><div class="panel-state-action"><button type="button" class="btn btn-secondary panel-state-btn" data-action="wifi-scan">Scan again</button></div></div></td></tr>
           </tbody>
         </table>
       </div>
     </section>
 
     <!-- RF Spectrum & Channel Congestion Visualizer -->
-    <section class="panel" id="wifi-spectrum-panel" style="margin-top:18px">
+    <section class="panel stack-top" id="wifi-spectrum-panel">
       <div class="spectrum-panel-header">
         <div>
           <h2>Channel use</h2>
           <div class="sub">Networks in range by channel, and the least crowded of the non-overlapping channels.</div>
         </div>
-        <div class="spectrum-band-toggle">
-          <button id="btn-spectrum-24" class="spectrum-band-btn active" type="button" aria-pressed="true">2.4 GHz</button>
-          <button id="btn-spectrum-5" class="spectrum-band-btn" type="button" aria-pressed="false">5 GHz</button>
+        <div class="seg" role="group" aria-label="Band">
+          <button id="btn-spectrum-24" class="seg-btn" type="button" aria-pressed="true">2.4 GHz</button>
+          <button id="btn-spectrum-5" class="seg-btn" type="button" aria-pressed="false">5 GHz</button>
         </div>
       </div>
 
@@ -351,8 +364,8 @@ Rescan <span class="cta-badge">Alt + S</span>
       <!-- SVG Spectrum Canvas Wrap -->
       <div class="spectrum-chart-container">
         <div class="spectrum-svg-wrap">
-          <svg id="wifi-spectrum-svg" class="spectrum-svg" viewBox="0 0 920 280" preserveAspectRatio="xMidYMid meet"></svg>
-          <div id="spectrum-tooltip" class="spectrum-tooltip" style="display:none"></div>
+          <svg id="wifi-spectrum-svg" class="spectrum-svg" viewBox="0 0 920 295" preserveAspectRatio="xMidYMid meet"></svg>
+          <div id="spectrum-tooltip" class="spectrum-tooltip" hidden></div>
         </div>
         <div class="spectrum-legend">
           <span><i class="spec-swatch spec-curr"></i> Connected</span>
@@ -371,8 +384,8 @@ Rescan <span class="cta-badge">Alt + S</span>
     <div id="ipsec-single-view">
       <section class="ribbon-block" id="ribbon-block" aria-labelledby="ribbon-title">
         <p class="ribbon-lede">
-          <strong>Left of the key boundary is <span data-gl="observed">parsed</span></strong> from cleartext.
-          <strong>Right of it is encrypted</strong>: <span data-gl="inferred">inferred</span> from framing, never decrypted.
+          <strong>Before the key boundary is <span data-gl="observed">parsed</span></strong> from cleartext.
+          <strong>After it is encrypted</strong>: <span data-gl="inferred">inferred</span> from framing, never decrypted.
         </p>
         <div class="ribbon-head">
           <h2 id="ribbon-title" class="ribbon-title">One link on the wire</h2>
@@ -385,72 +398,100 @@ Rescan <span class="cta-badge">Alt + S</span>
         </div>
       </section>
 
+      <!-- The assessment runs to several screens; these scroll, and stay in view -->
+      <nav class="section-nav" id="section-nav" aria-label="Sections of this assessment">
+        <button type="button" class="linkish section-nav-btn active" data-jump="ribbon-block" aria-current="true">Wire</button>
+        <button type="button" class="linkish section-nav-btn" data-jump="score-panel">Posture</button>
+        <button type="button" class="linkish section-nav-btn" data-jump="links-panel">Links</button>
+        <button type="button" class="linkish section-nav-btn" data-jump="findings-panel">Findings</button>
+        <button type="button" class="linkish section-nav-btn" data-jump="pq-panel">Post-quantum</button>
+        <button type="button" class="linkish section-nav-btn" data-jump="replay-panel">Replay</button>
+        <button type="button" class="linkish section-nav-btn" data-jump="remediation-panel">Hardening plan</button>
+        <button type="button" class="linkish section-nav-btn" data-jump="provenance-panel">Report</button>
+      </nav>
+
       <!-- Shown only when the server reports uploads enabled; never in the static build -->
       <section class="upload-zone" id="upload-zone" aria-labelledby="upload-title" hidden>
-        <div class="upload-text">
-          <h2 id="upload-title" class="upload-title">Assess your own capture</h2>
-          <p class="upload-hint">Drop a .pcap, .pcapng or .cap file anywhere on this page, or choose one.
-            Up to <span id="upload-limit">500 MB</span>.</p>
+        <div class="upload-empty-box">
+          <div class="upload-icon" aria-hidden="true">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <div class="upload-text">
+            <h2 id="upload-title" class="upload-title">Assess your own capture</h2>
+            <p class="upload-hint">Drop a .pcap, .pcapng or .cap file anywhere on this page, or choose one.
+              Up to <span id="upload-limit">500 MB</span>.</p>
+          </div>
+          <button type="button" class="btn btn-secondary" id="upload-pick">Choose capture file&hellip;</button>
+          <input type="file" id="upload-input" accept=".pcap,.pcapng,.cap" class="visually-hidden" tabindex="-1" aria-hidden="true">
+          <div class="upload-status" id="upload-status" role="status" aria-live="polite"></div>
         </div>
-        <button type="button" class="btn btn-secondary" id="upload-pick">Choose capture file&hellip;</button>
-        <input type="file" id="upload-input" accept=".pcap,.pcapng,.cap" class="visually-hidden" tabindex="-1" aria-hidden="true">
-        <div class="upload-status" id="upload-status" role="status" aria-live="polite"></div>
       </section>
 
-      <div class="grid" style="margin-bottom:18px">
-        <section class="panel" id="score-panel">
-          <h2>Cryptographic posture</h2>
-          <div class="sub" id="capmeta">Select a capture and run an assessment.</div>
-          <div class="scoreline">
-            <div class="dial">
-              <svg width="118" height="118" viewBox="0 0 118 118" role="img" aria-labelledby="dialtitle">
-                <title id="dialtitle">Posture score</title>
-                <circle class="dial-track" cx="59" cy="59" r="49" fill="none" stroke="#dfe7ec" stroke-width="11"/>
-                <circle id="arc" cx="59" cy="59" r="49" fill="none" stroke="var(--ok)"
-                        stroke-width="11" stroke-linecap="butt"
-                        stroke-dasharray="0 999" transform="rotate(-90 59 59)"/>
-                <text id="dialnum" x="59" y="65" text-anchor="middle"
-                      font-family="IBM Plex Mono, monospace" font-size="26"
-                      font-weight="600" fill="#14212b" class="dial-num">&mdash;</text>
-              </svg>
+      <section class="panel" id="score-panel">
+        <h2>Cryptographic posture</h2>
+        <div class="score-hero">
+          <div class="score-grade-wrap">
+            <span class="score-num" id="grade" aria-label="Posture grade">&mdash;</span>
+          </div>
+          <div class="score-summary-block">
+            <div class="score-sub" id="gradesub">No capture assessed yet.</div>
+            <div class="capmeta-sub" id="capmeta">Select a capture and run an assessment.</div>
+          </div>
+        </div>
+        <div class="sev-row" id="sevrow">
+          <div class="sev-bar-wrap">
+            <div class="sev-bar-track" role="progressbar" aria-label="Severity distribution" aria-valuenow="0">
+              <div class="sev-bar-seg" data-w="0"></div>
             </div>
-            <div class="score-meta">
-              <div class="score-num" id="grade">Not assessed</div>
-              <div class="score-sub" id="gradesub">No capture analysed yet.</div>
-              <div class="sev-row" id="sevrow"></div>
+            <div class="sev-bar-counts">
+              <span class="sev-count-item is-zero"><i class="sev-dot critical"></i> <b>&mdash;</b> critical</span>
+              <span class="sev-count-item is-zero"><i class="sev-dot high"></i> <b>&mdash;</b> high</span>
+              <span class="sev-count-item is-zero"><i class="sev-dot medium"></i> <b>&mdash;</b> medium</span>
+              <span class="sev-count-item is-zero"><i class="sev-dot low"></i> <b>&mdash;</b> low</span>
             </div>
           </div>
-          <div class="statgrid" id="stats" style="margin-top:18px"></div>
-          <p class="stat-note" id="stat-note" hidden></p>
-        </section>
-      </div>
+        </div>
+        <div class="dial" hidden aria-hidden="true">
+          <svg width="0" height="0">
+            <title id="dialtitle">Posture score</title>
+            <circle id="arc"></circle>
+            <text id="dialnum"></text>
+          </svg>
+        </div>
+        <div class="statgrid stack-top" id="stats"></div>
+        <p class="stat-note" id="stat-note" hidden></p>
+      </section>
 
-      <section class="panel links-panel" id="links-panel" aria-labelledby="links-title" style="margin-bottom:18px">
+      <section class="panel links-panel stack" id="links-panel" aria-labelledby="links-title">
         <h2 id="links-title">Links</h2>
-        <div class="sub" id="links-sub">One entry per gateway pair, worst first. Select one to see its handshake, tunnel and findings together.</div>
+        <div class="sub" id="links-sub">One link per pair of gateways, worst first; select one to see its handshake and tunnel and to filter Findings.</div>
         <div class="links-layout">
-          <ul class="link-list" id="link-list" aria-label="Gateway links, worst first"></ul>
+          <ul class="link-list" id="link-list" aria-label="Links, worst first"></ul>
           <div class="link-detail" id="link-detail" tabindex="-1" aria-live="polite">
-            <div class="empty">No links yet.</div>
+            <div class="panel-state empty" role="status"><p class="panel-state-msg">This capture has no links. Choose another capture.</p><div class="panel-state-action"><button type="button" class="btn btn-secondary panel-state-btn" data-action="focus-capture">Choose another capture</button></div></div>
           </div>
         </div>
       </section>
 
-      <div class="grid cols-2" style="margin-bottom:18px">
+      <div class="grid cols-2 stack">
         <section class="panel">
-          <h2><span data-gl="ike">IKE</span> security associations <span class="domain-tag obs" data-gl="observed">observed</span></h2>
+          <h2><span data-gl="ike">IKE</span> security associations <span class="domain-tag obs" data-gl="observed">Observed</span></h2>
           <div class="sub">Transform sets read from IKE_SA_INIT and Main/Aggressive Mode.</div>
-          <div id="sessions"><div class="empty">No sessions yet.</div></div>
+          <div id="sessions"><div class="panel-state empty" role="status"><p class="panel-state-msg">This capture has no IKE handshake. Choose another capture.</p><div class="panel-state-action"><button type="button" class="btn btn-secondary panel-state-btn" data-action="focus-capture">Choose another capture</button></div></div></div>
         </section>
 
         <section class="panel">
-          <h2><span data-gl="esp">ESP</span> tunnels <span class="domain-tag inf" data-gl="inferred">inferred</span></h2>
-          <div class="sub">Suite deduced from RFC 4303 framing. No payload is decrypted.</div>
-          <div id="flows"><div class="empty">No tunnels yet.</div></div>
+          <h2><span data-gl="esp">ESP</span> tunnels <span class="domain-tag inf" data-gl="inferred">Inferred</span></h2>
+          <div class="sub">Suite deduced from RFC 4303 framing; no payload is decrypted.</div>
+          <div id="flows"><div class="panel-state empty" role="status"><p class="panel-state-msg">This capture has no ESP traffic. Choose another capture.</p><div class="panel-state-action"><button type="button" class="btn btn-secondary panel-state-btn" data-action="focus-capture">Choose another capture</button></div></div></div>
         </section>
       </div>
 
-      <section class="panel" id="findings-panel" style="margin-bottom:18px">
+      <section class="panel stack" id="findings-panel">
         <div class="findings-head">
           <h2>Findings</h2>
           <div class="seg" role="group" aria-label="Group findings">
@@ -459,11 +500,12 @@ Rescan <span class="cta-badge">Alt + S</span>
           </div>
         </div>
         <div class="sub" id="findsub">Select a finding to see the evidence and the fix.</div>
-        <div id="findings"><div class="empty">No findings yet.</div></div>
+        <div class="findings-filter-bar" id="findings-filter-bar" hidden></div>
+        <div id="findings"><div class="panel-state empty" role="status"><p class="panel-state-msg">No findings yet. Assess a capture to list them.</p><div class="panel-state-action"><button type="button" class="btn btn-secondary panel-state-btn" data-action="run-analysis">Assess capture</button></div></div></div>
       </section>
 
-      <section class="panel" style="margin-bottom:18px">
-        <h2>Post-quantum exposure <span class="domain-tag obs" data-gl="observed">observed</span></h2>
+      <section class="panel stack" id="pq-panel">
+        <h2>Post-quantum exposure <span class="domain-tag obs" data-gl="observed">Observed</span></h2>
         <div class="sub" id="pqsub">Links ranked by what an adversary recording traffic today could read later.</div>
         <div class="hclock" id="hclock" role="group" aria-label="Harvest clock" hidden>
           <div class="hclock-read">
@@ -484,11 +526,11 @@ Rescan <span class="cta-badge">Alt + S</span>
           </div>
           <p class="hclock-note" id="hclock-note"></p>
         </div>
-        <div id="pqlinks"><div class="empty">No links assessed yet.</div></div>
+        <div id="pqlinks"><div class="panel-state empty" role="status"><p class="panel-state-msg">No key exchange was observed, so post-quantum exposure cannot be ranked. Assess a capture that includes IKE.</p><div class="panel-state-action"><button type="button" class="btn btn-secondary panel-state-btn" data-action="run-analysis">Assess capture</button></div></div></div>
       </section>
 
-      <section class="panel replay" id="replay-panel" style="margin-bottom:18px" aria-labelledby="replay-title">
-        <h2 id="replay-title">Posture replay <span class="domain-tag obs">baseline store</span></h2>
+      <section class="panel replay stack" id="replay-panel" aria-labelledby="replay-title">
+        <h2 id="replay-title">Posture replay <span class="domain-tag obs">Baseline store</span></h2>
         <p class="replay-point">This change is invisible in either capture alone: each one shows a valid negotiation, and only the comparison the baseline store makes reveals the drop.</p>
         <div class="replay-controls" id="replay-controls" hidden>
           <label for="replay-link">Link</label>
@@ -503,23 +545,23 @@ Rescan <span class="cta-badge">Alt + S</span>
           <summary>Table view</summary>
           <div id="replay-table"></div>
         </details>
-        <div class="empty" id="replay-empty">Loading the baseline store&hellip;</div>
+        <div class="panel-state empty" id="replay-empty" role="status"><p class="panel-state-msg">The baseline store has no history yet.</p><div class="panel-state-action"><button type="button" class="btn btn-secondary panel-state-btn" data-action="replay-init">Record current posture as baseline</button></div></div>
         <div class="sub replay-source" id="replay-source"></div>
       </section>
       <section class="panel remediation-panel" id="remediation-panel">
         <div class="remediation-header">
           <div>
             <h2>Hardening plan <span class="domain-tag obs" id="remediation-count-tag" hidden></span></h2>
-            <div class="sub">Configuration that fixes these findings on each detected gateway platform, with a matching rollback. Review it before applying it; nothing is sent to a gateway from this page.</div>
+            <div class="sub">Configuration and a matching rollback for each detected gateway platform, to review and apply yourself: nothing is sent to a gateway from this page.</div>
           </div>
         </div>
 
-        <div class="plat-row" id="platforms" style="margin-top:14px"></div>
+        <div class="plat-row" id="platforms"></div>
 
         <div class="playbook-toolbar">
-          <div class="playbook-view-tabs">
-            <button id="btn-playbook-forward" class="playbook-tab active" type="button">Hardening</button>
-            <button id="btn-playbook-rollback" class="playbook-tab" type="button">Rollback</button>
+          <div class="seg" role="group" aria-label="Plan direction">
+            <button id="btn-playbook-forward" class="seg-btn" type="button" aria-pressed="true">Hardening</button>
+            <button id="btn-playbook-rollback" class="seg-btn" type="button" aria-pressed="false">Rollback</button>
           </div>
           <div class="playbook-meta-chips">
             <span id="playbook-syntax-badge" class="playbook-chip chip-ok" hidden></span>
@@ -529,7 +571,7 @@ Rescan <span class="cta-badge">Alt + S</span>
             <button id="btn-playbook-copy" class="ghost" type="button">Copy</button>
             <button id="btn-playbook-download" class="ghost" type="button">Download .conf</button>
             <span class="copy-status" id="playbook-copy-status" role="status" aria-live="polite"></span>
-            <button id="btn-playbook-approve" class="solid-btn" type="button" title="Record who signed this plan off, in the local plan store">Record approval</button>
+            <button id="btn-playbook-approve" class="btn btn-primary" type="button" title="Record who signed this plan off, in the local plan store">Record approval</button>
           </div>
         </div>
 
@@ -563,10 +605,10 @@ Rescan <span class="cta-badge">Alt + S</span>
     </div>
 
     <!-- Before vs. After Diff Mode View -->
-    <div id="ipsec-diff-view" style="display:none">
+    <div id="ipsec-diff-view" hidden>
       
       <!-- Diff Hero Card: Score Delta & Posture Shift -->
-      <section class="panel diff-hero-panel" style="margin-bottom:18px">
+      <section class="panel diff-hero-panel stack">
         <div class="diff-hero-header">
           <div>
             <h2>Before and after</h2>
@@ -618,9 +660,9 @@ Rescan <span class="cta-badge">Alt + S</span>
       </section>
 
       <!-- Per-link strength, side by side -->
-      <section class="panel" style="margin-bottom:18px" aria-labelledby="diff-links-title">
+      <section class="panel stack" aria-labelledby="diff-links-title">
         <h2 id="diff-links-title">Link strength, A against B</h2>
-        <div class="sub" id="diff-links-sub">Each gateway pair in either capture. Rows that differ are marked.</div>
+        <div class="sub" id="diff-links-sub">Each link in either capture, with the rows that differ marked.</div>
         <div class="table-responsive">
           <table class="data-table diff-links-table" id="diff-links-table">
             <thead><tr>
@@ -635,48 +677,48 @@ Rescan <span class="cta-badge">Alt + S</span>
       </section>
 
       <!-- Side-by-Side Wire Framing Ribbons -->
-      <section class="panel" style="margin-bottom:18px">
+      <section class="panel stack">
         <h2>Wire framing, A against B</h2>
         <div class="sub">Cleartext headers and encrypted framing, capture A above capture B.</div>
         <div class="diff-ribbons-container">
           <div class="diff-ribbon-col">
-            <div class="diff-ribbon-title"><span class="baseline-dot">&#9679;</span> Baseline (A): <b id="diff-ribbon-title-a">&mdash;</b></div>
+            <div class="diff-ribbon-title"><span class="baseline-dot">&#9679;</span> Capture A: <b id="diff-ribbon-title-a">&mdash;</b></div>
             <div class="ribbon" id="diff-ribbon-a"></div>
           </div>
           <div class="diff-ribbon-col">
-            <div class="diff-ribbon-title"><span class="hardened-dot">&#9679;</span> Remediated (B): <b id="diff-ribbon-title-b">&mdash;</b></div>
+            <div class="diff-ribbon-title"><span class="hardened-dot">&#9679;</span> Capture B: <b id="diff-ribbon-title-b">&mdash;</b></div>
             <div class="ribbon" id="diff-ribbon-b"></div>
           </div>
         </div>
-        <div class="ribbon-legend" style="margin-top:10px">
+        <div class="ribbon-legend">
           <span><i class="swatch obs"></i> Parsed from the wire</span>
           <span><i class="swatch inf"></i> Inferred without keys</span>
         </div>
       </section>
 
       <!-- Cryptographic Suite Upgrade Matrix -->
-      <section class="panel" style="margin-bottom:18px">
+      <section class="panel stack">
         <h2>Negotiated suites</h2>
         <div class="sub">Transforms in capture A and capture B.</div>
         <div class="table-responsive">
           <table class="data-table diff-matrix-table" id="diff-matrix-table">
             <thead>
               <tr>
-                <th style="width:22%">Parameter</th>
-                <th style="width:33%">A</th>
-                <th style="width:33%">B</th>
-                <th style="width:12%;text-align:center">Change</th>
+                <th scope="col">Parameter</th>
+                <th scope="col">A</th>
+                <th scope="col">B</th>
+                <th scope="col">Change</th>
               </tr>
             </thead>
             <tbody id="diff-matrix-tbody">
-              <tr><td colspan="4" class="empty">Choose two captures and select Compare.</td></tr>
+              <tr><td colspan="4"><div class="panel-state empty" role="status"><p class="panel-state-msg">Choose two captures, then compare them.</p><div class="panel-state-action"><button type="button" class="btn btn-secondary panel-state-btn" data-action="diff-run">Compare</button></div></div></td></tr>
             </tbody>
           </table>
         </div>
       </section>
 
       <!-- Vulnerability Resolution & Risk Elimination -->
-      <section class="panel" style="margin-bottom:18px">
+      <section class="panel stack">
         <h2>Findings, A against B</h2>
         <div class="sub">What capture B no longer raises, and what it still does.</div>
         
@@ -688,7 +730,7 @@ Rescan <span class="cta-badge">Alt + S</span>
               <span class="diff-count-badge resolved" id="diff-resolved-count">0</span>
             </div>
             <div id="diff-resolved-list" class="diff-findings-list">
-              <div class="empty">No resolved findings to display.</div>
+              <div class="panel-state empty" role="status"><p class="panel-state-msg">Capture B resolves none of the findings in capture A.</p><div class="panel-state-action"><button type="button" class="btn btn-secondary panel-state-btn" data-action="jump-remediation">See the hardening plan</button></div></div>
             </div>
           </div>
 
@@ -699,7 +741,7 @@ Rescan <span class="cta-badge">Alt + S</span>
               <span class="diff-count-badge persisting" id="diff-persisting-count">0</span>
             </div>
             <div id="diff-persisting-list" class="diff-findings-list">
-              <div class="empty">No remaining findings in hardened capture.</div>
+              <div class="panel-state empty" role="status"><p class="panel-state-msg">Capture B resolves every finding in capture A.</p><div class="panel-state-action"><button type="button" class="btn btn-secondary panel-state-btn" data-action="export-report">Export report</button></div></div>
             </div>
           </div>
         </div>
@@ -708,12 +750,12 @@ Rescan <span class="cta-badge">Alt + S</span>
     </div>
 
     <!-- IPsec live wire sniffer -->
-    <div id="ipsec-live-view" style="display:none;">
-      <section class="panel live-sniffer-panel" style="margin-bottom:18px">
+    <div id="ipsec-live-view" hidden>
+      <section class="panel live-sniffer-panel stack">
         <div class="sniffer-panel-header">
           <div>
             <h2>Live capture</h2>
-            <div class="sub">IKE and ESP packets from a network interface as they arrive, grouped into security associations. Start captures from this machine and needs raw-socket privileges; if it cannot start it says so. Replay samples plays back the bundled sample captures instead, and is labelled as a replay.</div>
+            <div class="sub">IKE and ESP packets from a network interface on this machine as they arrive, grouped into security associations; starting needs raw-socket privileges.</div>
           </div>
           <div class="sniffer-controls-wrap">
             <select id="sniffer-iface-select" class="sniffer-iface-select" aria-label="Select network interface">
@@ -722,13 +764,13 @@ Rescan <span class="cta-badge">Alt + S</span>
             <button type="button" id="btn-sniffer-start" class="btn btn-primary">
 Start
             </button>
-            <button type="button" id="btn-sniffer-replay" class="btn btn-subtle" title="Play back the bundled sample captures. Not live traffic.">
+            <button type="button" id="btn-sniffer-replay" class="btn btn-secondary" title="Play back the bundled sample captures. Not live traffic.">
 Replay samples
             </button>
-            <button type="button" id="btn-sniffer-stop" class="btn btn-subtle" disabled>
+            <button type="button" id="btn-sniffer-stop" class="btn btn-ghost" disabled>
 Stop
             </button>
-            <button type="button" id="btn-sniffer-analyze" class="btn btn-accent" disabled title="Analyze captured packet buffer">
+            <button type="button" id="btn-sniffer-analyze" class="btn btn-secondary" disabled title="Assess the captured packets">
 Assess what was captured
             </button>
           </div>
@@ -768,7 +810,7 @@ Assess what was captured
             <span class="sniffer-feed-status">newest last</span>
           </div>
           <div class="sniffer-live-feed" id="sniffer-live-feed">
-            <div class="feed-placeholder">Select Start to capture from this machine.</div>
+            <div class="panel-state empty feed-placeholder" role="status"><p class="panel-state-msg">Nothing captured yet. Start a capture on this machine.</p><div class="panel-state-action"><button type="button" class="btn btn-secondary panel-state-btn" data-action="sniffer-start">Start capture</button></div></div>
           </div>
         </div>
 
@@ -777,7 +819,7 @@ Assess what was captured
           <h3>Security associations</h3>
           <div class="sub">Grouped by ESP SPI and IKE peer pair.</div>
           <div class="sniffer-spis-grid" id="sniffer-spis-grid">
-            <div class="empty">None seen yet.</div>
+            <div class="panel-state empty" role="status"><p class="panel-state-msg">No security associations in the live stream yet.</p><div class="panel-state-action"><button type="button" class="btn btn-secondary panel-state-btn" data-action="run-analysis">Load sample sessions</button></div></div>
           </div>
         </div>
       </section>
@@ -787,6 +829,11 @@ Assess what was captured
 
 
 
+  <footer class="page-foot">
+    <span id="foot-version">CipherGuard</span>
+    <span>Nothing is decrypted</span>
+    <a href="LICENSE.txt">Apache-2.0 licence</a>
+  </footer>
 </main>
 
 <!-- Sticky Mobile Quick Action Dock (Visible only on mobile screens <= 768px) -->
@@ -808,7 +855,7 @@ Assess what was captured
       <div class="backend-modal-title-group">
         <div>
           <h2 id="backend-modal-title">Server</h2>
-          <div class="backend-modal-subtitle">Where this page gets its analyses</div>
+          <div class="backend-modal-subtitle">Where this page gets its assessments</div>
         </div>
       </div>
       <button type="button" id="backend-modal-close" class="modal-close-btn" aria-label="Close dialog">&times;</button>
@@ -864,8 +911,8 @@ Assess what was captured
         </div>
         <div class="backend-input-group">
           <input type="url" id="backend-url-input" class="backend-input" placeholder="http://127.0.0.1:8000" spellcheck="false" autocomplete="off">
-          <button type="button" id="btn-save-backend-url" class="btn">Test and connect</button>
-          <button type="button" id="btn-reset-backend-url" class="btn btn-subtle" title="Forget the saved address">Forget</button>
+          <button type="button" id="btn-save-backend-url" class="btn btn-primary">Test and connect</button>
+          <button type="button" id="btn-reset-backend-url" class="btn btn-ghost" title="Forget the saved address">Forget</button>
         </div>
         <div id="backend-url-feedback" class="backend-feedback" role="status" hidden></div>
       </div>
@@ -897,7 +944,7 @@ Assess what was captured
         </div>
         <div class="shortcut-item">
           <div class="shortcut-keys"><kbd>Alt</kbd> + <kbd>S</kbd></div>
-          <div class="shortcut-desc"><strong>Scan Wi-Fi</strong><span>Open the Wi-Fi view and scan again</span></div>
+          <div class="shortcut-desc"><strong>Scan now</strong><span>Open the Wi-Fi view and scan again</span></div>
         </div>
         <div class="shortcut-item">
           <div class="shortcut-keys"><kbd>Alt</kbd> + <kbd>E</kbd></div>

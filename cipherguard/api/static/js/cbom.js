@@ -113,7 +113,7 @@ const CbomEngine = (() => {
     const modal = $("cbom-modal");
     if (!modal) return;
     modal.hidden = false;
-    modal.style.setProperty("display", "flex", "important");
+    ModalFocus.trap(modal);
     showMessage("Loading the CBOM\u2026");
     try {
       await loadData();
@@ -129,7 +129,7 @@ const CbomEngine = (() => {
     const modal = $("cbom-modal");
     if (!modal) return;
     modal.hidden = true;
-    modal.style.setProperty("display", "none", "important");
+    ModalFocus.release(modal);
   }
 
   function init(){

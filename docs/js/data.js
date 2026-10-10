@@ -17,6 +17,12 @@ function detectStaticMode(){
   return staticModeDetection;
 }
 
+// the footer names the build that produced what is on screen
+function showVersion(version){
+  const el = $("foot-version");
+  if (el && version) el.textContent = `CipherGuard ${version}`;
+}
+
 async function probeForServer(){
   // A server, if there is one, always wins over the saved analyses.
   try {
@@ -29,6 +35,7 @@ async function probeForServer(){
       staticMode.active = false;
       // kept for controls that depend on server capability (upload)
       state.health = health;
+      showVersion(health.version);
       return false;
     }
   } catch (e) { /* no server here: fall through to the static manifest */ }
@@ -39,6 +46,7 @@ async function probeForServer(){
     if (!res.ok) return false;
     staticMode.manifest = await res.json();
     staticMode.active = true;
+    showVersion(staticMode.manifest.version);
     return true;
   }catch{
     return false;
@@ -83,7 +91,7 @@ async function loadCapturesStatic(){
     return;
   }
   populateCaptureSelects(caps);
-  showBanner("Static demo: analyses were pre-computed by the real pipeline. "
+  showBanner("Static demo: assessments were computed ahead of time by the real pipeline. "
              + "Install CipherGuard to assess your own captures.", "info");
 }
 
@@ -102,7 +110,7 @@ async function loadCaptures(){
     showBanner(null);
   }catch(err){
     console.error("Loading the capture list failed:", err, err && err.body ? err.body : "");
-    if ($("capture")) $("capture").innerHTML = `<option value="">Backend unreachable</option>`;
+    if ($("capture")) $("capture").innerHTML = `<option value="">Server unreachable</option>`;
     if ($("run")) $("run").disabled = true;
     showBanner(explainFailure(err), "error", { label: "Retry", onClick: async () => {
       staticModeDetection = null;  // the server may have come up since

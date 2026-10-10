@@ -23,8 +23,10 @@ cd CipherGuard
 You should see `cipherguard/`, `samples/`, `models/`, `tests/`, `README.md`.
 
 On Windows you can stop here and double-click `launch_dashboard.bat`: it
-creates the virtual environment, installs the dependencies into it and opens
-the dashboard. The steps below do the same by hand, on any platform.
+creates the virtual environment, installs dependencies from `requirements.lock`
+(or `requirements.txt`), polls until the server answers, and opens the
+dashboard. Supported flags: `--port N`, `--lan`, `--no-browser`, `--help`.
+The steps below do the same by hand, on any platform.
 
 ---
 
@@ -329,7 +331,9 @@ until `CIPHERGUARD_TOKEN` is set.
 
 On Windows, `launch_dashboard.bat` serves the dashboard to this machine only.
 `launch_dashboard.bat --lan` serves other devices on the network and prints the
-access token each browser is asked for.
+access token each browser is asked for. Use `--port N` to change the listening
+port (rejects missing or non-numeric values), `--no-browser` to suppress opening
+the browser, and `--help` to view all launcher options.
 
 The Pages build and a local server cover most uses between them: the first
 needs nothing installed, the second assesses your own captures.

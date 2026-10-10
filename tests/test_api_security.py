@@ -188,6 +188,59 @@ def test_the_page_needs_no_inline_script():
         assert "javascript:" not in html
 
 
+def test_static_files_carry_no_inline_event_handlers():
+    """Markup built in script is still markup: a handler attribute in a template
+    string is blocked by script-src 'self' just like one in the page, and the
+    button silently does nothing. Scripts name an action instead (data-action)."""
+    import glob
+    import os
+    import re
+
+    from tests.jsmodules import STATIC
+
+    handler = re.compile(r"""[\s"'`]on[a-z]+\s*=\s*\\?["']""")
+    paths = [os.path.join(STATIC, n) for n in ("index.html", "404.html")] + glob.glob(
+        os.path.join(STATIC, "js", "*.js")
+    )
+    for path in paths:
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        assert not handler.search(text), f"inline event handler in {os.path.basename(path)}"
+        assert "javascript:" not in text, os.path.basename(path)
+
+
+def test_every_action_name_has_a_handler_that_exists():
+    """data-action names are matched by one listener in shell.js. A name with no
+    entry, or an entry calling a function that is not defined, is a dead button."""
+    import os
+    import re
+
+    from tests.jsmodules import STATIC, dashboard_js
+
+    js = dashboard_js()
+    block = js[js.index("const ACTIONS = {") : js.index("};", js.index("const ACTIONS = {"))]
+    actions = set(re.findall(r'^\s*"([a-z-]+)":', block, re.M))
+
+    with open(os.path.join(STATIC, "index.html"), encoding="utf-8") as fh:
+        used = set(re.findall(r'data-action="([a-z-]+)"', fh.read()))
+    # in script the name is the argument after the button label
+    used |= set(re.findall(r'(?:UIState\.box|\bempty)\(.*"([a-z]+(?:-[a-z]+)+)"(?:, (?:true|false))?\)', js))
+    used |= set(re.findall(r'\? "([a-z]+(?:-[a-z]+)+)" : "([a-z]+(?:-[a-z]+)+)"\n\s*\)', js)[0])
+    assert used and used <= actions, sorted(used - actions)
+
+    called = set(re.findall(r"\b([A-Za-z_]\w*)(?=\(|\.init\()", block)) - {"click", "focus", "scrollIntoView", "init"}
+    missing = {name for name in called if not re.search(rf"(?:function {name}\(|const {name} = )", js)}
+    assert called and not missing, sorted(missing)
+
+
+def test_script_policy_allows_nothing_inline(tmp_path):
+    csp = _client(tmp_path).get("/").headers["content-security-policy"]
+    directives = dict(d.split(" ", 1) for d in csp.split("; "))
+    for name in ("default-src", "script-src"):
+        for token in ("'unsafe-inline'", "'unsafe-hashes'", "'unsafe-eval'"):
+            assert token not in directives[name], f"{name} allows {token}"
+
+
 def test_interactive_api_docs_are_not_served(tmp_path):
     """They were open without the token and loaded scripts from a CDN."""
     client = _client(tmp_path, auth_token="s3cret")

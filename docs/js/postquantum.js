@@ -98,6 +98,11 @@ const HarvestClock = (() => {
         + `${as.crqc_years} yr quantum assumption = ${signed(gap)} yr`;
       $("hclock-secrecy").textContent =
         `${cls} data must stay confidential for ${secrecy} years`;
+      if (box.setAttribute) {
+        box.setAttribute("aria-label",
+          `Harvest clock: ${Fmt.bytes(base)} harvestable on exposed links, `
+          + `Mosca deadline ${d.value} (${d.late ? "past deadline" : "margin remaining"})`);
+      }
     };
     const onClass = () => showDeadline(sel.value);
     sel.addEventListener("change", onClass);
@@ -107,7 +112,7 @@ const HarvestClock = (() => {
     const arrival = new Date();
     arrival.setMonth(arrival.getMonth() + Math.round(as.crqc_years * 12));
     $("hclock-note").innerHTML =
-      `${Glossary.term("crqc", "Quantum arrival")} in ${as.crqc_years} years (${arrival.getFullYear()}) is a `
+      `${Glossary.term("crqc", "Quantum arrival")} in ${esc(as.crqc_years)} years (${arrival.getFullYear()}) is a `
       + `<b>planning assumption, not a forecast</b>. Substitute your agency's figure `
       + `with <code>cipherguard roadmap --crqc-years N</code>. The deadline is `
       + `below are for the <b>${esc(as.data_class)}</b> class this capture was `
@@ -163,8 +168,7 @@ function renderPQ(a){
   const el = $("pqlinks");
   HarvestClock.mount(plan);
   if (!plan || !plan.links.length){
-    el.innerHTML = `<div class="empty">No IKE negotiation observed, `
-      + `so no key exchange to assess.</div>`;
+    el.innerHTML = UIState.box("No key exchange was observed, so post-quantum exposure cannot be ranked. Assess a capture that includes IKE.", "Assess capture", "run-analysis");
     return;
   }
   const sm = plan.summary;
@@ -173,23 +177,23 @@ function renderPQ(a){
     + `carrying ${Fmt.bytes(sm.total_bytes_harvestable)} of observed traffic.`;
 
   const links = plan.links.map(l => `
-    <div class="pql ${l.quantum_safe ? "" : "exposed"}">
-      <span class="pqrank">${l.priority}</span>
+    <div class="pql ${l.quantum_safe ? "" : "exposed"}" role="article" aria-label="Link ${esc(l.priority)}: ${esc(l.peer)}, ${l.quantum_safe ? "PQ-safe" : "Quantum-exposed, " + esc(l.classical_bits) + " classical bits, " + esc(l.quantum_bits) + " quantum bits, exposure index " + esc(l.exposure_index)}">
+      <span class="pqrank" aria-hidden="true">${esc(l.priority)}</span>
       <span class="pqbody">
         <div class="pqpeer">${esc(l.peer)}</div>
-        <div class="pqbits">${l.classical_bits} classical / ${l.quantum_bits} `
+        <div class="pqbits">${esc(l.classical_bits)} classical / ${esc(l.quantum_bits)} `
       + `quantum bits · ${esc(l.kex_family.toUpperCase())} · `
       + `${Fmt.bytes(l.bytes_observed)} at ${Fmt.mbps(l.harvest_rate_mbps)}</div>
         <div class="pqwhy">${Glossary.mark(esc(l.rationale))}</div>
       </span>
       <span class="pqidx ${l.quantum_safe ? "safe" : "exposed"}">`
-      + `${l.quantum_safe ? "PQ-safe" : "exposure " + l.exposure_index}</span>
+      + `${l.quantum_safe ? "PQ-safe" : "exposure " + esc(l.exposure_index)}</span>
     </div>`).join("");
 
   const phases = plan.phases.length
-    ? `<div class="phases">` + plan.phases.map(ph => `
+    ? `<div class="phases" role="region" aria-label="Remediation phases">` + plan.phases.map(ph => `
         <div class="phase">
-          <h3>Phase ${ph.phase} — ${esc(ph.window)}</h3>
+          <h3>Phase ${esc(ph.phase)} — ${esc(ph.window)}</h3>
           <p>${esc(ph.action)}</p>
           <div class="tgt">${esc(ph.target)}</div>
         </div>`).join("") + `</div>`

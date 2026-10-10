@@ -81,21 +81,21 @@ function renderRfSpectrum(networks) {
     if (!is5) for (let d = -2; d <= 2; d++) if (d && channelCounts[cleanestCh + d]) beside += channelCounts[cleanestCh + d];
     const shared = connCh ? Math.max(0, connCci - 1) : 0;
     advisoryEl.innerHTML = `
-      <div class="spectrum-advisory-card recommended">
-        <div class="spectrum-advisory-label">Least crowded channel</div>
-        <div class="spectrum-advisory-value">Channel ${cleanestCh}</div>
+      <div class="spectrum-advisory-card stat">
+        <div class="spectrum-advisory-value k">Channel ${cleanestCh}</div>
+        <div class="spectrum-advisory-label l">Least crowded channel</div>
         <div class="spectrum-advisory-desc">${plural(cleanestCci, "network", "networks")} on it${is5 ? "" : `, ${beside} on the channels either side`}.</div>
       </div>
-      <div class="spectrum-advisory-card ${!connCh || shared === 0 ? "recommended" : (shared <= 2 ? "caution" : "alert")}">
-        <div class="spectrum-advisory-label">Your channel</div>
-        <div class="spectrum-advisory-value">${connCh ? `Channel ${connCh}` : "&mdash;"}</div>
+      <div class="spectrum-advisory-card stat">
+        <div class="spectrum-advisory-value k">${connCh ? `Channel ${connCh}` : "&mdash;"}</div>
+        <div class="spectrum-advisory-label l">Your channel</div>
         <div class="spectrum-advisory-desc">${connCh
           ? (shared ? `Shared with ${plural(shared, "other network", "other networks")}; they compete for airtime.` : "No other network in range uses it.")
           : `Not connected in the ${is5 ? "5" : "2.4"} GHz band.`}</div>
       </div>
-      <div class="spectrum-advisory-card">
-        <div class="spectrum-advisory-label">Networks in this band</div>
-        <div class="spectrum-advisory-value">${bandNetworks.length}</div>
+      <div class="spectrum-advisory-card stat">
+        <div class="spectrum-advisory-value k">${bandNetworks.length}</div>
+        <div class="spectrum-advisory-label l">Networks in this band</div>
         <div class="spectrum-advisory-desc">${is5 ? "5 GHz" : "2.4 GHz"} access points this machine can hear.</div>
       </div>
     `;
@@ -103,11 +103,11 @@ function renderRfSpectrum(networks) {
 
   // Dimensions
   const svgW = 920;
-  const svgH = 280;
+  const svgH = 295;
   const marginLeft = 60;
   const marginRight = 25;
-  const marginTop = 25;
-  const marginBottom = 45;
+  const marginTop = 28;
+  const marginBottom = 50;
   const plotW = svgW - marginLeft - marginRight;
   const plotH = svgH - marginTop - marginBottom;
   const yBase = marginTop + plotH;
@@ -121,18 +121,30 @@ function renderRfSpectrum(networks) {
 
   let svgContent = "";
 
+  // Accessible title & description for screen readers
+  svgContent += `
+    <title id="sp-chart-title">Wi-Fi channel use (${is5 ? "5 GHz" : "2.4 GHz"})</title>
+    <desc id="sp-chart-desc">Spectrum graph showing ${bandNetworks.length} networks across channels. ${connectedNet ? "Connected to " + esc(connectedNet.ssid) + " on channel " + connCh + "." : "Not connected."} The least crowded channel is ${cleanestCh}.</desc>
+  `;
+
+  // Y-axis title
+  svgContent += `
+    <text class="sp-axis-title" x="${marginLeft}" y="${yTop - 10}" text-anchor="start">Signal (dBm)</text>
+  `;
+
   // Horizontal power gridlines (-30, -50, -70, -90 dBm)
   [-30, -50, -70, -90].forEach(lvl => {
     const y = dbmToY(lvl);
     svgContent += `
       <line class="sp-grid" x1="${marginLeft}" y1="${y.toFixed(1)}" x2="${(marginLeft + plotW).toFixed(1)}" y2="${y.toFixed(1)}" stroke-dasharray="2 4"/>
-      <text class="sp-axis" x="${marginLeft - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="10">${lvl} dBm</text>
+      <text class="sp-axis" x="${marginLeft - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="12">${lvl} dBm</text>
     `;
   });
 
-  // Base X-axis line
+  // Base X-axis line & title
   svgContent += `
     <line class="sp-base" x1="${marginLeft}" y1="${yBase}" x2="${(marginLeft + plotW).toFixed(1)}" y2="${yBase}" stroke-width="1.5"/>
+    <text class="sp-axis-title" x="${(marginLeft + plotW / 2).toFixed(1)}" y="${yBase + 38}" text-anchor="middle">Channel (${is5 ? "5 GHz" : "2.4 GHz"} band)</text>
   `;
 
   // Draw Channel Ticks and Non-Overlapping Highlights
@@ -147,12 +159,12 @@ function renderRfSpectrum(networks) {
       if (isClean) {
         svgContent += `
           <line class="sp-clean-line" x1="${x.toFixed(1)}" y1="${yTop}" x2="${x.toFixed(1)}" y2="${yBase}" stroke-dasharray="3 3"/>
-          <text class="sp-clean" x="${x.toFixed(1)}" y="${yBase + 18}" text-anchor="middle" font-size="10">${ch}</text>
+          <text class="sp-clean" x="${x.toFixed(1)}" y="${yBase + 18}" text-anchor="middle" font-size="12">${ch}</text>
         `;
       } else {
         svgContent += `
           <line class="sp-base" x1="${x.toFixed(1)}" y1="${yBase}" x2="${x.toFixed(1)}" y2="${yBase + 5}"/>
-          <text class="sp-axis" x="${x.toFixed(1)}" y="${yBase + 18}" text-anchor="middle" font-size="10">${ch}</text>
+          <text class="sp-axis" x="${x.toFixed(1)}" y="${yBase + 18}" text-anchor="middle" font-size="12">${ch}</text>
         `;
       }
     }
@@ -169,16 +181,16 @@ function renderRfSpectrum(networks) {
 
       svgContent += `
         <line class="${isClean ? 'sp-clean-line' : 'sp-base'}" x1="${x.toFixed(1)}" y1="${yBase}" x2="${x.toFixed(1)}" y2="${yBase + 5}"/>
-        <text class="${isClean ? 'sp-clean' : 'sp-axis'}" x="${x.toFixed(1)}" y="${yBase + 18}" text-anchor="middle" font-size="9">${ch}</text>
+        <text class="${isClean ? 'sp-clean' : 'sp-axis'}" x="${x.toFixed(1)}" y="${yBase + 18}" text-anchor="middle" font-size="12">${ch}</text>
       `;
     });
 
     // Sub-labels for UNII zones
     svgContent += `
-      <text x="${fToX(5210).toFixed(1)}" y="${yTop + 10}" class="sp-axis" font-size="9" text-anchor="middle">UNII-1 (36-48)</text>
-      <text x="${fToX(5290).toFixed(1)}" y="${yTop + 10}" class="sp-axis" font-size="9" text-anchor="middle">UNII-2 DFS (52-64)</text>
-      <text x="${fToX(5600).toFixed(1)}" y="${yTop + 10}" class="sp-axis" font-size="9" text-anchor="middle">UNII-2e (100-144)</text>
-      <text x="${fToX(5785).toFixed(1)}" y="${yTop + 10}" class="sp-axis" font-size="9" text-anchor="middle">UNII-3 (149-165)</text>
+      <text x="${fToX(5210).toFixed(1)}" y="${yTop + 10}" class="sp-axis" font-size="12" text-anchor="middle">UNII-1 (36-48)</text>
+      <text x="${fToX(5290).toFixed(1)}" y="${yTop + 10}" class="sp-axis" font-size="12" text-anchor="middle">UNII-2 DFS (52-64)</text>
+      <text x="${fToX(5600).toFixed(1)}" y="${yTop + 10}" class="sp-axis" font-size="12" text-anchor="middle">UNII-2e (100-144)</text>
+      <text x="${fToX(5785).toFixed(1)}" y="${yTop + 10}" class="sp-axis" font-size="12" text-anchor="middle">UNII-3 (149-165)</text>
     `;
   }
 
@@ -191,8 +203,45 @@ function renderRfSpectrum(networks) {
     return (a.rssi_dbm || -80) - (b.rssi_dbm || -80);
   });
 
-  // Collision detection tracking for AP labels
-  const placedLabels = [];
+  // Collision detection tracking for AP labels using bounding boxes.
+  // Prevents collisions between any direct labels (e.g. Lab-Guest and Annex-Printer
+  // sharing Channel 11) and curve peaks.
+  const obstacles = [];
+  sorted.forEach((n) => {
+    const fc = getWifiCenterFreq(parseInt(n.channel, 10), n.band);
+    if (!fc || fc < fMin || fc > fMax || (!n.rssi_dbm && !n.signal_percent)) return;
+    const rssi = n.rssi_dbm || Math.round(-100 + (n.signal_percent * 0.7));
+    const px = fToX(fc);
+    const py = dbmToY(rssi);
+    obstacles.push({
+      left: px - 12,
+      right: px + 12,
+      top: py - 10,
+      bottom: py + 10,
+      peakFor: n
+    });
+  });
+
+  function labelBox(x, y, text) {
+    const w = Math.max(78, Math.min(140, (text || "").length * 7.5 + 14));
+    return {
+      left: x - w / 2,
+      right: x + w / 2,
+      top: y - 13,
+      bottom: y + 4,
+      width: w,
+      height: 17
+    };
+  }
+
+  function collides(b1, b2, padX = 8, padY = 5) {
+    return !(
+      b1.right + padX < b2.left ||
+      b1.left - padX > b2.right ||
+      b1.bottom + padY < b2.top ||
+      b1.top - padY > b2.bottom
+    );
+  }
 
   // Render AP bell curves
   sorted.forEach((n) => {
@@ -221,7 +270,7 @@ function renderRfSpectrum(networks) {
     const yCtrl = 2 * yPeak - yBase;
     const pathD = `M ${x1.toFixed(1)} ${yBase} Q ${xc.toFixed(1)} ${yCtrl.toFixed(1)} ${x2.toFixed(1)} ${yBase} Z`;
 
-    const tooltipData = JSON.stringify({
+    const tooltipData = esc(JSON.stringify({
       ssid: n.ssid || "(Hidden SSID)",
       bssid: n.bssid || "—",
       channel: ch,
@@ -229,41 +278,74 @@ function renderRfSpectrum(networks) {
       rssi: `${rssi} dBm` + (n.signal_percent ? ` (${n.signal_percent}%)` : ""),
       sec: [n.authentication, n.encryption].filter(Boolean).join(" / ") || "not reported",
       status: n.is_rogue ? "Possible evil twin" : (n.connected ? "Connected" : "Other network")
-    }).replace(/"/g, "&quot;");
+    }));
 
-    // Robust collision avoidance across congested channels
-    let yLabel = yPeak - 8;
-    let xLabel = xc;
-    let collisionCount = 0;
-    let hasCollision = true;
-    let safetyLimit = 0;
+    const labelText = `${n.ssid ? n.ssid.slice(0, 14) : 'AP'} (${rssi})`;
+    const estBox = labelBox(xc, yPeak - 10, labelText);
+    const halfW = estBox.width / 2;
+    const clampX = (x) => Math.max(marginLeft + halfW + 6, Math.min(svgW - marginRight - halfW - 6, x));
 
-    while (hasCollision && safetyLimit < 12) {
-      hasCollision = false;
-      safetyLimit++;
-      for (const prev of placedLabels) {
-        const dx = Math.abs(prev.x - xLabel);
-        const dy = Math.abs(prev.y - yLabel);
-        if (dx < 75 && dy < 14) {
-          hasCollision = true;
-          collisionCount++;
-          if (yLabel - 15 >= marginTop + 12) {
-            yLabel -= 15;
-          } else {
-            const xShift = (collisionCount % 2 === 1) ? -42 : 42;
-            xLabel = Math.max(marginLeft + 40, Math.min(marginLeft + plotW - 40, xc + xShift));
-            yLabel = Math.max(marginTop + 12, yPeak - 8 - ((collisionCount % 4) * 14));
-          }
+    // Candidate positions: above peak, higher tiers, staggered offsets left/right, and below peak
+    const candidateOffsets = [
+      { dx: 0, dy: -10 },
+      { dx: 0, dy: -28 },
+      { dx: 0, dy: -46 },
+      { dx: -70, dy: -12 },
+      { dx: 70, dy: -12 },
+      { dx: -70, dy: -30 },
+      { dx: 70, dy: -30 },
+      { dx: -100, dy: -14 },
+      { dx: 100, dy: -14 },
+      { dx: 0, dy: 22 },
+      { dx: -70, dy: 22 },
+      { dx: 70, dy: 22 },
+      { dx: 0, dy: -64 },
+      { dx: -120, dy: -28 },
+      { dx: 120, dy: -28 },
+      { dx: 0, dy: 40 }
+    ];
+
+    let chosenX = xc;
+    let chosenY = yPeak - 10;
+    let foundSlot = false;
+
+    for (const offset of candidateOffsets) {
+      const candX = clampX(xc + offset.dx);
+      const candY = yPeak + offset.dy;
+      const box = labelBox(candX, candY, labelText);
+
+      // Must remain within chart vertical bounds
+      if (box.top < marginTop + 8 || box.bottom > yBase - 6) continue;
+
+      let hit = false;
+      for (const obs of obstacles) {
+        if (obs.peakFor === n) continue; // ignore network's own peak
+        if (collides(box, obs)) {
+          hit = true;
           break;
         }
       }
+      if (!hit) {
+        chosenX = candX;
+        chosenY = candY;
+        foundSlot = true;
+        break;
+      }
     }
-    placedLabels.push({ x: xLabel, y: yLabel });
 
-    // Staggered leader line (callout) connecting displaced text to curve peak
+    if (!foundSlot) {
+      chosenX = clampX(xc);
+      chosenY = Math.max(marginTop + 14, yPeak - 10 - ((obstacles.length % 5) * 16));
+    }
+
+    // Register chosen label box as an obstacle for subsequent networks
+    obstacles.push(labelBox(chosenX, chosenY, labelText));
+
+    // Staggered leader line connecting displaced label to curve peak
     let leaderLine = "";
-    if (collisionCount > 0 || Math.abs(xLabel - xc) > 5) {
-      leaderLine = `<line x1="${xLabel.toFixed(1)}" y1="${(yLabel + 3).toFixed(1)}" x2="${xc.toFixed(1)}" y2="${yPeak.toFixed(1)}" stroke-dasharray="2 2" stroke-width="1.2" opacity="0.75"/>`;
+    if (Math.hypot(chosenX - xc, chosenY - yPeak) > 16) {
+      const lineY = chosenY < yPeak ? chosenY + 3 : chosenY - 13;
+      leaderLine = `<line class="sp-leader" x1="${chosenX.toFixed(1)}" y1="${lineY.toFixed(1)}" x2="${xc.toFixed(1)}" y2="${yPeak.toFixed(1)}" stroke-dasharray="2 2" stroke-width="1.2" opacity="0.65"/>`;
     }
 
     svgContent += `
@@ -271,13 +353,15 @@ function renderRfSpectrum(networks) {
         <path d="${pathD}" stroke-width="${strokeWidth}" class="curve-path" data-spec="${tooltipData}"/>
         ${leaderLine}
         <circle cx="${xc.toFixed(1)}" cy="${yPeak.toFixed(1)}" r="${n.is_rogue || n.connected ? '4' : '2.5'}"/>
-        <text x="${xLabel.toFixed(1)}" y="${yLabel.toFixed(1)}" font-size="10" font-weight="${n.is_rogue || n.connected ? '700' : '500'}" text-anchor="middle">
-          ${esc(n.ssid ? n.ssid.slice(0, 14) : 'AP')} (${rssi})
+        <text x="${chosenX.toFixed(1)}" y="${chosenY.toFixed(1)}" font-size="12" font-weight="${n.is_rogue || n.connected ? '700' : '500'}" text-anchor="middle">
+          ${esc(labelText)}
         </text>
       </g>
     `;
   });
 
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-labelledby", "sp-chart-title sp-chart-desc");
   svg.innerHTML = svgContent;
 
   // Tooltip interaction
@@ -288,14 +372,14 @@ function renderRfSpectrum(networks) {
         try {
           const d = JSON.parse(path.getAttribute("data-spec"));
           tooltip.innerHTML = `
-            <div style="font-weight:600; margin-bottom:2px">${esc(d.ssid)}</div>
-            <div style="font-family:var(--mono); font-size:0.74rem; opacity:.8">${esc(d.bssid)}</div>
-            <div style="margin-top:4px"><strong>Channel:</strong> ${esc(d.channel)} (${esc(d.freq)})</div>
+            <div class="tt-title">${esc(d.ssid)}</div>
+            <div class="tt-bssid">${esc(d.bssid)}</div>
+            <div class="tt-gap"><strong>Channel:</strong> ${esc(d.channel)} (${esc(d.freq)})</div>
             <div><strong>Signal:</strong> ${esc(d.rssi)}</div>
             <div><strong>Security:</strong> ${esc(d.sec)}</div>
-            <div style="margin-top:4px; font-weight:600">${esc(d.status)}</div>
+            <div class="tt-status">${esc(d.status)}</div>
           `;
-          tooltip.style.display = "block";
+          tooltip.hidden = false;
         } catch (err) {}
       });
 
@@ -304,12 +388,12 @@ function renderRfSpectrum(networks) {
         const rect = wrap.getBoundingClientRect();
         const x = e.clientX - rect.left + 15;
         const y = e.clientY - rect.top - 10;
-        tooltip.style.left = `${Math.min(x, rect.width - 200)}px`;
-        tooltip.style.top = `${Math.max(10, y)}px`;
+        tooltip.style.setProperty("--x", `${Math.min(x, rect.width - 200)}px`);
+        tooltip.style.setProperty("--y", `${Math.max(10, y)}px`);
       });
 
       path.addEventListener("mouseleave", () => {
-        tooltip.style.display = "none";
+        tooltip.hidden = true;
       });
     });
   }

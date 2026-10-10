@@ -11,8 +11,8 @@
     "radio_type": "802.11n",
     "authentication": "WPA2-Personal",
     "cipher": "CCMP",
-    "signal_percent": 84,
-    "rssi_dbm": -30,
+    "signal_percent": 90,
+    "rssi_dbm": -55,
     "rx_rate_mbps": 300.0,
     "tx_rate_mbps": 300.0,
     "dns_servers": [
@@ -134,7 +134,7 @@
     "low": 0,
     "info": 2
   },
-  "summary": "Connected to 'CipherGuard-HQ-Secure' on 2.4 GHz (Channel 10). Security: WPA2-Personal / CCMP with 84% signal. Score: 85/100 (Grade B).",
+  "summary": "Connected to 'CipherGuard-HQ-Secure' on 2.4 GHz (Channel 10). Security: WPA2-Personal / CCMP with 90% signal. Score: 85/100 (Grade B).",
   "dns_posture": {
     "dns_servers": [
       "1.1.1.1",

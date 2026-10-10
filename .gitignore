@@ -38,3 +38,6 @@ docker/captures/*.pcap
 
 # docs/ is the output of `cipherguard export-demo`. It is tracked so GitHub
 # Pages can also deploy from the branch; the Pages workflow rebuilds it.
+
+# Archify working folders (diagram candidates and receipts)
+.archify/

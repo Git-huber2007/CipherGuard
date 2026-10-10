@@ -36,7 +36,7 @@ function showToast(message, type = "info", duration = 4000){
   item.className = `toast-item ${type}`;
   const icon = type === "error" ? "" : type === "success" ? "✔" : "ℹ";
   item.innerHTML = `
-    <div style="display:flex;align-items:center;gap:8px">
+    <div class="toast-msg">
       <span>${icon}</span>
       <span>${esc(message)}</span>
     </div>
@@ -44,20 +44,17 @@ function showToast(message, type = "info", duration = 4000){
   `;
   const closeBtn = item.querySelector(".toast-close");
   if (closeBtn) {
-    closeBtn.onclick = () => {
-      item.style.opacity = "0";
-      item.style.transform = "translateY(12px)";
-      setTimeout(() => item.remove(), 250);
-    };
+    closeBtn.onclick = () => dismissToast(item);
   }
   container.appendChild(item);
   setTimeout(() => {
-    if (item.parentElement) {
-      item.style.opacity = "0";
-      item.style.transform = "translateY(12px)";
-      setTimeout(() => item.remove(), 250);
-    }
+    if (item.parentElement) dismissToast(item);
   }, duration);
+}
+
+function dismissToast(item){
+  item.classList.add("is-leaving");
+  setTimeout(() => item.remove(), 250);
 }
 
 function setButtonLoading(btn, isLoading, loadingText = "Processing..."){
@@ -90,7 +87,7 @@ function showFieldError(inputEl, message){
     err.setAttribute("role", "alert");
     inputEl.parentElement.appendChild(err);
   }
-  err.innerHTML = `${esc(message)}`;
+  err.textContent = message;
 }
 
 function clearFieldError(inputEl){
@@ -144,7 +141,7 @@ async function testBackendConnection(targetUrl){
     }
     return { ok: false, error: `HTTP ${res.status}: ${res.statusText}`, latency };
   } catch (err) {
-    return { ok: false, error: err.message || "Connection unreachable / blocked", latency: Math.round(performance.now() - start) };
+    return { ok: false, error: err.message || "Could not connect", latency: Math.round(performance.now() - start) };
   }
 }
 
@@ -177,7 +174,7 @@ function updateBackendModalContent(isLive, details = {}){
   } else {
     if (card) { card.className = "modal-status-card offline"; }
     if (badge) badge.textContent = "No server connected";
-    if (desc) desc.textContent = "This page is showing analyses that were computed when it was built. To assess your own captures or scan Wi-Fi, start the server and connect to it below.";
+    if (desc) desc.textContent = "This page is showing assessments that were computed when it was built. To assess your own captures or scan Wi-Fi, start the server and connect to it below.";
   }
 }
 
@@ -185,6 +182,7 @@ function openBackendModal(){
   const modal = $("backend-modal");
   if (!modal) return;
   modal.hidden = false;
+  ModalFocus.trap(modal);
   const input = $("backend-url-input");
   if (input) input.value = storedBackendUrl();
   const cmd = $("backend-start-cmd");
@@ -233,7 +231,7 @@ const Dialogs = (() => {
 
 function closeBackendModal(){
   const modal = $("backend-modal");
-  if (modal) modal.hidden = true;
+  if (modal){ modal.hidden = true; ModalFocus.release(modal); }
 }
 
 function openShortcutsModal(){
@@ -241,7 +239,7 @@ function openShortcutsModal(){
   if (!modal) return;
   modal.hidden = false;
   modal.removeAttribute("hidden");
-  modal.style.setProperty("display", "flex", "important");
+  ModalFocus.trap(modal);
 }
 
 function closeShortcutsModal(){
@@ -249,7 +247,7 @@ function closeShortcutsModal(){
   if (!modal) return;
   modal.hidden = true;
   modal.setAttribute("hidden", "");
-  modal.style.setProperty("display", "none", "important");
+  ModalFocus.release(modal);
 }
 
 async function handleSaveBackendUrl(){
@@ -344,17 +342,17 @@ async function apiError(res){
  * detail is only shown where it is written for the user (upload rules). */
 function explainFailure(err){
   if (typeof staticMode !== "undefined" && staticMode.active){
-    return "The saved analysis for this capture could not be loaded.";
+    return "The saved assessment for this capture could not be loaded.";
   }
   if (!err || err.status === undefined){
-    return "The analysis server is not responding.";
+    return "The server is not responding.";
   }
   if (err.status === 401 || err.status === 403) return "The server needs a valid access token.";
   if (err.status === 404) return "That capture is no longer available on the server.";
-  if (err.status === 413) return "That file is larger than the server accepts.";
+  if (err.status === 413) return "That capture is larger than the server accepts.";
   if (err.status === 422) return err.detail || "The server could not read that capture.";
   if (err.status === 429) return "Too many requests. Wait a minute, then try again.";
-  if (err.status >= 500) return "The server could not complete the analysis.";
+  if (err.status >= 500) return "The server could not complete the assessment.";
   return "The request could not be completed.";
 }
 

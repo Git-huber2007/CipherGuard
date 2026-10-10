@@ -3,12 +3,16 @@
 
 /* ------------------------------------------------------------- Wi-Fi logic */
 
+/* ok / med / crit for a signal percentage; the stylesheet has a fill-* and a tone-* class for each */
+function signalTone(pct, good = 60, fair = 30){
+  return pct >= good ? "ok" : pct >= fair ? "med" : "crit";
+}
+
 function switchTab(tab){
   const wifiTab = $("tab-wifi");
   const ipsecTab = $("tab-ipsec");
   const wifiView = $("view-wifi");
   const ipsecView = $("view-ipsec");
-  const wifiControls = $("wifi-controls");
   const ipsecControls = $("ipsec-controls");
   const mobileCtaLabel = $("mobile-cta-label");
 
@@ -18,13 +22,13 @@ function switchTab(tab){
     wifiTab.setAttribute("aria-selected", "true");
     ipsecTab.classList.remove("active");
     ipsecTab.setAttribute("aria-selected", "false");
+    wifiTab.tabIndex = 0; ipsecTab.tabIndex = -1;   // roving tabindex: one Tab stop, arrows between
 
     wifiView.classList.add("active");
     ipsecView.classList.remove("active");
 
-    if (wifiControls) wifiControls.style.display = "flex";
-    if (ipsecControls) ipsecControls.style.display = "none";
-    if (mobileCtaLabel) mobileCtaLabel.textContent = "Scan Wi-Fi";
+    if (ipsecControls) ipsecControls.hidden = true;
+    if (mobileCtaLabel) mobileCtaLabel.textContent = "Scan now";
   } else {
     document.title = state.ipsecMode === "diff"
       ? "Compare captures · CipherGuard"
@@ -33,12 +37,12 @@ function switchTab(tab){
     ipsecTab.setAttribute("aria-selected", "true");
     wifiTab.classList.remove("active");
     wifiTab.setAttribute("aria-selected", "false");
+    ipsecTab.tabIndex = 0; wifiTab.tabIndex = -1;
 
     ipsecView.classList.add("active");
     wifiView.classList.remove("active");
 
-    if (ipsecControls) ipsecControls.style.display = "flex";
-    if (wifiControls) wifiControls.style.display = "none";
+    if (ipsecControls) ipsecControls.hidden = false;
     if (mobileCtaLabel) mobileCtaLabel.textContent = state.ipsecMode === "diff" ? "Compare" : "Assess capture";
   }
 }
@@ -55,17 +59,15 @@ function updateBackendStatusPill(isLive, details = {}) {
     pill.title = "Connected to a CipherGuard server. Select for details.";
   } else {
     pill.className = "backend-status-pill offline";
-    label.textContent = "Saved analyses";
-    pill.title = "Showing analyses saved with this page. Select to connect a CipherGuard server.";
+    label.textContent = "Saved assessments";
+    pill.title = "Showing assessments saved with this page. Select to connect a CipherGuard server.";
   }
   updateBackendModalContent(isLive, details);
 }
 
 async function loadWifiAssessment(forceScan = false, silent = false){
-  const refreshBtn = $("wifi-refresh-btn");
   const scanBtn = $("wifi-scan-now");
   if (!silent) {
-    if (refreshBtn) setButtonLoading(refreshBtn, true, "Scanning RF Spectrum...");
     if (scanBtn) setButtonLoading(scanBtn, true, "Scanning...");
   }
 
@@ -115,11 +117,9 @@ async function loadWifiAssessment(forceScan = false, silent = false){
     state.wifiIsLive = false;
     $("wifi-last-scan").textContent = "Wi-Fi scan unavailable";
     const wf = $("wifi-findings");
-    if (wf) wf.innerHTML = `<div class="empty">No Wi-Fi scan is available: the `
-      + `server did not return one, and this build has no saved example.</div>`;
+    if (wf) wf.innerHTML = UIState.box("The Wi-Fi scan did not finish on this adapter. Scan again.", "Scan again", "wifi-scan", true);
   } finally {
     if (!silent) {
-      if (refreshBtn) setButtonLoading(refreshBtn, false);
       if (scanBtn) setButtonLoading(scanBtn, false);
     }
   }
@@ -138,7 +138,7 @@ function renderWifiDashboard(data){
   const banner = $("wifi-evil-twin-banner");
   if (banner) {
     if (rogueList.length > 0) {
-      banner.style.display = "flex";
+      banner.hidden = false;
       const primaryRogue = rogueList[0];
       const descEl = $("evil-twin-desc");
       if (descEl) {
@@ -154,14 +154,14 @@ function renderWifiDashboard(data){
         `;
       }
     } else {
-      banner.style.display = "none";
+      banner.hidden = true;
     }
   }
 
 
   // 1. Hero Card
   if (iface && iface.state && iface.state.toLowerCase() === "connected"){
-    $("wifi-ssid-title").textContent = iface.ssid || "Connected (Hidden SSID)";
+    $("wifi-ssid-title").textContent = iface.ssid || "Connected (hidden network)";
     $("wifi-bssid").textContent = iface.bssid || "—";
     $("wifi-band").textContent = iface.band || "—";
     $("wifi-channel").textContent = iface.channel ? `${iface.channel}` : "—";
@@ -170,9 +170,9 @@ function renderWifiDashboard(data){
     const badge = $("wifi-state-badge");
     badge.className = "wifi-status-badge";
     const ifaceDesc = iface.description ? ` (${iface.description})` : "";
-    $("wifi-state-text").textContent = `CONNECTED · ${iface.name || "Wi-Fi"}${ifaceDesc}`;
+    $("wifi-state-text").textContent = `Connected · ${iface.name || "Wi-Fi"}${ifaceDesc}`;
   } else {
-    $("wifi-ssid-title").textContent = "No Wi-Fi Connected";
+    $("wifi-ssid-title").textContent = "Not connected to Wi-Fi";
     $("wifi-bssid").textContent = "—";
     $("wifi-band").textContent = "—";
     $("wifi-channel").textContent = "—";
@@ -180,7 +180,7 @@ function renderWifiDashboard(data){
 
     const badge = $("wifi-state-badge");
     badge.className = "wifi-status-badge disconnected";
-    $("wifi-state-text").textContent = "DISCONNECTED";
+    $("wifi-state-text").textContent = "Disconnected";
   }
 
   // 2. Score & Dial
@@ -192,15 +192,19 @@ function renderWifiDashboard(data){
     arc.setAttribute("stroke", colour);
     arc.setAttribute("stroke-dasharray", `${(score / 100 * circ).toFixed(1)} ${circ.toFixed(1)}`);
   }
-  $("wifi-dialnum").textContent = score;
-  $("wifi-grade").textContent = `Grade ${data.grade || "—"}`;
-  $("wifi-gradesub").textContent = data.summary || "Wireless posture assessed.";
+  if ($("wifi-dialnum")) $("wifi-dialnum").textContent = score;
+  const wifiGradeEl = $("wifi-grade");
+  if (wifiGradeEl) {
+    wifiGradeEl.textContent = data.grade || "—";
+    wifiGradeEl.dataset.grade = data.grade || "";
+    wifiGradeEl.className = "score-num " + (data.grade || "");
+  }
+  const fullSummary = data.summary || "Wireless posture assessed.";
+  const oneSummary = fullSummary.split(/(?<=\.)\s+/)[0] || fullSummary;
+  $("wifi-gradesub").textContent = oneSummary;
 
   const counts = data.counts || {};
-  $("wifi-sevrow").innerHTML = ["critical", "high", "medium", "low", "info"]
-    .filter(k => counts[k])
-    .map(k => `<span class="sev-chip ${k}">${counts[k]} ${esc(k)}</span>`)
-    .join("") || `<span class="sev-chip info">clean</span>`;
+  $("wifi-sevrow").innerHTML = renderSeverityBar(counts);
 
   // 3. Stats row
   const sig = iface ? `${iface.signal_percent}%` : "—";
@@ -232,15 +236,17 @@ function renderWifiDashboard(data){
   // 4. Health List
   $("wifi-auth-cipher-val").textContent = iface ? `${iface.authentication} (${iface.cipher})` : "—";
   $("wifi-signal-pct").textContent = iface ? `${iface.signal_percent}% (${iface.rssi_dbm} dBm)` : "—";
-  if ($("wifi-signal-bar") && iface){
-    $("wifi-signal-bar").style.width = `${Math.max(5, iface.signal_percent)}%`;
-    $("wifi-signal-bar").style.background = iface.signal_percent >= 60 ? "var(--ok)" : iface.signal_percent >= 30 ? "var(--med)" : "var(--crit)";
+  const signalBar = $("wifi-signal-bar");
+  if (signalBar && iface){
+    signalBar.style.setProperty("--w", `${Math.max(5, iface.signal_percent)}%`);
+    signalBar.classList.remove("fill-ok", "fill-med", "fill-crit");
+    signalBar.classList.add(`fill-${signalTone(iface.signal_percent)}`);
   }
   $("wifi-rates-val").textContent = (iface && iface.rx_rate_mbps)
     ? `RX ${iface.rx_rate_mbps} Mbps / TX ${iface.tx_rate_mbps} Mbps` : "Auto-negotiated";
 
   const dns = (iface && iface.dns_servers && iface.dns_servers.length)
-    ? iface.dns_servers.join(", ") : "Default Gateway DNS";
+    ? iface.dns_servers.join(", ") : "Default gateway DNS";
   $("wifi-dns-val").textContent = dns;
   $("wifi-gateway-val").textContent = (iface && iface.gateway_ip) ? iface.gateway_ip : "—";
 
@@ -308,13 +314,13 @@ function renderVpnOverlay(vpn){
     routeSub.textContent = vpn.is_default_route ? "Default route (0.0.0.0/0) routed via tunnel" : "Default route remains on local Wi-Fi";
 
     if (vpn.dns_leak_detected){
-      leakVal.innerHTML = `<span style="color:var(--crit);font-weight:700">DNS Leak Detected</span>`;
+      leakVal.innerHTML = `<span class="leak-status tone-crit">DNS leak detected</span>`;
       leakSub.textContent = `Leaking to ${vpn.dns_leak_details}`;
     } else if (vpn.dns_servers && vpn.dns_servers.length){
-      leakVal.innerHTML = `<span style="color:var(--ok);font-weight:700">Protected</span>`;
+      leakVal.innerHTML = `<span class="leak-status tone-ok">Protected</span>`;
       leakSub.textContent = `Tunnel DNS: ${vpn.dns_servers.join(", ")}`;
     } else {
-      leakVal.innerHTML = `<span style="color:var(--ok);font-weight:700">Tunnel Isolated</span>`;
+      leakVal.innerHTML = `<span class="leak-status tone-ok">Tunnel isolated</span>`;
       leakSub.textContent = "No leak detected";
     }
   } else {
@@ -355,7 +361,7 @@ function renderVpnOverlay(vpn){
 function renderWifiFindings(findings){
   const el = $("wifi-findings");
   if (!findings.length){
-    el.innerHTML = `<div class="empty">No security findings. Current wireless posture meets standard baselines.</div>`;
+    el.innerHTML = UIState.box("No scan yet. Scan to check the networks in range.", "Scan now", "wifi-scan");
     return;
   }
   $("wifi-findsub").textContent = `${findings.length} findings identified on the local wireless segment.`;
@@ -363,7 +369,7 @@ function renderWifiFindings(findings){
   el.innerHTML = findings.map((f, i) => `
     <div class="finding" data-i="${i}">
       <div class="fhead" role="button" tabindex="0" aria-expanded="false">
-        <span class="sev-mark ${esc(f.severity)}">${esc(f.severity)}</span>
+        <span class="sev-mark ${esc(f.severity)}">${esc(cap(f.severity))}</span>
         <span class="fmain">
           <span class="ftitle">${esc(f.title)}</span>
           <div class="fsub">${esc(f.rule_id)} &middot; ${esc(f.subject)}</div>
@@ -381,7 +387,7 @@ function renderWifiFindings(findings){
     const toggle = () => {
       const open = h.parentElement.classList.toggle("open");
       h.setAttribute("aria-expanded", open ? "true" : "false");
-      h.querySelector(".chev").innerHTML = open ? "&#9652;" : "&#9662;";
+      h.querySelector(".chev").textContent = open ? "\u25B4" : "\u25BE";
     };
     h.addEventListener("click", toggle);
     h.addEventListener("keydown", e => {
@@ -437,7 +443,7 @@ function renderWifiNetworksTable(networks){
   state.currentWifiNetworks = networks;
 
   if (!networks.length){
-    tbody.innerHTML = `<tr><td colspan="6" class="empty">No other networks detected in range.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6">${UIState.box("No networks in range. Scan again to recheck.", "Scan again", "wifi-scan")}</td></tr>`;
     return;
   }
 
@@ -446,12 +452,12 @@ function renderWifiNetworksTable(networks){
   if (state.wifiGroupMode) {
     if (theadRow) {
       theadRow.innerHTML = `
-        <th scope="col">SSID / Network</th>
-        <th scope="col">Access Points (BSSID)</th>
-        <th scope="col">Security / Auth</th>
-        <th scope="col">Band &amp; Channels</th>
+        <th scope="col">Network (SSID)</th>
+        <th scope="col">Access points (BSSID)</th>
+        <th scope="col">Security</th>
+        <th scope="col">Band and channels</th>
         <th scope="col">Signal</th>
-        <th scope="col">Security Grade</th>
+        <th scope="col">Grade</th>
       `;
     }
 
@@ -489,8 +495,8 @@ function renderWifiNetworksTable(networks){
 
       let cls = isConnected ? "active-net" : "";
       if (hasRogue) cls += (cls ? " " : "") + "rogue-ap-row";
-      const activeLabel = isConnected ? ` <span class="sev-chip info" style="font-size:0.7rem;padding:1px 5px">CONNECTED</span>` : "";
-      const rogueLabel = hasRogue ? ` <span class="rogue-badge">ROGUE CLONE AP</span>` : "";
+      const activeLabel = isConnected ? ` <span class="sev-mark info">Connected</span>` : "";
+      const rogueLabel = hasRogue ? ` <span class="rogue-badge">Possible evil twin</span>` : "";
       const meshLabel = apCount > 1 
         ? `<span class="mesh-count-badge">${apCount} APs (Mesh)</span>`
         : "";
@@ -501,7 +507,7 @@ function renderWifiNetworksTable(networks){
         const subtoggleBtn = apCount > 1 
           ? ` <button type="button" class="btn-ap-subtoggle" data-group="${gIdx}" aria-expanded="false"><span class="subtoggle-icon">▼</span> View all ${apCount} mesh APs</button>` 
           : "";
-        apCell = `<div class="mesh-cell-summary"><code>${esc(connectedNet.bssid)}</code> <span class="active-ap-pill">● Active AP</span>${subtoggleBtn}</div>`;
+        apCell = `<div class="mesh-cell-summary"><code>${esc(connectedNet.bssid)}</code> <span class="domain-tag obs">Active AP</span>${subtoggleBtn}</div>`;
       } else if (apCount > 1) {
         apCell = `<div class="mesh-cell-summary"><code>${esc(bestNet.bssid)}</code> <span class="best-signal-pill">(Best signal)</span> <button type="button" class="btn-ap-subtoggle" data-group="${gIdx}" aria-expanded="false"><span class="subtoggle-icon">▼</span> View all ${apCount} mesh APs</button></div>`;
       } else {
@@ -514,28 +520,28 @@ function renderWifiNetworksTable(networks){
         <td>${esc(bestNet.authentication)} / ${esc(bestNet.encryption)}</td>
         <td>${esc(bandSummary)} &middot; ${esc(chanSummary)}</td>
         <td>
-          <div style="display:flex;align-items:center;gap:6px">
-            <span>${bestSignal}%</span>
-            <div class="signal-bar-track" style="width:50px;height:5px">
-              <div class="signal-bar-fill" style="width:${bestSignal}%;background:${bestSignal>60?'var(--ok)':'var(--med)'}"></div>
+          <div class="meter signal-meter">
+            <div class="meter-track">
+              <div class="meter-fill fill-${signalTone(bestSignal)}" data-w="${bestSignal}"></div>
             </div>
+            <span class="meter-val">${bestSignal}%</span>
           </div>
         </td>
-        <td><span class="grade-badge ${badgeCls}">Grade ${esc(hasRogue ? 'F' : bestNet.security_grade)}</span></td>
+        <td><span class="grade-badge ${esc(badgeCls)}">Grade ${esc(hasRogue ? 'F' : bestNet.security_grade)}</span></td>
       </tr>`;
 
       // If multi-AP, render collapsible detail subrow
       if (apCount > 1) {
         const sortedItems = [...items].sort((a,b) => (b.connected ? 1 : 0) - (a.connected ? 1 : 0) || (b.is_rogue ? 1 : 0) - (a.is_rogue ? 1 : 0) || b.signal_percent - a.signal_percent);
-        html += `<tr id="wifi-subgroup-${gIdx}" class="mesh-subgroup-row" style="display:none">
+        html += `<tr id="wifi-subgroup-${gIdx}" class="mesh-subgroup-row" hidden>
           <td colspan="6" class="mesh-subgroup-cell">
             <div class="mesh-subgroup-header">
               <div class="mesh-subgroup-title">
 
-                <span>Physical Access Points for ESSID <strong>"${esc(ssid)}"</strong></span>
-                <span class="mesh-count-tag">${apCount} APs in Roaming Cluster</span>
+                <span>Access points for <strong>"${esc(ssid)}"</strong></span>
+                <span class="mesh-count-tag">${apCount} access points in this network</span>
               </div>
-              <div class="mesh-subgroup-meta">802.11k/v Fast BSS Transition</div>
+              <div class="mesh-subgroup-meta">802.11k/v fast BSS transition</div>
             </div>
             <div class="mesh-ap-grid">
               ${sortedItems.map(ap => {
@@ -543,14 +549,14 @@ function renderWifiNetworksTable(networks){
                 const isRogue = ap.is_rogue;
                 let cardCls = isApConn ? "mesh-ap-card is-connected" : "mesh-ap-card";
                 if (isRogue) cardCls += " rogue-ap-row";
-                const sigColor = ap.signal_percent >= 70 ? "var(--ok)" : ap.signal_percent >= 45 ? "var(--med)" : "var(--crit)";
+                const tone = signalTone(ap.signal_percent, 70, 45);
                 const badgeText = isApConn 
-                  ? '<span class="mesh-ap-badge connected">● CONNECTED AP</span>' 
+                  ? '<span class="domain-tag obs">Connected access point</span>' 
                   : isRogue 
-                    ? '<span class="mesh-ap-badge" style="background:#dc2626;color:#fff;font-weight:700">ROGUE CLONE AP</span>'
-                    : '<span class="mesh-ap-badge neighbor">Neighbor AP</span>';
+                    ? '<span class="mesh-ap-badge rogue">Possible evil twin</span>'
+                    : '<span class="mesh-ap-badge neighbor">Nearby access point</span>';
                 const warningNote = isRogue
-                  ? `<div style="color:#b91c1c;font-size:0.72rem;font-weight:600;margin-top:4px;grid-column:1/-1">Downgraded Security: ${esc(ap.authentication)} / ${esc(ap.encryption)} &middot; Potential MitM Honeypot</div>`
+                  ? `<div class="mesh-ap-warning">Weaker security: ${esc(ap.authentication)} / ${esc(ap.encryption)} &middot; possible evil twin</div>`
                   : "";
                 return `<div class="${cardCls}">
                   <div class="mesh-ap-top">
@@ -561,8 +567,13 @@ function renderWifiNetworksTable(networks){
                     <div class="mesh-ap-spec">
                       <span>${esc(ap.band)} &middot; Ch ${esc(ap.channel)}</span>
                     </div>
-                    <div class="mesh-ap-signal" style="color:${sigColor}">
-                      ${ap.signal_percent}% (${ap.rssi_dbm} dBm)
+                    <div class="mesh-ap-signal">
+                      <div class="meter signal-meter">
+                        <div class="meter-track">
+                          <div class="meter-fill fill-${tone}" data-w="${esc(ap.signal_percent)}"></div>
+                        </div>
+                        <span class="meter-val tone-${tone}">${esc(ap.signal_percent)}% (${esc(ap.rssi_dbm)} dBm)</span>
+                      </div>
                     </div>
                     ${warningNote}
                   </div>
@@ -583,12 +594,12 @@ function renderWifiNetworksTable(networks){
         const gIdx = btn.getAttribute("data-group");
         const subRow = $(`wifi-subgroup-${gIdx}`);
         if (!subRow) return;
-        const isHidden = subRow.style.display === "none";
-        subRow.style.display = isHidden ? "table-row" : "none";
+        const isHidden = subRow.hidden;
+        subRow.hidden = !isHidden;
         btn.setAttribute("aria-expanded", isHidden ? "true" : "false");
         const count = subRow.querySelectorAll(".mesh-ap-card").length;
         if (isHidden) {
-          btn.innerHTML = `<span class="subtoggle-icon">▲</span> Collapse AP list`;
+          btn.innerHTML = `<span class="subtoggle-icon">▲</span> Hide access points`;
           btn.classList.add("expanded");
         } else {
           btn.innerHTML = `<span class="subtoggle-icon">▼</span> View all ${count} mesh APs`;
@@ -603,18 +614,18 @@ function renderWifiNetworksTable(networks){
       theadRow.innerHTML = `
         <th scope="col">SSID</th>
         <th scope="col">BSSID (MAC)</th>
-        <th scope="col">Security / Auth</th>
-        <th scope="col">Band / Channel</th>
+        <th scope="col">Security</th>
+        <th scope="col">Band and channel</th>
         <th scope="col">Signal</th>
-        <th scope="col">Security Grade</th>
+        <th scope="col">Grade</th>
       `;
     }
 
     tbody.innerHTML = networks.map(n => {
       let cls = n.connected ? "active-net" : "";
       if (n.is_rogue) cls += (cls ? " " : "") + "rogue-ap-row";
-      const activeLabel = n.connected ? ` <span class="sev-chip info" style="font-size:0.7rem;padding:1px 5px">CONNECTED</span>` : "";
-      const rogueLabel = n.is_rogue ? ` <span class="rogue-badge">ROGUE CLONE AP</span>` : "";
+      const activeLabel = n.connected ? ` <span class="sev-mark info">Connected</span>` : "";
+      const rogueLabel = n.is_rogue ? ` <span class="rogue-badge">Possible evil twin</span>` : "";
       const badgeCls = n.is_rogue ? "F" : (n.security_grade ? n.security_grade.replace("+", "") : "B");
       return `<tr class="${cls}">
         <td><b>${esc(n.ssid)}</b>${activeLabel}${rogueLabel}</td>
@@ -622,14 +633,14 @@ function renderWifiNetworksTable(networks){
         <td>${esc(n.authentication)} / ${esc(n.encryption)}</td>
         <td>${esc(n.band)} &middot; Ch ${esc(n.channel)}</td>
         <td>
-          <div style="display:flex;align-items:center;gap:6px">
-            <span>${n.signal_percent}%</span>
-            <div class="signal-bar-track" style="width:50px;height:5px">
-              <div class="signal-bar-fill" style="width:${n.signal_percent}%;background:${n.signal_percent>60?'var(--ok)':'var(--med)'}"></div>
+          <div class="meter signal-meter">
+            <div class="meter-track">
+              <div class="meter-fill fill-${signalTone(n.signal_percent)}" data-w="${esc(n.signal_percent)}"></div>
             </div>
+            <span class="meter-val">${esc(n.signal_percent)}%</span>
           </div>
         </td>
-        <td><span class="grade-badge ${badgeCls}">Grade ${esc(n.is_rogue ? 'F' : (n.security_grade || 'B'))}</span></td>
+        <td><span class="grade-badge ${esc(badgeCls)}">Grade ${esc(n.is_rogue ? 'F' : (n.security_grade || 'B'))}</span></td>
       </tr>`;
     }).join("");
   }

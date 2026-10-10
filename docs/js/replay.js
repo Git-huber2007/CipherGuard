@@ -43,7 +43,8 @@ const PostureReplay = (() => {
   }
 
   function geometry(obs, width){
-    const m = { l: 44, r: 20, t: 14, b: 34 };
+    const isNarrow = width < 420;
+    const m = isNarrow ? { l: 38, r: 14, t: 18, b: 34 } : { l: 44, r: 20, t: 18, b: 34 };
     const pw = Math.max(width - m.l - m.r, 40), ph = CHART_H - m.t - m.b;
     const top = Math.max(128, ...obs.map(o => Math.max(o.classical_bits, referenceBits(o) || 0)));
     const yMax = Math.ceil(top / 64) * 64;
@@ -83,15 +84,30 @@ const PostureReplay = (() => {
       return r == null ? null : [x(i), y(r)];
     }));
 
+    // Downgrade labels beside the marker with collision avoidance
+    const placedDownLabels = [];
     const marks = obs.map((o, i) => {
       const cx = x(i), cy = y(o.classical_bits);
       if (o.verdict === "downgrade"){
-        // under the mark: the line runs off to the right at this level, and
-        // below a downgrade there is always room above zero
+        const delta = signedBits(o.delta_bits);
+        // Position beside the marker: to the right if space allows, otherwise to the left
+        const hasRightRoom = cx + 85 <= right;
+        let lx = hasRightRoom ? cx + 10 : cx - 10;
+        let ly = cy + 4;
+        let anchor = hasRightRoom ? "start" : "end";
+
+        // Avoid collision with adjacent downgrade labels
+        for (const prev of placedDownLabels) {
+          if (Math.abs(prev.x - lx) < 75 && Math.abs(prev.y - ly) < 16) {
+            ly = prev.y + 16 > bottom - 6 ? prev.y - 16 : prev.y + 16;
+          }
+        }
+        placedDownLabels.push({ x: lx, y: ly });
+
         return `<line class="rp-drop" x1="${cx}" x2="${cx}" y1="${y(o.baseline_bits)}" y2="${cy}"/>`
           + `<path class="rp-mark rp-down" d="M${cx - 6},${cy - 5}H${cx + 6}L${cx},${cy + 6}Z"/>`
-          + (label ? `<text class="rp-dlabel" x="${cx}" y="${cy + 21}" text-anchor="middle">`
-                     + `${signedBits(o.delta_bits)}</text>` : "");
+          + (label ? `<text class="rp-dlabel" x="${lx}" y="${ly}" text-anchor="${anchor}">`
+                     + `Downgrade ${delta}</text>` : "");
       }
       const cls = o.verdict === "unconfirmed" ? "rp-mark rp-unconf" : "rp-mark";
       return `<circle class="${cls}" cx="${cx}" cy="${cy}" r="4.5"/>`;
@@ -104,12 +120,15 @@ const PostureReplay = (() => {
       + `, ${downs.length} downgrade${downs.length === 1 ? "" : "s"}`;
 
     return `<svg class="rp-svg" width="${width}" height="${CHART_H}" viewBox="0 0 ${width} ${CHART_H}"`
-      + ` role="img" aria-label="${summary}">`
+      + ` role="img" aria-labelledby="rp-chart-title rp-chart-desc">`
+      + `<title id="rp-chart-title">Posture replay chart</title>`
+      + `<desc id="rp-chart-desc">${summary}. Baseline: ${obs[0]?.baseline_bits || obs[0]?.classical_bits} bits. Current: ${obs[n - 1]?.classical_bits} bits.</desc>`
+      + `<text class="rp-axis-title" x="${m.l}" y="${m.t - 5}" text-anchor="start">Classical bits</text>`
       + grid
       + `<line class="rp-axis" x1="${m.l}" x2="${right}" y1="${bottom}" y2="${bottom}"/>`
       + xlab
-      + `<text class="rp-axis-title" x="${m.l + g.pw / 2}" y="${bottom + 30}" text-anchor="middle">`
-      + `observation, in recorded order (not to time scale)</text>`
+      + `<text class="rp-axis-title" x="${(m.l + g.pw / 2).toFixed(1)}" y="${bottom + 28}" text-anchor="middle">`
+      + `Observation (recorded order)</text>`
       // The cursor is a pale column behind the data, not a line over it: a
       // full-height rule at the selected point read as the link dropping to 0.
       + `<g class="rp-cursor" transform="translate(0 0)">`
@@ -159,15 +178,15 @@ const PostureReplay = (() => {
     const o = obs[i];
     const head = `<div class="rp-head"><b>Observation ${i + 1} of ${obs.length}</b>`
       + ` · ${esc(stamp(o.observed_at))} · <span class="rp-cap">${esc(o.capture)}</span></div>`;
-    const strength = `<div class="rp-strength">${o.classical_bits} classical / ${o.quantum_bits} quantum bits`
-      + (o.dh_group != null ? ` · DH group ${o.dh_group}` : "")
+    const strength = `<div class="rp-strength">${esc(o.classical_bits)} classical / ${esc(o.quantum_bits)} quantum bits`
+      + (o.dh_group != null ? ` · DH group ${esc(o.dh_group)}` : "")
       + (o.ike_version ? ` · ${esc(o.ike_version)}` : "") + `</div>`;
 
     if (o.verdict === "downgrade"){
       const d = diffTransforms(o.baseline_transforms, o.transforms);
       return head
         + `<div class="rp-verdict is-down"><span aria-hidden="true">▼ </span>Downgrade: `
-        + `${o.baseline_bits} → ${Fmt.bits(o.classical_bits)} (${signedBits(o.delta_bits)})</div>`
+        + `${esc(o.baseline_bits)} → ${Fmt.bits(o.classical_bits)} (${signedBits(o.delta_bits)})</div>`
         + `<div class="rp-compare">`
         + `<div class="rp-col"><div class="rp-col-h">Baseline · ${Fmt.bits(o.baseline_bits)}</div>`
         + txList(o.baseline_transforms, t => d.removed.includes(t) ? "gone" : "") + `</div>`
@@ -191,7 +210,7 @@ const PostureReplay = (() => {
       + `<th scope="col">Verdict</th><th scope="col">vs baseline</th><th scope="col">Transforms</th></tr></thead><tbody>`
       + obs.map((o, i) => `<tr${o.verdict === "downgrade" ? ` class="is-down"` : ""}><td>${i + 1}</td>`
         + `<td>${esc(stamp(o.observed_at))}</td><td>${esc(o.capture)}</td>`
-        + `<td>${o.classical_bits}</td><td>${o.quantum_bits}</td><td>${esc(o.verdict || "—")}</td>`
+        + `<td>${esc(o.classical_bits)}</td><td>${esc(o.quantum_bits)}</td><td>${esc(o.verdict || "—")}</td>`
         + `<td>${o.delta_bits == null ? "—" : signedBits(o.delta_bits)}</td>`
         + `<td>${esc((o.transforms || []).join(", "))}</td></tr>`).join("")
       + `</tbody></table>`;
@@ -215,7 +234,7 @@ const PostureReplay = (() => {
     if (svg){
       const g = geometry(obs, Number(svg.getAttribute("width")));
       const cur = svg.querySelector(".rp-cursor");
-      cur.style.transform = `translateX(${g.x(index)}px)`;
+      cur.style.setProperty("--x", `${g.x(index)}px`);
       cur.querySelector(".rp-current").setAttribute("cy", String(g.y(o.classical_bits)));
     }
   }
@@ -267,8 +286,8 @@ const PostureReplay = (() => {
       tip.textContent = `${i + 1}: ${Fmt.bits(o.classical_bits)}`
         + (o.verdict ? ` · ${o.verdict}` : "")
         + (o.verdict === "downgrade" ? ` ${signedBits(o.delta_bits)}` : "");
-      tip.style.left = `${Math.min(g.x(i) + 10, g.width - 150)}px`;
-      tip.style.top = `${Math.max(g.y(o.classical_bits) - 30, 0)}px`;
+      tip.style.setProperty("--x", `${Math.min(g.x(i) + 10, g.width - 150)}px`);
+      tip.style.setProperty("--y", `${Math.max(g.y(o.classical_bits) - 30, 0)}px`);
     });
     svg.addEventListener("pointerleave", () => { tip.hidden = true; });
     svg.addEventListener("click", ev => { stop(); setIndex(nearest(ev)); });
@@ -287,7 +306,7 @@ const PostureReplay = (() => {
     setIndex(startIndex(obs));
   }
 
-  function empty(message){
+  function empty(message, actionLabel = "Record current posture as baseline", action = "replay-init", isError = false){
     stop();
     hist = null;
     $("replay-controls").hidden = true;
@@ -296,7 +315,7 @@ const PostureReplay = (() => {
     $("replay-detail").innerHTML = "";
     const el = $("replay-empty");
     el.hidden = false;
-    el.innerHTML = message;
+    el.innerHTML = UIState.box(message, actionLabel, action, isError);
   }
 
   async function selectLink(peer){
@@ -305,20 +324,18 @@ const PostureReplay = (() => {
     try {
       const history = await loader(peer);
       if (mine !== request) return;            // a later selection won
-      if (!history) return empty(`No recorded history for ${esc(peer)}.`);
+      if (!history) return empty("The baseline store has no history for this link.", "Select active link", "focus-replay-link");
       show(history);
     } catch (e){
-      if (mine === request) empty(`Could not read this link's history: ${esc(e.message)}`);
+      if (mine === request) empty("Posture replay history could not be read for this link.", "Retry query", "replay-init", true);
     }
   }
 
   function showFleet(fleet, sourceHTML){
     if (!fleet || !fleet.tracked){
-      return empty("No baseline store yet. Record captures with "
-        + "<code>cipherguard watch &lt;capture&gt; --db &lt;file&gt;</code>, then serve with the same "
-        + "<code>--db</code>.");
+      return empty("The baseline store has no history yet.", "Record current posture as baseline", "replay-init");
     }
-    if (!fleet.links.length) return empty("The baseline store has no links yet.");
+    if (!fleet.links.length) return empty("The baseline store has no links yet.", "Record current posture as baseline", "replay-init");
     const sel = $("replay-link");
     // "a|b" is the storage form of a peer pair; the value stays the real key
     sel.innerHTML = fleet.links.map(l =>
@@ -351,11 +368,11 @@ const PostureReplay = (() => {
     try {
       if (staticMode.active){
         const res = await fetch("data/fleet_demo.json", { cache: "no-store" });
-        if (!res.ok) return empty("This static build has no posture replay demo.");
+        if (!res.ok) return empty("This static build has no posture replay demo.", "Load baseline store", "replay-init");
         const demo = await res.json();
         loader = async peer => demo.histories[peer];
         const how = (demo.commands || []).map(c =>
-          `<code>${esc(c.command)}</code> (exit ${c.exit_code})`).join(" then ");
+          `<code>${esc(c.command)}</code> (exit ${esc(c.exit_code)})`).join(" then ");
         return showFleet(demo.fleet, how ? `Static demo, recorded at export time by running ${how}.`
                                          : "Static demo, recorded at export time.");
       }
@@ -364,7 +381,7 @@ const PostureReplay = (() => {
         (await api(`/api/fleet/history?peer=${encodeURIComponent(peer)}`, { silent: true })).json();
       return showFleet(fleet, "Read-only from this server's baseline store.");
     } catch (e){
-      return empty(`Could not read the baseline store: ${esc(e.message)}`);
+      return empty("The baseline store could not be read.", "Reconnect baseline store", "replay-init", true);
     }
   }
 

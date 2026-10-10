@@ -45,7 +45,7 @@ const CompareView = (() => {
   }
 
   function rowsHTML(list){
-    if (!list.length) return `<tr><td colspan="4" class="empty">Neither capture has a link.</td></tr>`;
+    if (!list.length) return `<tr><td colspan="4">${UIState.box("The two captures share no links. Choose a capture B with the same gateways.", "Choose capture B", "focus-capture-b")}</td></tr>`;
     return list.map(r => {
       const label = linkLabel(r.a || r.b);
       const mark = r.differs ? `<span class="cmp-mark" aria-hidden="true">●</span> ` : "";
@@ -77,7 +77,7 @@ function renderDiffView(a, b){
   const differing = cmp.filter(r => r.differs).length;
   if ($("diff-links-tbody")) $("diff-links-tbody").innerHTML = CompareView.rowsHTML(cmp);
   if ($("diff-links-sub")) $("diff-links-sub").textContent =
-    `${cmp.length} gateway pair${cmp.length === 1 ? "" : "s"} across both captures; `
+    `${cmp.length} link${cmp.length === 1 ? "" : "s"} across both captures; `
     + `${differing} differ${differing === 1 ? "s" : ""}. Links are matched by address pair.`;
 
   const scoreA = a.score ?? 0;
@@ -101,7 +101,7 @@ function renderDiffView(a, b){
   }
 
   // 2. Summary Cards
-  if ($("diff-name-a")) $("diff-name-a").textContent = a.capture || "Baseline";
+  if ($("diff-name-a")) $("diff-name-a").textContent = a.capture || "Capture A";
   if ($("diff-score-a")) $("diff-score-a").textContent = `${scoreA}/100`;
   const gradeAEl = $("diff-grade-a");
   if (gradeAEl){
@@ -111,13 +111,13 @@ function renderDiffView(a, b){
   if ($("diff-sevs-a")) $("diff-sevs-a").innerHTML = CompareView.sevChips(a.counts, null);
   if ($("diff-meta-a")){
     $("diff-meta-a").innerHTML = `
-      <div style="font-size:0.75rem;color:var(--muted)">
+      <div class="diff-meta-line">
         ${(a.sessions || []).length} IKE sessions &middot; ${(a.flows || []).length} ESP SAs &middot; ${(a.findings || []).length} findings
       </div>
     `;
   }
 
-  if ($("diff-name-b")) $("diff-name-b").textContent = b.capture || "Hardened";
+  if ($("diff-name-b")) $("diff-name-b").textContent = b.capture || "Capture B";
   if ($("diff-score-b")) $("diff-score-b").textContent = `${scoreB}/100`;
   const gradeBEl = $("diff-grade-b");
   if (gradeBEl){
@@ -127,7 +127,7 @@ function renderDiffView(a, b){
   if ($("diff-sevs-b")) $("diff-sevs-b").innerHTML = CompareView.sevChips(b.counts, a.counts);
   if ($("diff-meta-b")){
     $("diff-meta-b").innerHTML = `
-      <div style="font-size:0.75rem;color:var(--muted)">
+      <div class="diff-meta-line">
         ${(b.sessions || []).length} IKE sessions &middot; ${(b.flows || []).length} ESP SAs &middot; ${(b.findings || []).length} findings
       </div>
     `;
@@ -137,20 +137,20 @@ function renderDiffView(a, b){
   const statDeltaEl = $("diff-stat-delta");
   if (verdictEl && statDeltaEl){
     if (delta > 0){
-      verdictEl.innerHTML = `<span style="color:var(--text-success)">&#9650; +${delta} points</span>`;
+      verdictEl.innerHTML = `<span class="tone-success">&#9650; +${delta} points</span>`;
       statDeltaEl.textContent = `Grade ${a.grade} to ${b.grade}`;
     } else if (delta < 0){
-      verdictEl.innerHTML = `<span style="color:var(--crit)">&#9660; ${delta} points</span>`;
+      verdictEl.innerHTML = `<span class="tone-crit">&#9660; ${delta} points</span>`;
       statDeltaEl.textContent = `Grade ${a.grade} to ${b.grade}`;
     } else {
-      verdictEl.innerHTML = `<span style="color:var(--muted)">No change</span>`;
+      verdictEl.innerHTML = `<span class="tone-muted">No change</span>`;
       statDeltaEl.textContent = `Both captures score the same`;
     }
   }
 
   // 3. Side-by-Side Wire Ribbons
-  if ($("diff-ribbon-title-a")) $("diff-ribbon-title-a").textContent = a.capture || "Baseline";
-  if ($("diff-ribbon-title-b")) $("diff-ribbon-title-b").textContent = b.capture || "Hardened";
+  if ($("diff-ribbon-title-a")) $("diff-ribbon-title-a").textContent = a.capture || "Capture A";
+  if ($("diff-ribbon-title-b")) $("diff-ribbon-title-b").textContent = b.capture || "Capture B";
   renderRibbonTo("diff-ribbon-a", a);
   renderRibbonTo("diff-ribbon-b", b);
 
@@ -194,7 +194,7 @@ function renderDiffView(a, b){
         <td><b>${esc(row.param)}</b></td>
         <td><code>${esc(row.valA)}</code></td>
         <td><code>${esc(row.valB)}</code></td>
-        <td style="text-align:center"><span class="${row.status.cls}">${esc(row.status.text)}</span></td>
+        <td class="cell-center"><span class="${row.status.cls}">${esc(row.status.text)}</span></td>
       </tr>
     `).join("");
   }
@@ -216,14 +216,14 @@ function renderDiffView(a, b){
   const resList = $("diff-resolved-list");
   if (resList){
     if (resolved.length === 0){
-      resList.innerHTML = `<div class="empty">Capture B still raises every finding in capture A.</div>`;
+      resList.innerHTML = UIState.box("Capture B resolves none of the findings in capture A.", "See the hardening plan", "jump-remediation");
     } else {
       resList.innerHTML = resolved.map(f => `
         <div class="diff-finding-card resolved">
           <div class="title">
-            <span style="color:var(--text-success)">&#10004;</span>
+            <span class="tone-success">&#10004;</span>
             <span>${esc(f.title)}</span>
-            <span class="sev-chip ${f.severity.toLowerCase()}" style="font-size:0.65rem;padding:0 5px">${esc(f.severity)}</span>
+            <span class="sev-chip ${esc(f.severity.toLowerCase())}">${esc(f.severity)}</span>
           </div>
           <div class="meta">${esc(f.rule_id)} &middot; ${esc(f.subject)}</div>
         </div>
@@ -235,14 +235,14 @@ function renderDiffView(a, b){
   if (persistList){
     const remaining = [...persisting, ...newInB];
     if (remaining.length === 0){
-      persistList.innerHTML = `<div class="empty">Capture B raises no findings.</div>`;
+      persistList.innerHTML = UIState.box("Capture B resolves every finding in capture A.", "Export report", "export-report");
     } else {
       persistList.innerHTML = remaining.map(f => `
         <div class="diff-finding-card persisting">
           <div class="title">
 
             <span>${esc(f.title)}</span>
-            <span class="sev-chip ${f.severity.toLowerCase()}" style="font-size:0.65rem;padding:0 5px">${esc(f.severity)}</span>
+            <span class="sev-chip ${esc(f.severity.toLowerCase())}">${esc(f.severity)}</span>
           </div>
           <div class="meta">${esc(f.rule_id)} &middot; ${esc(f.subject)}</div>
           <div class="fix"><b>Fix:</b> ${esc(f.remediation || "See the hardening plan")}</div>

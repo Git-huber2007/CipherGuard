@@ -1,7 +1,11 @@
 """Generate production-ready web assets for CipherGuard:
-- favicon.ico
+- favicon.ico (multi-resolution ICO: 16x16, 32x32, 48x48, 64x64)
 - apple-touch-icon.png (180x180)
-- og-image.png (1200x630 high-res social card)
+- icon-192.png (192x192) & icon-512.png (512x512) for PWA webmanifest
+- og-image.png (1200x630 high-resolution social card)
+
+All assets use the Wire Ribbon mark:
+Teal observed block + thin dark key-boundary seam bar + violet hatched inferred block.
 """
 
 import os
@@ -12,149 +16,189 @@ IMG_DIR = os.path.join(STATIC_DIR, "img")
 os.makedirs(IMG_DIR, exist_ok=True)
 
 
-def draw_shield_icon(size=180):
+def draw_wire_ribbon_icon(size=180):
+    """Draw the authentic CipherGuard Wire Ribbon mark.
+
+    Proportions match the 16x16 hand-written SVG grid:
+    - Left: Teal block (observed cleartext wire parameters)
+    - Center: Thin dark ink bar (cryptographic key boundary seam)
+    - Right: Violet block with crisp diagonal hatch lines (inferred ciphertext)
+    """
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    pad = size * 0.08
-    w = size - 2 * pad
-    h = size - 2 * pad
-    cx = size / 2
 
-    # Draw shield polygon
-    pts = [
-        (cx, pad),
-        (size - pad, pad + h * 0.22),
-        (size - pad, pad + h * 0.55),
-        (cx, size - pad),
-        (pad, pad + h * 0.55),
-        (pad, pad + h * 0.22),
-    ]
-    # Background shield
-    draw.polygon(pts, fill=(15, 23, 42, 255), outline=(56, 189, 248, 255), width=max(2, int(size * 0.04)))
+    # Proportional padding aligned to the 16x16 grid (1px X, 2px Y per 16 units)
+    pad_x = size * (1.0 / 16.0)
+    pad_y = size * (2.0 / 16.0)
+    w = size - 2.0 * pad_x
+    h = size - 2.0 * pad_y
+    x0, y0 = pad_x, pad_y
+    x1, y1 = x0 + w, y0 + h
+    radius = max(2, int(round(size * (2.0 / 16.0))))
 
-    # Inner lock / tech shapes
-    lw = w * 0.35
-    lh = h * 0.3
-    lx0 = cx - lw / 2
-    ly0 = pad + h * 0.45
-    draw.rectangle(
-        [lx0, ly0, lx0 + lw, ly0 + lh],
-        fill=(2, 132, 199, 255),
-        outline=(224, 242, 254, 255),
-        width=max(1, int(size * 0.02)),
-    )
+    # Exact seam and block dimensions
+    seam_w = max(2, int(round(w * (2.0 / 14.0))))
+    cx = size / 2.0
+    seam_x0 = cx - seam_w / 2.0
+    seam_x1 = cx + seam_w / 2.0
 
-    # Lock shackle
-    shackle_pad = lw * 0.2
-    sw = lw - 2 * shackle_pad
-    draw.arc(
-        [lx0 + shackle_pad, ly0 - sw * 0.9, lx0 + lw - shackle_pad, ly0 + sw * 0.4],
-        180,
-        0,
-        fill=(224, 242, 254, 255),
-        width=max(2, int(size * 0.035)),
-    )
+    # Color tokens matching CipherGuard theme
+    teal = (27, 110, 140, 255)  # #1b6e8c (observed)
+    ink = (20, 33, 43, 255)  # #14212b (dark seam bar)
+    violet = (109, 78, 156, 255)  # #6d4e9c (inferred ciphertext)
+    hatch_color = (216, 199, 240, 255)  # #d8c7f0 (light violet hatch stripes)
 
-    # Keyhole
-    draw.ellipse([cx - size * 0.03, ly0 + lh * 0.3, cx + size * 0.03, ly0 + lh * 0.5], fill=(15, 23, 42, 255))
-    draw.rectangle([cx - size * 0.015, ly0 + lh * 0.45, cx + size * 0.015, ly0 + lh * 0.75], fill=(15, 23, 42, 255))
+    # 1. Outer rounded container mask for smooth corner radius
+    mask = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([x0, y0, x1, y1], radius=radius, fill=255)
 
-    # Wi-Fi arcs at top
-    draw.arc(
-        [cx - w * 0.25, pad + h * 0.15, cx + w * 0.25, pad + h * 0.45],
-        200,
-        340,
-        fill=(56, 189, 248, 255),
-        width=max(2, int(size * 0.03)),
-    )
-    draw.arc(
-        [cx - w * 0.15, pad + h * 0.23, cx + w * 0.15, pad + h * 0.45],
-        200,
-        340,
-        fill=(56, 189, 248, 255),
-        width=max(2, int(size * 0.025)),
+    # 2. Base content layers
+    content = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    cdraw = ImageDraw.Draw(content)
+
+    # Left: Teal block
+    cdraw.rectangle([x0, y0, seam_x0, y1], fill=teal)
+
+    # Right: Violet block
+    cdraw.rectangle([seam_x1, y0, x1, y1], fill=violet)
+
+    # 3. Violet block diagonal hatching (strictly clipped to right block)
+    r_mask = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(r_mask).rectangle([seam_x1, y0, x1, y1], fill=255)
+
+    hatch_img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    hdraw = ImageDraw.Draw(hatch_img)
+    hw = max(1, int(round(size * (1.1 / 16.0))))
+    spacing = max(3, int(round(size * (3.5 / 16.0))))
+
+    # Draw diagonal lines at -45 deg slope across the right half
+    for offset in range(-int(h * 1.5), int((x1 - seam_x1) + h * 1.5), spacing):
+        p0 = (seam_x1 + offset, y1)
+        p1 = (seam_x1 + offset + h, y0)
+        hdraw.line([p0, p1], fill=hatch_color, width=hw)
+
+    content.paste(hatch_img, (0, 0), r_mask)
+
+    # 4. Center: Thin dark key-boundary seam bar
+    cdraw.rectangle([seam_x0, y0, seam_x1, y1], fill=ink)
+
+    # Composite content into rounded mask
+    img.paste(content, (0, 0), mask)
+
+    # 5. Subtle crisp perimeter border for high contrast in light & dark chrome
+    border_w = max(1, int(round(size * (0.8 / 16.0))))
+    ImageDraw.Draw(img).rounded_rectangle(
+        [x0, y0, x1, y1],
+        radius=radius,
+        outline=(20, 33, 43, 90),
+        width=border_w,
     )
 
     return img
 
 
-# 1. Favicon.ico and apple-touch-icon.png
-icon_180 = draw_shield_icon(180)
-icon_180.save(os.path.join(IMG_DIR, "apple-touch-icon.png"), "PNG", optimize=True)
+# Backwards compatibility alias
+draw_shield_icon = draw_wire_ribbon_icon
 
-icon_32 = draw_shield_icon(32)
-icon_16 = draw_shield_icon(16)
-icon_48 = draw_shield_icon(48)
-icon_180.save(
-    os.path.join(STATIC_DIR, "favicon.ico"),
-    format="ICO",
-    sizes=[(16, 16), (32, 32), (48, 48), (64, 64)],
-)
 
-# 2. Open Graph Card (1200x630)
-og = Image.new("RGB", (1200, 630), (15, 23, 42))
-og_draw = ImageDraw.Draw(og)
+def generate_all():
+    print("Generating CipherGuard web assets...")
 
-# Background subtle tech grid lines
-for x in range(0, 1200, 40):
-    og_draw.line([(x, 0), (x, 630)], fill=(30, 41, 59), width=1)
-for y in range(0, 630, 40):
-    og_draw.line([(0, y), (1200, y)], fill=(30, 41, 59), width=1)
+    # 1. Apple touch icon (180x180)
+    icon_180 = draw_wire_ribbon_icon(180)
+    icon_180.save(os.path.join(IMG_DIR, "apple-touch-icon.png"), "PNG", optimize=True)
+    print("  [OK] apple-touch-icon.png (180x180)")
 
-# Glowing accent lines
-og_draw.line([(0, 626), (1200, 626)], fill=(56, 189, 248), width=4)
-og_draw.line([(0, 4), (1200, 4)], fill=(16, 185, 129), width=4)
+    # 2. PWA icons (192x192 & 512x512)
+    icon_192 = draw_wire_ribbon_icon(192)
+    icon_192.save(os.path.join(IMG_DIR, "icon-192.png"), "PNG", optimize=True)
+    icon_512 = draw_wire_ribbon_icon(512)
+    icon_512.save(os.path.join(IMG_DIR, "icon-512.png"), "PNG", optimize=True)
+    print("  [OK] icon-192.png & icon-512.png")
 
-# Place shield icon on left
-shield_big = draw_shield_icon(280)
-og.paste(shield_big, (80, 175), shield_big)
+    # 3. Favicon.ico with multi-resolution bitmaps (16, 32, 48, 64)
+    icon_180.save(
+        os.path.join(STATIC_DIR, "favicon.ico"),
+        format="ICO",
+        sizes=[(16, 16), (32, 32), (48, 48), (64, 64)],
+    )
+    print("  [OK] favicon.ico (16, 32, 48, 64)")
 
-# Draw Title & Typography
-try:
-    font_title = ImageFont.truetype("arial.ttf", 68)
-    font_sub = ImageFont.truetype("arial.ttf", 32)
-    font_tag = ImageFont.truetype("arial.ttf", 22)
-    font_meta = ImageFont.truetype("arial.ttf", 20)
-except Exception:
-    font_title = ImageFont.load_default()
-    font_sub = ImageFont.load_default()
-    font_tag = ImageFont.load_default()
-    font_meta = ImageFont.load_default()
+    # 4. Open Graph Card (1200x630)
+    og = Image.new("RGB", (1200, 630), (15, 23, 42))
+    og_draw = ImageDraw.Draw(og)
 
-# Pill badge
-og_draw.rounded_rectangle([400, 150, 770, 188], radius=6, fill=(30, 58, 85), outline=(56, 189, 248), width=1)
-og_draw.text((415, 158), "NTRO SIH26160 • OFFENSIVE & DEFENSIVE SUITE", fill=(125, 211, 252), font=font_meta)
+    # Subtle tech grid background
+    for x in range(0, 1200, 40):
+        og_draw.line([(x, 0), (x, 630)], fill=(24, 34, 48), width=1)
+    for y in range(0, 630, 40):
+        og_draw.line([(0, y), (1200, y)], fill=(24, 34, 48), width=1)
 
-# Main Title
-og_draw.text((400, 210), "CipherGuard", fill=(255, 255, 255), font=font_title)
+    # Accent boundary lines (Teal on top, Violet on bottom)
+    og_draw.line([(0, 4), (1200, 4)], fill=(27, 110, 140), width=4)
+    og_draw.line([(0, 626), (1200, 626)], fill=(109, 78, 156), width=4)
 
-# Subtitle
-og_draw.text((400, 300), "Passive IPsec Protocol & Live Wi-Fi Security Analyzer", fill=(148, 163, 184), font=font_sub)
+    # Place Wire Ribbon Mark on left
+    ribbon_big = draw_wire_ribbon_icon(280)
+    og.paste(ribbon_big, (80, 175), ribbon_big)
 
-# Feature Badges
-badges = [
-    ("🛡️ Zero-Payload Framing Inspection", (16, 185, 129)),
-    ("🚨 Rogue AP & Evil Twin Hunter", (239, 68, 68)),
-    ("⚡ NIST SP 800-77 & MITRE Compliance", (56, 189, 248)),
-    ("🔐 Post-Quantum Cryptography Defense", (168, 85, 247)),
-]
+    # Typography
+    try:
+        font_title = ImageFont.truetype("arial.ttf", 68)
+        font_sub = ImageFont.truetype("arial.ttf", 30)
+        font_meta = ImageFont.truetype("arial.ttf", 20)
+    except Exception:
+        font_title = ImageFont.load_default()
+        font_sub = ImageFont.load_default()
+        font_meta = ImageFont.load_default()
 
-bx = 400
-by = 370
-for i, (text, color) in enumerate(badges):
-    col = i % 2
-    row = i // 2
-    x = bx + col * 370
-    y = by + row * 55
-    og_draw.rounded_rectangle([x, y, x + 350, y + 42], radius=6, fill=(30, 41, 59), outline=color, width=1)
-    og_draw.text((x + 14, y + 10), text, fill=(241, 245, 249), font=font_meta)
+    # Pill badge
+    og_draw.rounded_rectangle([400, 140, 780, 178], radius=6, fill=(27, 45, 60), outline=(27, 110, 140), width=1)
+    og_draw.text((415, 149), "NTRO SIH26160 • OFFENSIVE & DEFENSIVE SUITE", fill=(110, 190, 220), font=font_meta)
 
-# Footer bar
-og_draw.text(
-    (400, 540), "Self-Contained • Sovereign Cyber Security • Air-Gapped Ready", fill=(100, 116, 139), font=font_meta
-)
+    # Main Title
+    og_draw.text((400, 198), "CipherGuard", fill=(255, 255, 255), font=font_title)
 
-# Save compressed optimized image
-og_path = os.path.join(IMG_DIR, "og-image.png")
-og.save(og_path, "PNG", optimize=True)
-print(f"Successfully generated: {og_path}")
+    # Subtitle
+    og_draw.text(
+        (400, 285), "Passive IPsec Protocol & Live Wi-Fi Security Analyzer", fill=(148, 163, 184), font=font_sub
+    )
+
+    # Wire Ribbon Concept Caption
+    og_draw.text(
+        (400, 330),
+        "Zero-Payload Wire Inspection: Observed Cleartext ↔ Cryptographic Seam ↔ Inferred Ciphertext",
+        fill=(100, 130, 155),
+        font=font_meta,
+    )
+
+    # Feature Badges
+    badges = [
+        ("🛡️ Zero-Payload Framing Inspection", (27, 110, 140)),
+        ("🚨 Rogue AP & Evil Twin Hunter", (239, 68, 68)),
+        ("⚡ NIST SP 800-77 & MITRE Compliance", (56, 189, 248)),
+        ("🔐 Post-Quantum Cryptography Defense", (109, 78, 156)),
+    ]
+
+    bx = 400
+    by = 375
+    for i, (text, color) in enumerate(badges):
+        col = i % 2
+        row = i // 2
+        x = bx + col * 370
+        y = by + row * 55
+        og_draw.rounded_rectangle([x, y, x + 350, y + 42], radius=6, fill=(24, 34, 48), outline=color, width=1)
+        og_draw.text((x + 14, y + 10), text, fill=(241, 245, 249), font=font_meta)
+
+    # Footer
+    og_draw.text(
+        (400, 540), "Self-Contained • Sovereign Cyber Security • Air-Gapped Ready", fill=(100, 116, 139), font=font_meta
+    )
+
+    og_path = os.path.join(IMG_DIR, "og-image.png")
+    og.save(og_path, "PNG", optimize=True)
+    print(f"  [OK] og-image.png ({og_path})")
+    print("All web assets generated successfully!")
+
+
+if __name__ == "__main__":
+    generate_all()
