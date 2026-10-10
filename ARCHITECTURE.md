@@ -9,38 +9,12 @@ This file covers how the code is laid out and the rules it is held to.
 
 ## Pipeline
 
-```mermaid
-flowchart TD
-    subgraph IN["1. Input"]
-        TAP["Capture file or mirror port<br/>(pcap, pcapng, AF_PACKET)"] --> DISSECT["Packet dissector<br/>(IPv4/IPv6, UDP 500/4500, ESP)"]
-        NIC["Local Wi-Fi adapter"] --> WIFI["Wi-Fi scanner<br/>(netsh on Windows, nmcli on Linux)"]
-    end
+[![From a capture to a report: IKE is parsed from cleartext, ESP is inferred from framing without keys, both feed the rules and score, and the assessment becomes the dashboard JSON, CBOM, hardening plan and exported report](.github/assets/data-flow.png)](https://git-huber2007.github.io/CipherGuard/diagrams/capture-to-report.html)
 
-    subgraph INFER["2. Dissection and inference"]
-        DISSECT -->|"cleartext handshake"| IKE["IKE parser<br/>(IKEv1 and IKEv2)"]
-        DISSECT -->|"packet lengths and timing"| FEAT["Flow features"]
-        FEAT --> MODEL["Random Forest and 1D-CNN"]
-        FEAT --> MASK["RFC 4303 framing mask"]
-        MODEL & MASK --> ESP["ESP suite estimate"]
-        WIFI --> ROGUE["Clone and weak-security checks"]
-    end
+[![CipherGuard components: the dashboard reaches the API through a request guard; the API calls the pipeline, export, remediation, intel, Wi-Fi and capture packages; the monitored network is only ever read](.github/assets/architecture.png)](https://git-huber2007.github.io/CipherGuard/diagrams/cipherguard-components.html)
 
-    subgraph AUDIT["3. Audit"]
-        IKE & ESP --> RULES["Rules and 0-100 score<br/>(NIST SP 800-77, RFC 8247)"]
-        IKE & ESP --> PQC["Post-quantum exposure<br/>(Mosca: X + Y > Z)"]
-        IKE & ESP --> BASE[("Baseline store<br/>downgrade detection")]
-    end
-
-    subgraph OUT["4. Output"]
-        RULES & PQC --> PLAN["Remediation plans<br/>(Cisco, strongSwan, Fortinet, Juniper)"]
-        RULES & PQC --> CBOM["CycloneDX 1.6 CBOM"]
-        RULES & PQC & ROGUE --> DASH["Dashboard<br/>(static export or live API)"]
-        RULES & PQC & ROGUE --> CLI["CLI report"]
-    end
-```
-
-`cipherguard/pipeline.py` runs stages 1 to 3 for one capture file and returns a
-scored assessment. Every output in stage 4 is built from that assessment.
+`cipherguard/pipeline.py` runs stages 1 to 4 for one capture file and returns a
+scored assessment. Every output in stage 5 is built from that assessment.
 
 ## Observed and inferred
 

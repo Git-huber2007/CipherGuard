@@ -105,35 +105,13 @@ documentation ranges (203.0.113.0/24, 198.51.100.0/24).
 
 ## How it works
 
-```mermaid
-flowchart TD
-    subgraph IN["1. Input"]
-        TAP["Capture file or mirror port<br/>(pcap, pcapng, AF_PACKET)"] --> DISSECT["Packet dissector<br/>(IPv4/IPv6, UDP 500/4500, ESP)"]
-        NIC["Local Wi-Fi adapter"] --> WIFI["Wi-Fi scanner<br/>(netsh on Windows, nmcli on Linux)"]
-    end
+[![CipherGuard components: the dashboard reaches the API through a request guard; the API calls the pipeline, export, remediation, intel, Wi-Fi and capture packages; the monitored network is only ever read](.github/assets/architecture.png)](https://git-huber2007.github.io/CipherGuard/diagrams/cipherguard-components.html)
 
-    subgraph INFER["2. Dissection and inference"]
-        DISSECT -->|"cleartext handshake"| IKE["IKE parser<br/>(IKEv1 and IKEv2)"]
-        DISSECT -->|"packet lengths and timing"| FEAT["Flow features"]
-        FEAT --> MODEL["Random Forest and 1D-CNN"]
-        FEAT --> MASK["RFC 4303 framing mask"]
-        MODEL & MASK --> ESP["ESP suite estimate"]
-        WIFI --> ROGUE["Clone and weak-security checks"]
-    end
+[![From a capture to a report: IKE is parsed from cleartext, ESP is inferred from framing without keys, both feed the rules and score, and the assessment becomes the dashboard JSON, CBOM, hardening plan and exported report](.github/assets/data-flow.png)](https://git-huber2007.github.io/CipherGuard/diagrams/capture-to-report.html)
 
-    subgraph AUDIT["3. Audit"]
-        IKE & ESP --> RULES["Rules and 0-100 score<br/>(NIST SP 800-77, RFC 8247)"]
-        IKE & ESP --> PQC["Post-quantum exposure<br/>(Mosca: X + Y > Z)"]
-        IKE & ESP --> BASE[("Baseline store<br/>downgrade detection")]
-    end
-
-    subgraph OUT["4. Output"]
-        RULES & PQC --> PLAN["Hardening plans<br/>(Cisco, strongSwan, Fortinet, Juniper)"]
-        RULES & PQC --> CBOM["CycloneDX 1.6 CBOM"]
-        RULES & PQC & ROGUE --> DASH["Dashboard<br/>(static export or live API)"]
-        RULES & PQC & ROGUE --> CLI["CLI report"]
-    end
-```
+Select a diagram to open the explorable version, where each node links to the
+source it was drawn from. A third diagram follows
+[one assess request](https://git-huber2007.github.io/CipherGuard/diagrams/assess-capture.html) through the server.
 
 ESP inference is mostly arithmetic. RFC 4303 pads the encrypted region to the
 cipher's block size, so every packet length on one SA shares a residue fixed by
@@ -141,11 +119,6 @@ the block size, IV length and ICV length. That residue rules suites out with
 certainty. The learned models only rank what is left, and a model output that
 contradicts the arithmetic is discarded. [METHOD.md](METHOD.md) has the
 derivation.
-
-Explorable diagrams, each node linked to the source it was drawn from:
-[components](docs/diagrams/cipherguard-components.html) ·
-[from a capture to a report](docs/diagrams/capture-to-report.html) ·
-[one assess request](docs/diagrams/assess-capture.html).
 
 ## Measured results
 
